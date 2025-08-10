@@ -34,12 +34,12 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     var maxArrows = 5
 
     override fun onGameStart() {
-        Mouse.startTracking()
+        Mouse.startTracking()                 // tracking permanent
         Movement.startSprinting()
         Movement.startForward()
         TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
 
-        // Tir d’ouverture (full charge via Bow.kt). On évite de tirer si déjà en action.
+        // Tir d’ouverture (full charge via Bow.kt) si aucune action en cours
         TimeUtils.setTimeout({
             val opp = opponent()
             if (opp != null && shotsFired < maxArrows && !Mouse.isUsingProjectile()) {
@@ -121,18 +121,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.stopJumping()
             }
 
-            // Sécurité arc: ne s'applique QUE si on tient un arc (plus jamais sur la canne)
-            if (Mouse.isUsingProjectile() &&
-                mc.thePlayer.heldItem != null &&
-                mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("bow")) {
-
-                val facingUs = !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)
-                val close = distance < bowCancelCloseDistance
-                val nearAndFacing = facingUs && distance <= 8f
-                if (close || nearAndFacing) {
-                    Mouse.rClickUp() // Bow.kt gère ensuite l’épée avec un petit délai
-                }
-            }
+            // -- IMPORTANT --
+            // On supprime toute "sécurité arc" côté Classic : Bow.kt s'en charge déjà.
+            // => pas de Mouse.rClickUp ici pour l'arc, afin d'éviter d'annuler le tir d'ouverture.
 
             val movePriority = arrayListOf(0, 0)
             var clear = false
@@ -144,21 +135,22 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.startForward()
             }
 
-            // Ne JAMAIS re-équiper l'épée si une action projectile est en cours ou si le verrou rod n’est pas expiré
-            if (!Mouse.isUsingProjectile() && System.currentTimeMillis() >= rodLockUntil) {
+            // Ne JAMAIS ré-équiper l'épée si une action projectile est en cours, si le verrou rod n’est pas expiré,
+            // ou si le clic droit est encore appuyé (évite le ping-pong visuel).
+            if (!Mouse.isUsingProjectile() && System.currentTimeMillis() >= rodLockUntil && !Mouse.rClickDown) {
                 if (distance < 1.5f && mc.thePlayer.heldItem != null &&
                     !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
                     Inventory.setInvItem("sword")
-                    Mouse.rClickUp()
                 }
             }
 
-            // Fenêtrage (façon OP) : on n’ouvre ni rod ni bow s’il y a une autre action
+            // Fenêtrage (façon OP) : on n’ouvre ni rod ni bow si une autre action est en cours
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
                 // Rod windows + verrou (empêche le ping-pong canne/épée)
                 if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) &&
-                    !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
+                    !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) &&
+                    System.currentTimeMillis() >= rodLockUntil) {
 
                     val lockMs = when {
                         distance < 4f    -> RandomUtils.randomIntInRange(260, 320)
