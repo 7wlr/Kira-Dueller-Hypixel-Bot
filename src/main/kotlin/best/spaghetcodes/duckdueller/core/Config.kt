@@ -3,12 +3,10 @@ package best.spaghetcodes.duckdueller.core
 import best.spaghetcodes.duckdueller.DuckDueller
 import best.spaghetcodes.duckdueller.bot.bots.*
 import best.spaghetcodes.duckdueller.gui.CustomConfigGUI
-import best.spaghetcodes.duckdueller.utils.ChatUtils
 import gg.essential.vigilance.Vigilant
 import gg.essential.vigilance.data.Property
 import gg.essential.vigilance.data.PropertyType
 import net.minecraft.client.gui.GuiScreen
-
 import java.io.File
 
 class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = ConfigSorter()) {
@@ -24,7 +22,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         category = "General",
         options = ["Sumo", "Boxing", "Classic", "OP", "Combo"]
     )
-    val currentBot = 0
+    var currentBot = 0
 
     @Property(
         type = PropertyType.TEXT,
@@ -41,15 +39,15 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Whether or not the bot should move in pre-game lobbies.",
         category = "General",
     )
-    val lobbyMovement = true
+    var lobbyMovement = true
 
     @Property(
-    type = PropertyType.SWITCH,
-    name = "Disable Chat Messages",
-    description = "When this is enabled, the bot will not send any chat messages.",
-    category = "General",
+        type = PropertyType.SWITCH,
+        name = "Disable Chat Messages",
+        description = "When this is enabled, the bot will not send any chat messages.",
+        category = "General",
     )
-    val disableChatMessages = false
+    var disableChatMessages = false
 
     @Property(
         type = PropertyType.NUMBER,
@@ -60,7 +58,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 1000,
         increment = 10
     )
-    val throwAfterGames = 0
+    var throwAfterGames = 0
 
     @Property(
         type = PropertyType.SLIDER,
@@ -70,7 +68,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         min = 0,
         max = 10000
     )
-    val disconnectAfterGames = 0
+    var disconnectAfterGames = 0
 
     @Property(
         type = PropertyType.NUMBER,
@@ -81,7 +79,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 500,
         increment = 30
     )
-    val disconnectAfterMinutes = 0
+    var disconnectAfterMinutes = 0
 
     /*
         COMBAT
@@ -96,7 +94,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 15,
         increment = 1
     )
-    val minCPS = 10
+    var minCPS = 10
 
     @Property(
         type = PropertyType.NUMBER,
@@ -107,61 +105,61 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 18,
         increment = 1
     )
-    val maxCPS = 14
+    var maxCPS = 14
 
     @Property(
         type = PropertyType.NUMBER,
         name = "Horizontal Look Speed",
-        description = "How fast the bot can look left/right (lower number = less snappy, slightly less accurate when teleporting)",
+        description = "Horizontal look speed.",
         category = "Combat",
-        min = 5,
-        max = 15,
+        min = 1,
+        max = 50,
         increment = 1
     )
-    val lookSpeedHorizontal = 10
+    var lookSpeedHorizontal = 10
 
     @Property(
         type = PropertyType.NUMBER,
         name = "Vertical Look Speed",
-        description = "How fast the bot can look up/down (lower number = less snappy, slightly less accurate when teleporting)",
+        description = "Vertical look speed.",
         category = "Combat",
         min = 1,
-        max = 15,
+        max = 50,
         increment = 1
     )
-    val lookSpeedVertical = 5
+    var lookSpeedVertical = 5
 
     @Property(
         type = PropertyType.DECIMAL_SLIDER,
         name = "Look Randomization",
-        description = "How much randomization should happen when looking (higher number = more jittery aim)",
+        description = "Random offset added to view movement.",
         category = "Combat",
         minF = 0f,
-        maxF = 2f,
+        maxF = 2f
     )
-    val lookRand = 0.3f
+    var lookRand = 0.3f
 
     @Property(
         type = PropertyType.NUMBER,
         name = "Max Look Distance",
-        description = "How close the opponent has to be before the bot starts tracking them",
+        description = "Max distance for tracking.",
         category = "Combat",
-        min = 120,
-        max = 180,
+        min = 10,
+        max = 200,
         increment = 5
     )
-    val maxDistanceLook = 150
+    var maxDistanceLook = 150
 
     @Property(
         type = PropertyType.NUMBER,
         name = "Max Attack Distance",
-        description = "How close the opponent has to be before the bot starts attacking them",
+        description = "Max distance for attacking.",
         category = "Combat",
-        min = 5,
-        max = 15,
+        min = 3,
+        max = 6,
         increment = 1
     )
-    val maxDistanceAttack = 5
+    var maxDistanceAttack = 5
 
     /*
         Auto GG
@@ -173,7 +171,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Send a gg message after every game",
         category = "AutoGG",
     )
-    val sendAutoGG = true
+    var sendAutoGG = true
 
     @Property(
         type = PropertyType.TEXT,
@@ -181,7 +179,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "AutoGG message the bot sends after every game",
         category = "AutoGG",
     )
-    val ggMessage = "gg"
+    var ggMessage = "gg"
 
     @Property(
         type = PropertyType.NUMBER,
@@ -192,7 +190,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 1000,
         increment = 50
     )
-    val ggDelay = 100
+    var ggDelay = 100
 
     @Property(
         type = PropertyType.SWITCH,
@@ -200,7 +198,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Send a message as soon as the game starts",
         category = "AutoGG",
     )
-    val sendStartMessage = false
+    var sendStartMessage = false
 
     @Property(
         type = PropertyType.TEXT,
@@ -208,7 +206,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Message to send at the beginning of the game",
         category = "AutoGG",
     )
-    val startMessage = "GL HF!"
+    var startMessage = "GL HF!"
 
     @Property(
         type = PropertyType.NUMBER,
@@ -219,7 +217,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 1000,
         increment = 50
     )
-    val startMessageDelay = 100
+    var startMessageDelay = 100
 
     /*
         Auto Requeue
@@ -234,7 +232,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 5000,
         increment = 50
     )
-    val autoRqDelay = 2500
+    var autoRqDelay = 2500
 
     @Property(
         type = PropertyType.NUMBER,
@@ -245,7 +243,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 60,
         increment = 5
     )
-    val rqNoGame = 30
+    var rqNoGame = 30
 
     @Property(
         type = PropertyType.SWITCH,
@@ -253,7 +251,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Use the paper to requeue",
         category = "Auto Requeue",
     )
-    val paperRequeue = true
+    var paperRequeue = true
 
     @Property(
         type = PropertyType.SWITCH,
@@ -261,10 +259,10 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Faster Requeue (no rewards)",
         category = "Auto Requeue",
     )
-    val fastRequeue = true
+    var fastRequeue = true
 
     /*
-        Queue Dodging
+        Queue Dodging (gardé dans la config, pas affiché dans la GUI custom)
      */
 
     @Property(
@@ -273,7 +271,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Whether or not the bot should dodge people based on stats",
         category = "Queue Dodging",
     )
-    val enableDodging = true
+    var enableDodging = false
 
     @Property(
         type = PropertyType.SLIDER,
@@ -283,7 +281,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         min = 500,
         max = 20000
     )
-    val dodgeWins = 4000
+    var dodgeWins = 4000
 
     @Property(
         type = PropertyType.NUMBER,
@@ -294,7 +292,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         max = 100,
         increment = 5
     )
-    val dodgeWS = 15
+    var dodgeWS = 15
 
     @Property(
         type = PropertyType.DECIMAL_SLIDER,
@@ -304,7 +302,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         minF = 2f,
         maxF = 15f,
     )
-    val dodgeWLR = 3.0f
+    var dodgeWLR = 3.0f
 
     @Property(
         type = PropertyType.PARAGRAPH,
@@ -312,7 +310,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Players to dodge regardless of stats (comma separated)",
         category = "Queue Dodging",
     )
-    val dodgePlayersList = ""
+    var dodgePlayersList = ""
 
     @Property(
         type = PropertyType.SWITCH,
@@ -320,7 +318,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Whether or not the bot should dodge people it already lost against",
         category = "Queue Dodging",
     )
-    val dodgeLostTo = true
+    var dodgeLostTo = true
 
     @Property(
         type = PropertyType.SWITCH,
@@ -328,7 +326,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Whether or not the bot should dodge when no stats are found (nicked player or hypixel error)",
         category = "Queue Dodging",
     )
-    val dodgeNoStats = true
+    var dodgeNoStats = true
 
     @Property(
         type = PropertyType.SWITCH,
@@ -336,10 +334,10 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "If Hypixel prevents the bot from leaving (woah there, slow down!), it will disconnect and reconnect to dodge.",
         category = "Queue Dodging",
     )
-    val strictDodging = false
+    var strictDodging = false
 
     /*
-        Webhook
+        Webhook (gardé dans la config, pas affiché dans la GUI custom)
      */
 
     @Property(
@@ -348,7 +346,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Whether or not the bot should send a discord webhook message after each game.",
         category = "Webhook",
     )
-    val sendWebhookMessages = false
+    var sendWebhookMessages = false
 
     @Property(
         type = PropertyType.TEXT,
@@ -364,7 +362,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Should the bot send the stats of the player in the lobby to the webhook?",
         category = "Webhook",
     )
-    val sendWebhookStats = false
+    var sendWebhookStats = false
 
     @Property(
         type = PropertyType.SWITCH,
@@ -372,7 +370,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "If enabled, the bot will send a webhook whenever it dodged a player/nick.",
         category = "Webhook",
     )
-    val sendWebhookDodge = false
+    var sendWebhookDodge = false
 
     /*
         Misc
@@ -384,7 +382,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         description = "Switch between the sword and the fish in boxing.",
         category = "Misc",
     )
-    val boxingFish = false
+    var boxingFish = false
 
     val bots = mapOf(0 to Sumo(), 1 to Boxing(), 2 to Classic(), 3 to OP(), 4 to Combo())
 
@@ -411,8 +409,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
 
         initialize()
     }
-    
-    // Nouvelle méthode pour obtenir la GUI custom (pas un override)
+
     fun getCustomGui(): GuiScreen {
         return CustomConfigGUI()
     }
