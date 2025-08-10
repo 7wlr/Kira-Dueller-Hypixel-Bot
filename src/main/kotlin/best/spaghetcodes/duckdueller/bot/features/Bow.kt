@@ -10,9 +10,8 @@ import net.minecraft.client.Minecraft
 
 /**
  * Arc (Hypixel Classic):
- * - Full charge par défaut (≈ 1150–1300 ms).
- * - Si l'adversaire revient/se retourne: lâche immédiatement, puis repasse épée
- *   avec un léger délai pour ne PAS annuler le tir.
+ * - Full charge par défaut (~1150–1300 ms).
+ * - Si pression: on relâche immédiatement, puis on repasse épée APRÈS un petit délai (sinon le tir peut être annulé).
  * - AUCUN auto-CPS ici.
  */
 interface Bow {
@@ -20,27 +19,27 @@ interface Bow {
     val bowMinHoldMs: Int get() = 1150
     val bowMaxHoldMs: Int get() = 1300
 
-    /** Distance à laquelle on relâche tout de suite si pression. */
+    /** Distance où on force le release immédiat si l’ennemi est trop près. */
     val bowCancelCloseDistance: Float get() = 6.0f
 
     /**
-     * Tient l’arc jusqu’au full-charge, sauf pression (release immédiat).
+     * Tient l’arc jusqu’au full-charge, sauf pression (release anticipé).
      * @param distance Float (aligné avec EntityUtils.getDistanceNoY)
-     * @param afterShot callback appelé UNE fois après que la flèche est partie
+     * @param afterShot callback UNE fois après que la flèche est réellement partie
      */
     fun useBow(distance: Float, afterShot: () -> Unit = {}) {
         if (Mouse.isUsingProjectile()) return
 
-        // Équipe l’arc et démarre une vraie phase "projectile"
         Inventory.setInvItem("bow")
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
+
         Mouse.setUsingProjectile(true)
-        Mouse.rClick(hold) // maintient et relâche après 'hold' ms
+        Mouse.rClick(hold) // maintient puis relâche après 'hold' ms
 
         val self = this as? BotBase
         var fired = false
 
-        // Surveillance de la pression pendant la charge
+        // Surveille la pression pendant la charge
         val interval = TimeUtils.setInterval({
             val player = Minecraft.getMinecraft().thePlayer ?: return@setInterval
             val opp = self?.opponent() ?: return@setInterval
@@ -49,19 +48,21 @@ interface Bow {
             val d: Float = EntityUtils.getDistanceNoY(player, opp)
             val facingUs = !EntityUtils.entityFacingAway(player, opp)
 
-            if (facingUs || d < bowCancelCloseDistance) {
+            // On n'annule plus juste parce que l'ennemi nous regarde de loin.
+            // Pression réelle: trop près, ou proche ET il nous fixe.
+            val pressure = (d < bowCancelCloseDistance) || (facingUs && d <= 8f)
+            if (pressure) {
                 fired = true
-                // Relâche MAINTENANT, puis laisse 60–110ms avant l'épée
-                Mouse.rClickUp()
+                Mouse.rClickUp()          // lâcher maintenant → la flèche part
                 Mouse.setUsingProjectile(false)
                 TimeUtils.setTimeout({
                     Inventory.setInvItem("sword")
                     afterShot()
-                }, RandomUtils.randomIntInRange(60, 110))
+                }, RandomUtils.randomIntInRange(70, 110))
             }
         }, 50, 50)
 
-        // Full charge atteint → repasse épée juste après (petit délai pour ne pas annuler)
+        // Full charge atteint → on repasse épée juste après (petit délai pour ne pas annuler le tir)
         TimeUtils.setTimeout({
             interval?.cancel()
             if (!fired) {
@@ -70,7 +71,7 @@ interface Bow {
                 TimeUtils.setTimeout({
                     Inventory.setInvItem("sword")
                     afterShot()
-                }, RandomUtils.randomIntInRange(60, 110))
+                }, RandomUtils.randomIntInRange(70, 110))
             }
         }, hold + RandomUtils.randomIntInRange(20, 40))
     }
