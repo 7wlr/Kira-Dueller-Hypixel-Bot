@@ -73,9 +73,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     tapping = true
                     combo--
                     TimeUtils.setTimeout(fun () { tapping = false }, 300)
-                } else if (n.contains("sword")) {
-                    Mouse.rClick(RandomUtils.randomIntInRange(80, 100)) // blockhit léger
-                }
+                } 
+                // REMOVED: block-hit à l'épée (Mouse.rClick(...)) -> tu gères l’attaque ailleurs
             }
         } else {
             Combat.wTap(100)
@@ -98,7 +97,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            // Tracking permanent + auto-CPS OFF
+            // Tracking permanent + auto-CPS OFF (laisse ton autre mod cliquer)
             Mouse.startTracking()
             Mouse.stopLeftAC()
 
@@ -121,9 +120,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.stopJumping()
             }
 
-            // -- IMPORTANT --
-            // On supprime toute "sécurité arc" côté Classic : Bow.kt s'en charge déjà.
-            // => pas de Mouse.rClickUp ici pour l'arc, afin d'éviter d'annuler le tir d'ouverture.
+            // Pas de “sécurité arc” ici: Bow.kt gère le release/épée -> évite de casser le tir d’ouverture
 
             val movePriority = arrayListOf(0, 0)
             var clear = false
@@ -135,8 +132,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.startForward()
             }
 
-            // Ne JAMAIS ré-équiper l'épée si une action projectile est en cours, si le verrou rod n’est pas expiré,
-            // ou si le clic droit est encore appuyé (évite le ping-pong visuel).
+            // Ne JAMAIS ré-équiper l'épée si une action projectile est en cours,
+            // si le verrou rod n’est pas expiré, ou si le clic droit est encore appuyé
             if (!Mouse.isUsingProjectile() && System.currentTimeMillis() >= rodLockUntil && !Mouse.rClickDown) {
                 if (distance < 1.5f && mc.thePlayer.heldItem != null &&
                     !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
@@ -144,7 +141,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
 
-            // Fenêtrage (façon OP) : on n’ouvre ni rod ni bow si une autre action est en cours
+            // Fenêtrage (façon OP) : ni rod ni bow si une autre action est en cours
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
                 // Rod windows + verrou (empêche le ping-pong canne/épée)
