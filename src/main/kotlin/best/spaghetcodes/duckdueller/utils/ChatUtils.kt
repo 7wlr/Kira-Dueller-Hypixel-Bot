@@ -30,11 +30,13 @@ object ChatUtils {
     }
 
     fun info(message: String) {
-        sendChatMessage("${EnumChatFormatting.GOLD}[${EnumChatFormatting.GREEN}${EnumChatFormatting.BOLD}Duck${EnumChatFormatting.RESET}${EnumChatFormatting.DARK_GREEN}Dueller${EnumChatFormatting.GOLD}] ${EnumChatFormatting.WHITE}$message")
+        // Prefixe chat changé : [KIRA] en bleu ciel (AQUA)
+        sendChatMessage("${EnumChatFormatting.AQUA}[${EnumChatFormatting.BOLD}KIRA${EnumChatFormatting.RESET}${EnumChatFormatting.AQUA}] ${EnumChatFormatting.WHITE}$message")
     }
 
     fun error(message: String) {
-        sendChatMessage("${EnumChatFormatting.GOLD}[${EnumChatFormatting.GREEN}${EnumChatFormatting.BOLD}Duck${EnumChatFormatting.RESET}${EnumChatFormatting.DARK_GREEN}Dueller${EnumChatFormatting.GOLD}] ${EnumChatFormatting.RED}$message")
+        // Même prefixe, message en rouge
+        sendChatMessage("${EnumChatFormatting.AQUA}[${EnumChatFormatting.BOLD}KIRA${EnumChatFormatting.RESET}${EnumChatFormatting.AQUA}] ${EnumChatFormatting.RED}$message")
     }
 
     private fun sendChatMessage(message: String) {
