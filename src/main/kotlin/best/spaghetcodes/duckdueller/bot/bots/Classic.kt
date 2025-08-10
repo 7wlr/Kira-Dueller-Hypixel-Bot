@@ -30,6 +30,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     }
 
     private val jumpDistanceThreshold = 5.0f
+    private var rodLockUntil = 0L
 
     var shotsFired = 0
     var maxArrows = 5
@@ -114,6 +115,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.stopJumping()
             }
 
+            // En charge d’arc : si pression, on lâche et on repasse épée (géré aussi dans Bow)
             if (Mouse.isUsingProjectile()) {
                 val facingUs = !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)
                 val tooClose = distance < bowCancelCloseDistance
@@ -133,19 +135,24 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.startForward()
             }
 
-            if (distance < 1.5f && mc.thePlayer.heldItem != null && !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
-                Inventory.setInvItem("sword")
-                Mouse.rClickUp()
+            // NE PAS re-équiper épée pendant la fenêtre "rodLockUntil"
+            if (System.currentTimeMillis() >= rodLockUntil) {
+                if (distance < 1.5f && mc.thePlayer.heldItem != null && !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
+                    Inventory.setInvItem("sword")
+                    Mouse.rClickUp()
+                }
             }
 
+            // ---- Rod windows (Hypixel Classic) : lancer "réel" + retour épée après un court délai
             if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
-                if (!Mouse.isUsingProjectile()) useRod()
+                if (!Mouse.isUsingProjectile()) useRodClassic()
             }
 
             if (combo >= 3 && distance >= 3.2f && mc.thePlayer.onGround) {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
             }
 
+            // ---- Arc (tirs “safe” + full charge par défaut)
             if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5f..30f) ||
                 (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
                 if (distance > 5f && !Mouse.isUsingProjectile() && shotsFired < maxArrows) {
@@ -181,6 +188,22 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
 
             handle(clear, randomStrafe, movePriority)
+        }
+    }
+
+    /**
+     * Lancer de canne optimisé Hypixel Classic :
+     * - sort la canne, lance réellement (clic droit court),
+     * - empêche de rééquiper l’épée pendant ~220–300ms,
+     * - rééquipe l’épée juste après pour enchaîner le hit.
+     */
+    private fun useRodClassic() {
+        rodLockUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(220, 300)
+        if (Inventory.setInvItem("rod")) {
+            Mouse.rClick(RandomUtils.randomIntInRange(90, 120)) // lancer du flotteur
+            TimeUtils.setTimeout({
+                Inventory.setInvItem("sword")
+            }, RandomUtils.randomIntInRange(180, 240))
         }
     }
 
