@@ -33,30 +33,20 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
     private var tapping = false
     private var fishTimer: Timer? = null
 
-    private val trackingStopDistance = 2.2f
-
     override fun onGameStart() {
         Movement.startSprinting()
         Movement.startForward()
         if (DuckDueller.config?.boxingFish == true) {
             TimeUtils.setTimeout(this::fishFunc, RandomUtils.randomIntInRange(10000, 20000))
         }
-        // Auto-tracking ON au départ
-        Mouse.startTracking()
-        // AUTO-CPS OFF
+        Mouse.startTracking()              // tracking ON
         Mouse.stopLeftAC()
     }
 
     private fun fishFunc(fish: Boolean = true) {
         if (StateManager.state == StateManager.States.PLAYING) {
-            if (fish) {
-                Inventory.setInvItem("fish")
-            } else {
-                Inventory.setInvItem("sword")
-            }
-            fishTimer = TimeUtils.setTimeout(fun () {
-                fishFunc(!fish)
-            }, RandomUtils.randomIntInRange(10000, 20000))
+            if (fish) Inventory.setInvItem("fish") else Inventory.setInvItem("sword")
+            fishTimer = TimeUtils.setTimeout(fun () { fishFunc(!fish) }, RandomUtils.randomIntInRange(10000, 20000))
         }
     }
 
@@ -66,7 +56,7 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
             Mouse.stopLeftAC()
             Combat.stopRandomStrafe()
             fishTimer?.cancel()
-            Mouse.stopTracking()
+            Mouse.stopTracking()           // clean
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
@@ -74,12 +64,8 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
         tapping = true
         ChatUtils.info("W-Tap")
         Combat.wTap(100)
-        TimeUtils.setTimeout(fun () {
-            tapping = false
-        }, 100)
-        if (combo >= 3) {
-            Movement.clearLeftRight()
-        }
+        TimeUtils.setTimeout(fun () { tapping = false }, 100)
+        if (combo >= 3) Movement.clearLeftRight()
     }
 
     override fun onTick() {
@@ -91,14 +77,9 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
         if (opponent() != null && mc.theWorld != null && mc.thePlayer != null) {
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            // Auto-tracking intelligent : ON si loin, OFF en mêlée
-            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                if (distance > trackingStopDistance) Mouse.startTracking() else Mouse.stopTracking()
-            } else {
-                Mouse.stopTracking()
-            }
+            // tracking ON en continu
+            Mouse.startTracking()
 
-            // AUTO-CPS OFF (quelle que soit la distance/etats de combo)
             Mouse.stopLeftAC()
 
             if (combo >= 3 && distance >= 3.2f && mc.thePlayer.onGround) {
@@ -108,9 +89,7 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
             if (distance < 1.5f || (distance < 2.7f && combo >= 1)) {
                 Movement.stopForward()
             } else {
-                if (!tapping) {
-                    Movement.startForward()
-                }
+                if (!tapping) Movement.startForward()
             }
 
             val movePriority = arrayListOf(0, 0)
@@ -118,7 +97,6 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
             var randomStrafe = false
 
             if (!EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
-                // RANGES en Float pour matcher 'distance'
                 if (distance in 15.0f..8.0f) {
                     randomStrafe = true
                 } else {
@@ -131,16 +109,11 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
                     } else if (distance < 4f) {
                         val rotations = EntityUtils.getRotations(opponent()!!, mc.thePlayer, false)
                         if (rotations != null) {
-                            if (rotations[0] < 0) {
-                                movePriority[1] += 5
-                            } else {
-                                movePriority[0] += 5
-                            }
+                            if (rotations[0] < 0) movePriority[1] += 5 else movePriority[0] += 5
                         }
                     }
                 }
             } else {
-                // runner
                 if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) {
                     movePriority[0] += 4
                 } else {
