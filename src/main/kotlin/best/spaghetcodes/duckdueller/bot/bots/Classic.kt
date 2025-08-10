@@ -31,7 +31,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     // --- Paramètres comportementaux (changements demandés) ---
     private val jumpDistanceThreshold = 5.0      // Sauter dès que l’ennemi est > 5 blocs
-    private val bowCancelCloseDistance = 6.0     // Annuler l’arc si l’ennemi revient < 6 blocs
+    // NOTE: bowCancelCloseDistance fourni par Bow (6.0 par défaut)
 
     var shotsFired = 0
     var maxArrows = 5
@@ -106,16 +106,13 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            // ---- Auto-aim OFF : ne jamais lancer le tracking ici (géré par ton autre mod)
+            // ---- Auto-aim OFF
             Mouse.stopTracking()
 
-            // ---- Auto-CPS OFF : le bot ne déclenche plus de clic gauche auto
-            // (on ne fait plus startLeftAC nulle part dans ce profil)
-            // On peut s'assurer qu'il n'y a jamais d'état résiduel :
-            // (Appel idempotent par tick, tolérable côté perfs)
+            // ---- Auto-CPS OFF
             Mouse.stopLeftAC()
 
-            // ---- Gestion du saut : rendre le bot plus "vivant" dès > 5 blocs
+            // ---- Saut > 5 blocs : rendu plus “vivant”
             if (distance > jumpDistanceThreshold) {
                 if (opponent() != null && opponent()!!.heldItem != null && opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow")) {
                     if (WorldUtils.blockInFront(mc.thePlayer, 2f, 0.5f) == Blocks.air) {
@@ -136,14 +133,13 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
 
-            // ---- Si on était en train d’utiliser l’arc, mais que l’adversaire se retourne
-            //      OU revient trop près, on ABANDONNE l’arc et on repasse épée.
+            // ---- Si on charge l’arc et que l’adversaire re-engage: abandon immédiat (géré aussi dans Bow, double sécurité)
             if (Mouse.isUsingProjectile()) {
                 val facingUs = !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)
                 val tooClose = distance < bowCancelCloseDistance
                 if (facingUs || tooClose) {
-                    Mouse.rClickUp()                 // on relâche l’arc
-                    Inventory.setInvItem("sword")    // on revient à l’épée
+                    Mouse.rClickUp()
+                    Inventory.setInvItem("sword")
                 }
             }
 
@@ -175,9 +171,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
             }
 
-            // Logique d’utilisation de l’arc : seulement si l’ennemi est de dos OU très loin,
-            // et uniquement si on n’a pas dépassé le quota de flèches.
-            if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5f..30f) ||
+            // Logique arc: de dos ou très loin
+            if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5..30.0) ||
                 (distance in 28.0..33.0 && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
                 if (distance > 5 && !Mouse.isUsingProjectile() && shotsFired < maxArrows) {
                     clear = true
@@ -200,9 +195,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                         movePriority[1] += 4
                     }
                 } else {
-                    // NOTE: condition "distance in 15f..8f" d’origine paraît inversée,
-                    // je ne la modifie pas ici pour rester strictement dans le scope demandé.
-                    if (distance in 15f..8f) {
+                    // Condition d’origine (ordre inversé) conservée pour rester minimaliste
+                    if (distance in 15.0..8.0) {
                         randomStrafe = true
                     } else {
                         randomStrafe = false
