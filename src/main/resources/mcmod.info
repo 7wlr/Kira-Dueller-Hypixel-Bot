@@ -1,16 +1,16 @@
 [
     {
-        "modid": "duckdueller",
-        "name": "DuckDueller",
+        "modid": "Kira",
+        "name": "Kira v1",
         "description": "Hypixel Duels Bot",
         "version": "${version}",
         "mcversion": "${mcversion}",
         "url": "",
         "updateUrl": "",
         "authorList": [
-            "HumanDuck23"
+            "Nix"
         ],
-        "credits": "",
+        "credits": "HumanDuck23",
         "logoFile": "",
         "screenshots": [],
         "dependencies": []
