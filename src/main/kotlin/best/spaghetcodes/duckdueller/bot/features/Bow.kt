@@ -9,65 +9,60 @@ import best.spaghetcodes.duckdueller.utils.TimeUtils
 import net.minecraft.client.Minecraft
 
 /**
- * Comportement commun "arc agressif et humain":
- * - AUCUN autotracking ni auto-CPS ici.
- * - Charge puis tire, sauf si l’adversaire re-fixe ou revient trop près:
- *   -> annule la charge, relâche, repasse épée.
- * - Après tir: repasse automatiquement à l’épée.
+ * Arc agressif "human-like" :
+ * - Toujours charge au maximum (≈ 1s) pour un tir full power.
+ * - Si l’adversaire se retourne ou revient trop près : on LÂCHE la flèche immédiatement et on repasse épée.
+ * - AUCUN autotracking/auto-CPS ici.
  */
 interface Bow {
 
-    /** Fenêtre de charge "humaine" (ms). */
-    val bowMinHoldMs: Int get() = 520
-    val bowMaxHoldMs: Int get() = 720
+    /** Fenêtre de charge "max-power" (ms), avec légère variance humaine. */
+    val bowMinHoldMs: Int get() = 950  // ~19 ticks
+    val bowMaxHoldMs: Int get() = 1050 // ~21 ticks
 
-    /** Distance de cancel si l’ennemi revient trop près — en Float pour matcher le projet. */
+    /** Distance de "pression" à laquelle on doit lâcher la flèche et repasser épée. */
     val bowCancelCloseDistance: Float get() = 6.0f
 
     /**
-     * Utilisation de l’arc avec annulation sécurisée.
-     * @param distance distance actuelle (Float, aligné avec EntityUtils.getDistanceNoY)
-     * @param afterShot callback après un tir effectif
+     * Utilisation de l’arc : tire à full charge, sauf pression → tire tout de suite.
+     * @param distance distance actuelle (Float)
+     * @param afterShot callback appelé UNE fois quand la flèche part
      */
     fun useBow(distance: Float, afterShot: () -> Unit = {}) {
-        // Évite la ré-entrée si déjà en phase projectile
         if (Mouse.isUsingProjectile()) return
 
-        // Équipe l'arc
         Inventory.setInvItem("bow")
 
-        // Durée de charge pseudo-aléatoire
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
-
-        // Lance la charge (clic droit maintenu puis relâché après 'hold' ms)
-        Mouse.rClick(hold)
+        Mouse.rClick(hold) // maintien du clic droit pendant 'hold' ms
 
         val self = this as? BotBase
-        var canceled = false
+        var fired = false
 
-        // Surveille la situation toutes les 50ms pendant la charge
         val interval = TimeUtils.setInterval({
             val player = Minecraft.getMinecraft().thePlayer ?: return@setInterval
             val opp = self?.opponent() ?: return@setInterval
 
-            if (canceled) return@setInterval
+            if (fired) return@setInterval
 
             val d: Float = EntityUtils.getDistanceNoY(player, opp)
             val facingUs = !EntityUtils.entityFacingAway(player, opp)
 
-            // Annuler si l’ennemi re-fixe ou s’approche trop
+            // Si l’adversaire re-engage → on LÂCHE la flèche maintenant et on repasse épée
             if (facingUs || d < bowCancelCloseDistance) {
-                canceled = true
-                Mouse.rClickUp()
+                fired = true
+                Mouse.rClickUp()              // relâche → flèche part même si pas full charge
                 Inventory.setInvItem("sword")
+                afterShot()
             }
         }, 50, 50)
 
-        // Fin de charge programmée
+        // Fin de charge programmée (full power)
         TimeUtils.setTimeout({
             interval?.cancel()
-            Inventory.setInvItem("sword")
-            if (!canceled) {
+            if (!fired) {
+                fired = true
+                Inventory.setInvItem("sword") // repasse épée juste après le tir full charge
                 afterShot()
             }
         }, hold + RandomUtils.randomIntInRange(20, 40))
