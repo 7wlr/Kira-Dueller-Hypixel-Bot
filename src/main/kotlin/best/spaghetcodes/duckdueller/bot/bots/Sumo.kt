@@ -30,6 +30,8 @@ class Sumo : BotBase("/play duels_sumo_duel") {
     private var opponentOffEdge = false
     private var tap50 = false
 
+    private val trackingStopDistance = 2.2f
+
     override fun onJoinGame() {
         if (DuckDueller.config?.lobbyMovement == true) {
             LobbyMovement.sumo()
@@ -48,8 +50,9 @@ class Sumo : BotBase("/play duels_sumo_duel") {
         LobbyMovement.stop()
         Movement.startSprinting()
         Movement.startForward()
-        // AUTO-AIM OFF / AUTO-CPS OFF garantis par défaut
-        Mouse.stopTracking()
+        // Auto-tracking ON au départ (on laisse l’aim fin à ton autre mod en mêlée)
+        Mouse.startTracking()
+        // Auto-CPS OFF
         Mouse.stopLeftAC()
     }
 
@@ -76,8 +79,8 @@ class Sumo : BotBase("/play duels_sumo_duel") {
     }
 
     override fun onFoundOpponent() {
-        // AUTO-AIM OFF (on laisse ton autre mod gérer la visée)
-        Mouse.stopTracking()
+        // on active le tracking quand on détecte l’adversaire
+        Mouse.startTracking()
     }
 
     fun leftEdge(distance: Float): Boolean {
@@ -105,12 +108,16 @@ class Sumo : BotBase("/play duels_sumo_duel") {
                 Movement.startSprinting()
             }
 
-            // AUTO-AIM OFF
-            Mouse.stopTracking()
-
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            // AUTO-CPS OFF (jamais de startLeftAC)
+            // Auto-tracking intelligent : ON si loin, OFF en mêlée
+            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
+                if (distance > trackingStopDistance) Mouse.startTracking() else Mouse.stopTracking()
+            } else {
+                Mouse.stopTracking()
+            }
+
+            // Auto-CPS OFF
             Mouse.stopLeftAC()
 
             val movePriority = arrayListOf(0, 0)
@@ -140,7 +147,7 @@ class Sumo : BotBase("/play duels_sumo_duel") {
                 clear = true
             }
 
-            if (combo >= 3 && distance >= 3.2 && mc.thePlayer.onGround && !nearEdge(5f) && !WorldUtils.airInFront(mc.thePlayer, 3f)) {
+            if (combo >= 3 && distance >= 3.2f && mc.thePlayer.onGround && !nearEdge(5f) && !WorldUtils.airInFront(mc.thePlayer, 3f)) {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
             }
 
@@ -168,7 +175,7 @@ class Sumo : BotBase("/play duels_sumo_duel") {
                 }
             }
 
-            if (distance < 1.2) {
+            if (distance < 1.2f) {
                 Movement.stopForward()
             } else {
                 if (!tapping) {
