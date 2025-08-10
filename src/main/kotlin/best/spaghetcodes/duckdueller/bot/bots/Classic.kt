@@ -15,9 +15,7 @@ import net.minecraft.util.Vec3
 
 class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
-    override fun getName(): String {
-        return "Classic"
-    }
+    override fun getName(): String = "Classic"
 
     init {
         setStatKeys(
@@ -37,21 +35,21 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     var maxArrows = 5
 
     override fun onGameStart() {
-        Mouse.startTracking()         // tracking ON
+        Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
         TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
 
-        // Tir d'ouverture: 1 flèche très tôt (full charge via Bow.kt)
+        // Tir d’ouverture très tôt (full charge via Bow.kt)
         didOpeningShot = false
         TimeUtils.setTimeout({
             val opp = opponent()
-            if (opp != null && shotsFired < maxArrows) {
+            if (opp != null && shotsFired < maxArrows && !Mouse.isUsingProjectile()) {
                 val d = EntityUtils.getDistanceNoY(mc.thePlayer, opp)
                 useBow(d) { shotsFired++ }
                 didOpeningShot = true
             }
-        }, RandomUtils.randomIntInRange(350, 550))
+        }, RandomUtils.randomIntInRange(300, 500))
     }
 
     override fun onGameEnd() {
@@ -60,7 +58,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
         TimeUtils.setTimeout(fun () {
             i?.cancel()
-            Mouse.stopTracking()      // clean
+            Mouse.stopTracking()
             Movement.clearAll()
             Combat.stopRandomStrafe()
         }, RandomUtils.randomIntInRange(200, 400))
@@ -79,7 +77,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     combo--
                     TimeUtils.setTimeout(fun () { tapping = false }, 300)
                 } else if (n.contains("sword")) {
-                    Mouse.rClick(RandomUtils.randomIntInRange(80, 100)) // petit blockhit
+                    Mouse.rClick(RandomUtils.randomIntInRange(80, 100)) // blockhit léger
                 }
             }
         } else {
@@ -103,12 +101,11 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            // tracking ON en continu
+            // Tracking permanent + auto-CPS OFF
             Mouse.startTracking()
-
-            // auto-CPS OFF (idempotent)
             Mouse.stopLeftAC()
 
+            // Sauts “humains”
             if (distance > jumpDistanceThreshold) {
                 if (opponent() != null && opponent()!!.heldItem != null && opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow")) {
                     if (WorldUtils.blockInFront(mc.thePlayer, 2f, 0.5f) == Blocks.air) {
@@ -127,13 +124,13 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.stopJumping()
             }
 
-            // Si on charge l’arc et que l’adversaire re-engage → lâche et repasse épée (sécurité côté bot)
+            // Si on charge l’arc et que l’adversaire met la pression : relâche (sécurité côté bot)
             if (Mouse.isUsingProjectile()) {
                 val facingUs = !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)
                 val tooClose = distance < bowCancelCloseDistance
                 if (facingUs || tooClose) {
                     Mouse.rClickUp()
-                    Inventory.setInvItem("sword")
+                    // L’épée sera rééquipée par Bow.kt juste après un court délai
                 }
             }
 
@@ -147,50 +144,53 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.startForward()
             }
 
-            // Empêche de ré-équiper l’épée pendant la fenêtre rodLock
-            if (System.currentTimeMillis() >= rodLockUntil) {
-                if (distance < 1.5f && mc.thePlayer.heldItem != null && !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
+            // Ne JAMAIS re-équiper l'épée si on est dans une action projectile ou sous verrou rod
+            if (!Mouse.isUsingProjectile() && System.currentTimeMillis() >= rodLockUntil) {
+                if (distance < 1.5f && mc.thePlayer.heldItem != null &&
+                    !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
                     Inventory.setInvItem("sword")
                     Mouse.rClickUp()
                 }
             }
 
-            // --- Rod windows (avec verrou pour laisser le temps au flotteur de toucher)
-            if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) &&
-                !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) &&
-                !Mouse.isUsingProjectile()) {
+            // --- Fenêtrage "à la OP": on ne tente ni rod ni bow si une autre action est en cours
+            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
-                // Verrou calculé comme dans Rod.kt (distance-aware)
-                val lockMs = when {
-                    distance < 4f    -> RandomUtils.randomIntInRange(240, 300)
-                    distance < 6.7f  -> RandomUtils.randomIntInRange(300, 360)
-                    distance < 9.7f  -> RandomUtils.randomIntInRange(360, 440)
-                    else             -> RandomUtils.randomIntInRange(440, 520)
+                // Rod windows (Hypixel), avec verrou calculé d’avance pour empêcher le ping-pong
+                if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) &&
+                    !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
+
+                    val lockMs = when {
+                        distance < 4f    -> RandomUtils.randomIntInRange(260, 320)
+                        distance < 6.7f  -> RandomUtils.randomIntInRange(320, 380)
+                        distance < 9.7f  -> RandomUtils.randomIntInRange(380, 460)
+                        else             -> RandomUtils.randomIntInRange(460, 560)
+                    }
+                    rodLockUntil = System.currentTimeMillis() + lockMs
+                    useRod()
                 }
-                rodLockUntil = System.currentTimeMillis() + lockMs
-
-                useRod()
+                // Bow windows (tir “safe”) — en plus du tir d’ouverture
+                else if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5f..30f) ||
+                         (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
+                    if (distance > 10f && shotsFired < maxArrows && System.currentTimeMillis() % 2L == 0L) { // petite variabilité
+                        clear = true
+                        useBow(distance) { shotsFired++ }
+                    } else {
+                        clear = false
+                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
+                        else movePriority[1] += 4
+                    }
+                }
             }
 
             if (combo >= 3 && distance >= 3.2f && mc.thePlayer.onGround) {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
             }
 
-            // --- Arc (fenêtres "safe") ; tir d’ouverture déjà géré au start
-            if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5f..30f) ||
-                (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
-                if (distance > 5f && !Mouse.isUsingProjectile() && shotsFired < maxArrows) {
-                    clear = true
-                    useBow(distance) { shotsFired++ }
-                } else {
-                    clear = false
-                    if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
-                    else movePriority[1] += 4
-                }
-            } else {
+            // Strafe / priorités de mouvement (inchangé)
+            if (!clear) {
                 if (EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
-                    if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
-                    else movePriority[1] += 4
+                    if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
                 } else {
                     if (distance in 15.0f..8.0f) {
                         randomStrafe = true
