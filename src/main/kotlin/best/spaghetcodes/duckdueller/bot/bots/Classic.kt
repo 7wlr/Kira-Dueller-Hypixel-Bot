@@ -29,7 +29,6 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     private val jumpDistanceThreshold = 5.0f
     private var rodLockUntil = 0L
-    private var didOpeningShot = false
 
     var shotsFired = 0
     var maxArrows = 5
@@ -40,14 +39,12 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Movement.startForward()
         TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
 
-        // Tir d’ouverture très tôt (full charge via Bow.kt)
-        didOpeningShot = false
+        // Tir d’ouverture (full charge via Bow.kt). On évite de tirer si déjà en action.
         TimeUtils.setTimeout({
             val opp = opponent()
             if (opp != null && shotsFired < maxArrows && !Mouse.isUsingProjectile()) {
                 val d = EntityUtils.getDistanceNoY(mc.thePlayer, opp)
                 useBow(d) { shotsFired++ }
-                didOpeningShot = true
             }
         }, RandomUtils.randomIntInRange(300, 500))
     }
@@ -124,13 +121,16 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.stopJumping()
             }
 
-            // Si on charge l’arc et que l’adversaire met la pression : relâche (sécurité côté bot)
-            if (Mouse.isUsingProjectile()) {
+            // Sécurité arc: ne s'applique QUE si on tient un arc (plus jamais sur la canne)
+            if (Mouse.isUsingProjectile() &&
+                mc.thePlayer.heldItem != null &&
+                mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("bow")) {
+
                 val facingUs = !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)
-                val tooClose = distance < bowCancelCloseDistance
-                if (facingUs || tooClose) {
-                    Mouse.rClickUp()
-                    // L’épée sera rééquipée par Bow.kt juste après un court délai
+                val close = distance < bowCancelCloseDistance
+                val nearAndFacing = facingUs && distance <= 8f
+                if (close || nearAndFacing) {
+                    Mouse.rClickUp() // Bow.kt gère ensuite l’épée avec un petit délai
                 }
             }
 
@@ -144,7 +144,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.startForward()
             }
 
-            // Ne JAMAIS re-équiper l'épée si on est dans une action projectile ou sous verrou rod
+            // Ne JAMAIS re-équiper l'épée si une action projectile est en cours ou si le verrou rod n’est pas expiré
             if (!Mouse.isUsingProjectile() && System.currentTimeMillis() >= rodLockUntil) {
                 if (distance < 1.5f && mc.thePlayer.heldItem != null &&
                     !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
@@ -153,10 +153,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
 
-            // --- Fenêtrage "à la OP": on ne tente ni rod ni bow si une autre action est en cours
+            // Fenêtrage (façon OP) : on n’ouvre ni rod ni bow s’il y a une autre action
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
-                // Rod windows (Hypixel), avec verrou calculé d’avance pour empêcher le ping-pong
+                // Rod windows + verrou (empêche le ping-pong canne/épée)
                 if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) &&
                     !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
 
@@ -168,11 +168,11 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     }
                     rodLockUntil = System.currentTimeMillis() + lockMs
                     useRod()
-                }
-                // Bow windows (tir “safe”) — en plus du tir d’ouverture
-                else if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5f..30f) ||
-                         (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
-                    if (distance > 10f && shotsFired < maxArrows && System.currentTimeMillis() % 2L == 0L) { // petite variabilité
+
+                // Bow windows (en plus du tir d’ouverture)
+                } else if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5f..30f) ||
+                           (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
+                    if (distance > 10f && shotsFired < maxArrows) {
                         clear = true
                         useBow(distance) { shotsFired++ }
                     } else {
@@ -187,7 +187,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
             }
 
-            // Strafe / priorités de mouvement (inchangé)
+            // Strafe / priorités (inchangé)
             if (!clear) {
                 if (EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
                     if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
