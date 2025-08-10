@@ -48,7 +48,6 @@ interface Bow {
             val d: Float = EntityUtils.getDistanceNoY(player, opp)
             val facingUs = !EntityUtils.entityFacingAway(player, opp)
 
-            // On n'annule plus juste parce que l'ennemi nous regarde de loin.
             // Pression réelle: trop près, ou proche ET il nous fixe.
             val pressure = (d < bowCancelCloseDistance) || (facingUs && d <= 8f)
             if (pressure) {
@@ -62,7 +61,7 @@ interface Bow {
             }
         }, 50, 50)
 
-        // Full charge atteint → on repasse épée juste après (petit délai pour ne pas annuler le tir)
+        // Full charge atteint → repasse épée juste après (petit délai pour ne pas annuler le tir)
         TimeUtils.setTimeout({
             interval?.cancel()
             if (!fired) {
