@@ -9,6 +9,7 @@ class ConfigCommand : Command("duckdueller") {
 
     @DefaultHandler
     fun handle() {
-        EssentialAPI.getGuiUtil().openScreen(DuckDueller.config?.gui())
+        // Utilise la nouvelle GUI custom au lieu de la GUI Vigilance par défaut
+        EssentialAPI.getGuiUtil().openScreen(DuckDueller.config?.getCustomGui())
     }
 }
