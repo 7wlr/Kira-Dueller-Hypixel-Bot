@@ -30,8 +30,6 @@ class Sumo : BotBase("/play duels_sumo_duel") {
     private var opponentOffEdge = false
     private var tap50 = false
 
-    private val trackingStopDistance = 2.2f
-
     override fun onJoinGame() {
         if (DuckDueller.config?.lobbyMovement == true) {
             LobbyMovement.sumo()
@@ -50,9 +48,7 @@ class Sumo : BotBase("/play duels_sumo_duel") {
         LobbyMovement.stop()
         Movement.startSprinting()
         Movement.startForward()
-        // Auto-tracking ON au départ (on laisse l’aim fin à ton autre mod en mêlée)
-        Mouse.startTracking()
-        // Auto-CPS OFF
+        Mouse.startTracking()            // tracking ON
         Mouse.stopLeftAC()
     }
 
@@ -61,7 +57,7 @@ class Sumo : BotBase("/play duels_sumo_duel") {
             Movement.clearAll()
             Mouse.stopLeftAC()
             Combat.stopRandomStrafe()
-            Mouse.stopTracking()
+            Mouse.stopTracking()         // clean
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
@@ -72,14 +68,11 @@ class Sumo : BotBase("/play duels_sumo_duel") {
             ChatUtils.info("W-Tap $dur")
             Combat.wTap(dur)
             tap50 = !tap50
-            TimeUtils.setTimeout(fun () {
-                tapping = false
-            }, dur)
+            TimeUtils.setTimeout(fun () { tapping = false }, dur)
         }
     }
 
     override fun onFoundOpponent() {
-        // on active le tracking quand on détecte l’adversaire
         Mouse.startTracking()
     }
 
@@ -91,33 +84,25 @@ class Sumo : BotBase("/play duels_sumo_duel") {
         return (WorldUtils.airOnRight(mc.thePlayer, distance))
     }
 
-    fun nearEdge(distance: Float): Boolean { // doesnt check front
+    fun nearEdge(distance: Float): Boolean {
         return (rightEdge(distance) || leftEdge(distance) || WorldUtils.airInBack(mc.thePlayer, distance))
     }
 
     fun opponentNearEdge(distance: Float): Boolean {
-        return (WorldUtils.airInBack(opponent()!!, distance) || WorldUtils.airOnLeft(opponent()!!, distance) || WorldUtils.airOnRight(
-            opponent()!!, distance))
+        return (WorldUtils.airInBack(opponent()!!, distance) || WorldUtils.airOnLeft(opponent()!!, distance) || WorldUtils.airOnRight(opponent()!!, distance))
     }
 
     override fun onTick() {
         opponentOffEdge = opponent() != null && mc.thePlayer != null &&
                 (WorldUtils.entityOffEdge(opponent()!!) || opponentOffEdge && EntityUtils.getDistanceNoY(mc.thePlayer, opponent()!!) > 6)
         if (!opponentOffEdge && mc.thePlayer != null && opponent() != null) {
-            if (!mc.thePlayer.isSprinting) {
-                Movement.startSprinting()
-            }
+            if (!mc.thePlayer.isSprinting) Movement.startSprinting()
 
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            // Auto-tracking intelligent : ON si loin, OFF en mêlée
-            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                if (distance > trackingStopDistance) Mouse.startTracking() else Mouse.stopTracking()
-            } else {
-                Mouse.stopTracking()
-            }
+            // tracking ON en continu
+            Mouse.startTracking()
 
-            // Auto-CPS OFF
             Mouse.stopLeftAC()
 
             val movePriority = arrayListOf(0, 0)
@@ -166,11 +151,7 @@ class Sumo : BotBase("/play duels_sumo_duel") {
                         Movement.stopLeft()
                         Movement.startRight()
                     } else {
-                        if (RandomUtils.randomBool()) {
-                            Movement.startLeft()
-                        } else {
-                            Movement.startRight()
-                        }
+                        if (RandomUtils.randomBool()) Movement.startLeft() else Movement.startRight()
                     }
                 }
             }
@@ -178,12 +159,9 @@ class Sumo : BotBase("/play duels_sumo_duel") {
             if (distance < 1.2f) {
                 Movement.stopForward()
             } else {
-                if (!tapping) {
-                    Movement.startForward()
-                }
+                if (!tapping) Movement.startForward()
             }
 
-            // don't walk off an edge
             if (WorldUtils.airInFront(mc.thePlayer, 2f) && mc.thePlayer.onGround) {
                 Movement.startSneaking()
             } else {
