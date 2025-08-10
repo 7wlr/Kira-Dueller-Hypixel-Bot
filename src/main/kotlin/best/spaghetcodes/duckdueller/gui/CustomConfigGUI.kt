@@ -15,11 +15,13 @@ import kotlin.math.min
 class CustomConfigGUI : GuiScreen() {
 
     private var currentTab = 0
-    private val tabNames = listOf("General", "Combat", "Stats")
+    // Onglets: PAS de Dodging, on ajoute Webhook
+    private val tabNames = listOf("General", "Combat", "Webhook", "Stats")
     private var fadeIn = 0f
 
     // champs éditables
     private lateinit var apiKeyField: GuiTextField
+    private lateinit var webhookField: GuiTextField
 
     // couleurs
     private val primaryColor = Color(0, 240, 255, 255).rgb  // cyan KIRA
@@ -35,14 +37,17 @@ class CustomConfigGUI : GuiScreen() {
         fadeIn = 0f
         Keyboard.enableRepeatEvents(true)
 
-        // champs
         val centerX = width / 2
+
         apiKeyField = GuiTextField(0, fontRendererObj, centerX - 140, 100, 280, 20).apply {
             maxStringLength = 36
             text = DuckDueller.config?.apiKey ?: ""
         }
+        webhookField = GuiTextField(1, fontRendererObj, centerX - 140, 100, 280, 20).apply {
+            maxStringLength = 180
+            text = DuckDueller.config?.webhookURL ?: ""
+        }
 
-        // boutons
         buttonList.clear()
         buttonList.add(GuiButton(100, width / 2 - 60, height - 30, 120, 20, "Save & Close"))
     }
@@ -55,13 +60,13 @@ class CustomConfigGUI : GuiScreen() {
     override fun updateScreen() {
         super.updateScreen()
         apiKeyField.updateCursorCounter()
+        webhookField.updateCursorCounter()
     }
 
     override fun drawScreen(mouseX: Int, mouseY: Int, partialTicks: Float) {
         hotspots.clear()
         if (fadeIn < 1f) fadeIn = min(1f, fadeIn + 0.05f)
 
-        // fond dégradé
         drawGradientRect(
             0, 0, width, height,
             Color(10, 10, 20, (250 * fadeIn).toInt()).rgb,
@@ -73,26 +78,22 @@ class CustomConfigGUI : GuiScreen() {
         val containerW = width - 80
         val containerH = height - 80
 
-        // conteneur
         drawRect(containerX, containerY, containerX + containerW, containerY + containerH, backgroundColor)
         drawBorder(containerX, containerY, containerW, containerH, primaryColor)
 
-        // titre
         drawCenteredString(fontRendererObj, "§lKIRA CONFIG", width / 2, 15, primaryColor)
 
-        // onglets
         drawTabs(containerX, containerY - 25, mouseX, mouseY)
 
-        // contenu
         val contentX = containerX + 20
         val contentY = containerY + 20
         when (currentTab) {
             0 -> drawGeneralTab(contentX, contentY)
             1 -> drawCombatTab(contentX, contentY)
-            2 -> drawStatsTab(contentX, contentY)
+            2 -> drawWebhookTab(contentX, contentY)
+            3 -> drawStatsTab(contentX, contentY)
         }
 
-        // statut + version
         val status = if (DuckDueller.bot?.toggled() == true) "§aONLINE" else "§cOFFLINE"
         drawString(fontRendererObj, "Status: $status", width - 80, height - 10, -1)
         drawString(fontRendererObj, "§7KIRA UI", 5, height - 10, Color.GRAY.rgb)
@@ -112,10 +113,7 @@ class CustomConfigGUI : GuiScreen() {
     }
 
     private fun drawButton(x: Int, y: Int, w: Int, h: Int, label: String, active: Boolean = true) {
-        val bg = when {
-            !active -> Color(60, 60, 60, 120).rgb
-            else -> Color(40, 40, 60, 140).rgb
-        }
+        val bg = if (active) Color(40, 40, 60, 140).rgb else Color(60, 60, 60, 120).rgb
         drawRect(x, y, x + w, y + h, bg)
         drawCenteredString(fontRendererObj, label, x + w / 2, y + 6, if (active) -1 else Color(160,160,160).rgb)
     }
@@ -135,7 +133,6 @@ class CustomConfigGUI : GuiScreen() {
     private fun selector(label: String, x: Int, y: Int, get: () -> Int, set: (Int) -> Unit, options: List<String>) {
         val cur = min(max(0, get()), options.lastIndex)
         drawString(fontRendererObj, "$label:", x, y, -1)
-        // boutons - / +
         drawButton(x + 110, y - 4, 18, 18, "«")
         addHotspot(x + 110, y - 4, 18, 18) {
             val v = if (cur <= 0) options.lastIndex else cur - 1
@@ -187,42 +184,32 @@ class CustomConfigGUI : GuiScreen() {
 
         val cfg = DuckDueller.config ?: return
 
-        // Sélecteur de bot
         val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo")
         selector("Current Bot", x, yOff, { cfg.currentBot }, { v ->
             cfg.currentBot = v
-            // sécurité: on force le swap immédiatement
-            val b = cfg.bots[v]
-            if (b != null) {
-                DuckDueller.swapBot(b)
-            }
+            DuckDueller.config?.bots?.get(v)?.let { DuckDueller.swapBot(it) }
         }, botNames)
         yOff += 24
 
-        // API Key (affichée / modifiable — utile si tu gardes les stats/webhooks)
         drawString(fontRendererObj, "API Key:", x, yOff, -1); yOff += 15
         apiKeyField.xPosition = x
         apiKeyField.yPosition = yOff
         apiKeyField.drawTextBox()
         yOff += 26
 
-        // Switches
         toggle("Lobby Movement", x, yOff, { cfg.lobbyMovement }, { cfg.lobbyMovement = it }); yOff += 20
         toggle("Fast Requeue", x, yOff, { cfg.fastRequeue }, { cfg.fastRequeue = it }); yOff += 20
         toggle("Paper Requeue", x, yOff, { cfg.paperRequeue }, { cfg.paperRequeue = it }); yOff += 20
         toggle("Disable Chat Messages", x, yOff, { cfg.disableChatMessages }, { cfg.disableChatMessages = it }); yOff += 24
 
-        // Valeurs
         number("Disconnect After Games", x, yOff, { cfg.disconnectAfterGames }, { cfg.disconnectAfterGames = it }, 0, 10000, 10); yOff += 20
         number("Disconnect After Minutes", x, yOff, { cfg.disconnectAfterMinutes }, { cfg.disconnectAfterMinutes = it }, 0, 500, 5); yOff += 24
         number("Auto Requeue Delay (ms)", x, yOff, { cfg.autoRqDelay }, { cfg.autoRqDelay = it }, 500, 5000, 50); yOff += 20
         number("Requeue After No Game (s)", x, yOff, { cfg.rqNoGame }, { cfg.rqNoGame = it }, 15, 60, 1); yOff += 24
 
-        // AutoGG / Start
         toggle("Enable AutoGG", x, yOff, { cfg.sendAutoGG }, { cfg.sendAutoGG = it }); yOff += 20
         number("AutoGG Delay (ms)", x, yOff, { cfg.ggDelay }, { cfg.ggDelay = it }, 50, 1000, 50); yOff += 20
-        drawString(fontRendererObj, "AutoGG Message:", x, yOff, -1); yOff += 15
-        // on n’ouvre pas de 2nd champ texte pour rester compact → message modifiable via Vigilant si besoin
+        drawString(fontRendererObj, "AutoGG Message: ${cfg.ggMessage}", x, yOff, -1); yOff += 20
 
         toggle("Game Start Message", x, yOff, { cfg.sendStartMessage }, { cfg.sendStartMessage = it }); yOff += 20
         number("Start Message Delay (ms)", x, yOff, { cfg.startMessageDelay }, { cfg.startMessageDelay = it }, 50, 1000, 50)
@@ -243,6 +230,25 @@ class CustomConfigGUI : GuiScreen() {
 
         number("Max Look Distance", x, yOff, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); yOff += 20
         number("Max Attack Distance", x, yOff, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1)
+    }
+
+    private fun drawWebhookTab(x: Int, y: Int) {
+        var yOff = y
+        drawString(fontRendererObj, "§lWEBHOOK", x, yOff, primaryColor); yOff += 25
+
+        val cfg = DuckDueller.config ?: return
+
+        toggle("Send Webhook Messages", x, yOff, { cfg.sendWebhookMessages }, { cfg.sendWebhookMessages = it }); yOff += 20
+
+        drawString(fontRendererObj, "Webhook URL:", x, yOff, -1); yOff += 15
+        webhookField.xPosition = x
+        webhookField.yPosition = yOff
+        webhookField.drawTextBox()
+        yOff += 26
+
+        toggle("Send Queue Stats", x, yOff, { cfg.sendWebhookStats }, { cfg.sendWebhookStats = it }); yOff += 20
+        toggle("Send Dodge Alerts", x, yOff, { cfg.sendWebhookDodge }, { cfg.sendWebhookDodge = it }); yOff += 20
+        drawString(fontRendererObj, "Note: Dodging n’est pas dans cette GUI.", x, yOff, Color.GRAY.rgb)
     }
 
     private fun drawStatsTab(x: Int, y: Int) {
@@ -282,14 +288,18 @@ class CustomConfigGUI : GuiScreen() {
     override fun mouseClicked(mouseX: Int, mouseY: Int, mouseButton: Int) {
         super.mouseClicked(mouseX, mouseY, mouseButton)
         hotspots.firstOrNull { mouseX in it.x1..it.x2 && mouseY in it.y1..it.y2 }?.onClick?.invoke()
-        apiKeyField.mouseClicked(mouseX, mouseY, mouseButton)
+        when (currentTab) {
+            0 -> apiKeyField.mouseClicked(mouseX, mouseY, mouseButton)
+            2 -> webhookField.mouseClicked(mouseX, mouseY, mouseButton)
+        }
     }
 
     override fun keyTyped(typedChar: Char, keyCode: Int) {
         if (keyCode == Keyboard.KEY_ESCAPE) {
             saveAndClose(); return
         }
-        apiKeyField.textboxKeyTyped(typedChar, keyCode)
+        if (currentTab == 0) apiKeyField.textboxKeyTyped(typedChar, keyCode)
+        if (currentTab == 2) webhookField.textboxKeyTyped(typedChar, keyCode)
         super.keyTyped(typedChar, keyCode)
     }
 
@@ -300,8 +310,11 @@ class CustomConfigGUI : GuiScreen() {
     }
 
     private fun saveAndClose() {
-        DuckDueller.config?.apiKey = apiKeyField.text
-        DuckDueller.config?.writeData()
+        DuckDueller.config?.apply {
+            apiKey = apiKeyField.text
+            webhookURL = webhookField.text
+            writeData()
+        }
         ChatUtils.info("Configuration saved!")
         mc.displayGuiScreen(null)
     }
