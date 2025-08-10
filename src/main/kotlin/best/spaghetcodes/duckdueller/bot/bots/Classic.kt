@@ -44,6 +44,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var gameStartAt = 0L
     private var lastSwordBlock = 0L
 
+    // --- Anti jump après avoir été touché ---
+    private var noJumpUntil = 0L
+    private var lastHurtTime = 0
+
     var shotsFired = 0
     var maxArrows = 5
 
@@ -64,6 +68,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Mouse.rClickUp()               // jamais bloqué d’entrée
         gameStartAt = System.currentTimeMillis()
         lastSwordBlock = 0L
+
+        noJumpUntil = 0L
+        lastHurtTime = 0
 
         // Tir d’ouverture (full charge via Bow.kt) si aucune action en cours
         TimeUtils.setTimeout({
@@ -133,6 +140,13 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             Mouse.startTracking()
             Mouse.stopLeftAC()
 
+            // --- Anti jump après coup : si on vient d’être touché, bloque le jump un court instant
+            val ht = mc.thePlayer.hurtTime
+            if (ht > 0 && lastHurtTime == 0) {
+                noJumpUntil = now + RandomUtils.randomIntInRange(360, 520)
+            }
+            lastHurtTime = ht
+
             // --- Block épée utile (loin + immobile + arc), jamais au spawn, durée suffisante ---
             val holdingSword = mc.thePlayer.heldItem != null &&
                 mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")
@@ -146,7 +160,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     (now - lastSwordBlock) > 900 && !Mouse.isUsingProjectile()
                 if (canHoldBlock) {
                     // block assez long pour encaisser le tir
-                    Mouse.rClick(RandomUtils.randomIntInRange(420, 560))
+                    Mouse.rClick(RandomUtils.randomIntInRange(650, 820))
                     lastSwordBlock = now
                 } else if (Mouse.rClickDown) {
                     // on ne reste jamais bloqué si la condition n’est plus vraie
@@ -154,20 +168,23 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
 
-            // Sauts “humains”
+            // Empêche de sauter pendant qu’on bloque, et pendant le no-jump post-hit
+            val canJump = (now >= noJumpUntil) && !Mouse.rClickDown
+
+            // Sauts “humains” (avec canJump)
             if (distance > jumpDistanceThreshold) {
                 if (oppHasBow) {
                     if (WorldUtils.blockInFront(mc.thePlayer, 2f, 0.5f) == Blocks.air) {
                         if (!EntityUtils.entityFacingAway(mc.thePlayer, opp) && !needJump) {
                             Movement.stopJumping()
                         } else {
-                            Movement.startJumping()
+                            if (canJump) Movement.startJumping() else Movement.stopJumping()
                         }
                     } else {
-                        Movement.startJumping()
+                        if (canJump) Movement.startJumping() else Movement.stopJumping()
                     }
                 } else {
-                    Movement.startJumping()
+                    if (canJump) Movement.startJumping() else Movement.stopJumping()
                 }
             } else if (!needJump) {
                 Movement.stopJumping()
