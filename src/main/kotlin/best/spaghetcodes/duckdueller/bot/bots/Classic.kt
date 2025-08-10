@@ -65,6 +65,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         gameStartAt = System.currentTimeMillis()
         lastSwordBlock = 0L
 
+        // Tir d’ouverture (full charge via Bow.kt) si aucune action en cours
         TimeUtils.setTimeout({
             val opp = opponent()
             if (opp != null && shotsFired < maxArrows && !Mouse.isUsingProjectile()) {
@@ -94,14 +95,17 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             if (mc.thePlayer != null && mc.thePlayer.heldItem != null) {
                 val n = mc.thePlayer.heldItem.unlocalizedName.lowercase()
                 if (n.contains("rod")) {
+                    // W-Tap long après hit à la rod (affiché)
                     ChatUtils.info("W-Tap 300")
                     Combat.wTap(300)
                     tapping = true
                     combo--
                     TimeUtils.setTimeout(fun () { tapping = false }, 300)
                 }
+                // pas de block-hit à l’épée — l’attaque est gérée par ton autre mod
             }
         } else {
+            // Petit W-Tap pour maintenir la pression (affiché)
             ChatUtils.info("W-Tap 100")
             Combat.wTap(100)
             tapping = true
@@ -129,21 +133,23 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             Mouse.startTracking()
             Mouse.stopLeftAC()
 
-            // --- Block épée autorisé seulement "loin + immobile + arc" et jamais au start ---
+            // --- Block épée utile (loin + immobile + arc), jamais au spawn, durée suffisante ---
             val holdingSword = mc.thePlayer.heldItem != null &&
                 mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")
             val oppHasBow = opp.heldItem != null &&
                 opp.heldItem.unlocalizedName.lowercase().contains("bow")
             val oppSpeed = kotlin.math.abs(opp.motionX) + kotlin.math.abs(opp.motionZ)
-            val farAndStill = (distance > 11.5f && oppSpeed < 0.04)
+            val farAndStill = (distance > 12.5f && oppSpeed < 0.04)   // seuil relevé
             val sinceStart = now - gameStartAt
             if (holdingSword) {
-                val canShortBlock = oppHasBow && farAndStill && sinceStart > 2000 &&
+                val canHoldBlock = oppHasBow && farAndStill && sinceStart > 2000 &&
                     (now - lastSwordBlock) > 900 && !Mouse.isUsingProjectile()
-                if (canShortBlock) {
-                    Mouse.rClick(RandomUtils.randomIntInRange(120, 160))
+                if (canHoldBlock) {
+                    // block assez long pour encaisser le tir
+                    Mouse.rClick(RandomUtils.randomIntInRange(420, 560))
                     lastSwordBlock = now
                 } else if (Mouse.rClickDown) {
+                    // on ne reste jamais bloqué si la condition n’est plus vraie
                     Mouse.rClickUp()
                 }
             }
