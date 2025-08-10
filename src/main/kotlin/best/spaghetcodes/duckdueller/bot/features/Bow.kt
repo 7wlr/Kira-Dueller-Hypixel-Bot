@@ -21,19 +21,19 @@ interface Bow {
     val bowMinHoldMs: Int get() = 520
     val bowMaxHoldMs: Int get() = 720
 
-    /** Distance de cancel si l’ennemi revient trop près. */
-    val bowCancelCloseDistance: Double get() = 6.0
+    /** Distance de cancel si l’ennemi revient trop près — en Float pour matcher le projet. */
+    val bowCancelCloseDistance: Float get() = 6.0f
 
     /**
      * Utilisation de l’arc avec annulation sécurisée.
-     * @param distance distance actuelle (info facultative)
+     * @param distance distance actuelle (Float, aligné avec EntityUtils.getDistanceNoY)
      * @param afterShot callback après un tir effectif
      */
-    fun useBow(distance: Double, afterShot: () -> Unit = {}) {
+    fun useBow(distance: Float, afterShot: () -> Unit = {}) {
         // Évite la ré-entrée si déjà en phase projectile
         if (Mouse.isUsingProjectile()) return
 
-        // Équipe l’arc
+        // Équipe l'arc
         Inventory.setInvItem("bow")
 
         // Durée de charge pseudo-aléatoire
@@ -52,7 +52,7 @@ interface Bow {
 
             if (canceled) return@setInterval
 
-            val d = EntityUtils.getDistanceNoY(player, opp)
+            val d: Float = EntityUtils.getDistanceNoY(player, opp)
             val facingUs = !EntityUtils.entityFacingAway(player, opp)
 
             // Annuler si l’ennemi re-fixe ou s’approche trop
