@@ -29,7 +29,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     private val jumpDistanceThreshold = 5.0f
 
-    // --- Strafe state (NOUVEAU) ---
+    // --- Strafe state ---
     private var strafeDir = 1                 // -1 = gauche, +1 = droite
     private var lastStrafeSwitch = 0L         // dernier switch de côté
     private var stagnantSince = 0L            // début d’une distance quasi stable (pour break-orbit)
@@ -53,7 +53,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         rodLockUntil = 0L
         lastStrafeSwitch = 0L
         stagnantSince = 0L
-        strafeDir = if (RandomUtils.randomBoolean()) 1 else -1
+        // FIX: remplace randomBoolean() par int 0/1
+        strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
 
         // Tir d’ouverture (full charge via Bow.kt) si aucune action en cours
         TimeUtils.setTimeout({
@@ -259,7 +260,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
 
                     // Random strafe utile surtout mid-long range
-                    randomStrafe = distance in 8.0f..15.0f    // FIX: ancien 15.0..8.0 (range vide)
+                    randomStrafe = distance in 8.0f..15.0f
                 }
             }
 
