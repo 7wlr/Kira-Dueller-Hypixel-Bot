@@ -187,7 +187,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         TimeUtils.setTimeout(fun () {
                             if (packet.message != null) {
                                 val unformatted = packet.message.unformattedText.lowercase()
-                                if (unformatted.contains("won the duel!") && mc.thePlayer != null) {
+                                if (unformatted.contains("GAGNANT!") && mc.thePlayer != null) {
                                     var winner = ""
                                     var loser = ""
                                     var iWon = false
@@ -311,7 +311,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
         if (KeyBindings.toggleBotKeyBinding.isPressed) {
             toggle()
-            ChatUtils.info("Duck Dueller has been toggled ${if (toggled()) "${EnumChatFormatting.GREEN}on" else "${EnumChatFormatting.RED}off"}")
+            ChatUtils.info("KIRA has been toggled ${if (toggled()) "${EnumChatFormatting.GREEN}on" else "${EnumChatFormatting.RED}off"}")
             if (toggled()) {
                 ChatUtils.info("Current selected bot: ${EnumChatFormatting.GREEN}${getName()}")
                 joinGame()
