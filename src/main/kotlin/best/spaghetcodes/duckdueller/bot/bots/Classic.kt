@@ -28,8 +28,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     }
 
     private val jumpDistanceThreshold = 5.0f
+
     private var rodLockUntil = 0L
-    private var lastCounterRod = 0L         // NEW: anti-rod mid-range cooldown
+    private var lastRodUse = 0L        // cooldown global rod
+    private var prevDistance = -1f     // pour détecter si l’adversaire APPROCHE
 
     var shotsFired = 0
     var maxArrows = 5
@@ -39,6 +41,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Movement.startSprinting()
         Movement.startForward()
         TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
+
+        prevDistance = -1f
+        lastRodUse = 0L
+        rodLockUntil = 0L
 
         // Tir d’ouverture (full charge via Bow.kt) si aucune action en cours
         TimeUtils.setTimeout({
@@ -70,7 +76,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             if (mc.thePlayer != null && mc.thePlayer.heldItem != null) {
                 val n = mc.thePlayer.heldItem.unlocalizedName.lowercase()
                 if (n.contains("rod")) {
-                    // W-Tap long après hit à la rod (affiché dans le chat)
+                    // W-Tap long après hit à la rod (affiché)
                     ChatUtils.info("W-Tap 300")
                     Combat.wTap(300)
                     tapping = true
@@ -80,7 +86,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 // pas de block-hit à l’épée — l’attaque est gérée par ton autre mod
             }
         } else {
-            // Petit W-Tap pour maintenir la pression à distance (affiché)
+            // Petit W-Tap pour maintenir la pression (affiché)
             ChatUtils.info("W-Tap 100")
             Combat.wTap(100)
             tapping = true
@@ -102,6 +108,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
             val opp = opponent()!!
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opp)
+            val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
 
             // Tracking permanent + auto-CPS OFF (laisse ton autre mod cliquer)
             Mouse.startTracking()
@@ -136,7 +143,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.startForward()
             }
 
-            // Ne JAMAIS ré-équiper l’épée si une action projectile est en cours,
+            // Ne JAMAIS ré-équiper l’épée si action projectile en cours,
             // si le verrou rod n’est pas expiré, ou si le clic droit est encore appuyé
             if (!Mouse.isUsingProjectile() && System.currentTimeMillis() >= rodLockUntil && !Mouse.rClickDown) {
                 if (distance < 1.5f && mc.thePlayer.heldItem != null &&
@@ -148,41 +155,45 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             // Fenêtrage (façon OP) : ni rod ni bow si une autre action est en cours
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
-                // ---- (1) Anti-rod mid-range (NOUVEAU) ----
-                // Si l’adversaire nous fait face à mi-distance et entretient un loop rod->épée,
-                // on contre en envoyant NOTRE rod à 3.4..5.2 : ça casse son sprint et ouvre le melee.
                 val now = System.currentTimeMillis()
-                val canCounterRod = (now - lastCounterRod) > 700   // anti-spam ~0.7s
-                if (canCounterRod &&
-                    distance in 3.4f..5.2f &&
-                    !EntityUtils.entityFacingAway(mc.thePlayer, opp)) {
+                // cooldown minimal selon la portée (moins de spam)
+                val minCd = if (distance < 5.3f) 650 else 900
+                val cdOK = (now - lastRodUse) >= minCd
 
-                    // Verrou court, adapté à la distance, pour laisser connecter le flotteur
+                // === Anti-rod mid-range (3.4..5.2) — seulement si l’adversaire APPROCHE & nous fait face & combo faible ===
+                if (cdOK &&
+                    distance in 3.4f..5.2f &&
+                    !EntityUtils.entityFacingAway(mc.thePlayer, opp) &&
+                    approaching &&
+                    combo <= 1 &&
+                    now >= rodLockUntil) {
+
                     val lockMs = when {
                         distance < 4.0f -> RandomUtils.randomIntInRange(260, 320)
                         distance < 4.6f -> RandomUtils.randomIntInRange(300, 360)
                         else            -> RandomUtils.randomIntInRange(340, 420)
                     }
                     rodLockUntil = now + lockMs
-                    lastCounterRod = now
+                    lastRodUse = now
                     useRod()
-                }
 
-                // ---- (2) Rod windows classiques ----
-                else if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) &&
-                         !EntityUtils.entityFacingAway(mc.thePlayer, opp) &&
-                         System.currentTimeMillis() >= rodLockUntil) {
+                // === Fenêtre classique resserrée (5.7..6.5) — seulement si l’adversaire APPROCHE & nous fait face & combo faible ===
+                } else if (cdOK &&
+                           distance in 5.7f..6.5f &&
+                           !EntityUtils.entityFacingAway(mc.thePlayer, opp) &&
+                           approaching &&
+                           combo <= 1 &&
+                           now >= rodLockUntil) {
 
                     val lockMs = when {
-                        distance < 4f    -> RandomUtils.randomIntInRange(260, 320)
-                        distance < 6.7f  -> RandomUtils.randomIntInRange(320, 380)
-                        distance < 9.7f  -> RandomUtils.randomIntInRange(380, 460)
-                        else             -> RandomUtils.randomIntInRange(460, 560)
+                        distance < 6.1f -> RandomUtils.randomIntInRange(320, 380)
+                        else            -> RandomUtils.randomIntInRange(360, 440)
                     }
-                    rodLockUntil = System.currentTimeMillis() + lockMs
+                    rodLockUntil = now + lockMs
+                    lastRodUse = now
                     useRod()
 
-                // ---- (3) Bow windows (en plus du tir d’ouverture) ----
+                // === Bow windows (en plus du tir d’ouverture) ===
                 } else if ((EntityUtils.entityFacingAway(mc.thePlayer, opp) && distance in 3.5f..30f) ||
                            (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opp))) {
                     if (distance > 10f && shotsFired < maxArrows) {
@@ -225,6 +236,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
 
             handle(clear, randomStrafe, movePriority)
+
+            // Mémorise la distance pour détecter "approche" au tick suivant
+            prevDistance = distance
         }
     }
 }
