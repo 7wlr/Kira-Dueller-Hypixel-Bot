@@ -21,7 +21,8 @@ object KeyBindings {
     @SubscribeEvent
     fun onTick(ev: ClientTickEvent) {
         if (configGuiKeyBinding.isPressed) {
-            EssentialAPI.getGuiUtil().openScreen(DuckDueller.config?.gui())
+            // Utilise la nouvelle GUI custom au lieu de la GUI Vigilance
+            EssentialAPI.getGuiUtil().openScreen(DuckDueller.config?.getCustomGui())
         }
     }
 
