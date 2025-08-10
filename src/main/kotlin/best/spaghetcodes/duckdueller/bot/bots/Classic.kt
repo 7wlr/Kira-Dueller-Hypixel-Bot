@@ -29,15 +29,13 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         )
     }
 
-    // --- Paramètres comportementaux ---
-    private val jumpDistanceThreshold = 5.0f     // Sauter dès que l’ennemi est > 5 blocs (Float)
-    // bowCancelCloseDistance vient de Bow (6.0f par défaut)
+    private val jumpDistanceThreshold = 5.0f
 
     var shotsFired = 0
     var maxArrows = 5
 
     override fun onGameStart() {
-        Mouse.stopTracking()          // auto-aim OFF
+        Mouse.startTracking()         // tracking ON
         Movement.startSprinting()
         Movement.startForward()
         TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
@@ -45,11 +43,11 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     override fun onGameEnd() {
         shotsFired = 0
-        Mouse.stopLeftAC()            // auto-CPS OFF (sécurité)
+        Mouse.stopLeftAC()
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
         TimeUtils.setTimeout(fun () {
             i?.cancel()
-            Mouse.stopTracking()
+            Mouse.stopTracking()      // clean
             Movement.clearAll()
             Combat.stopRandomStrafe()
         }, RandomUtils.randomIntInRange(200, 400))
@@ -58,7 +56,6 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     var tapping = false
 
     override fun onAttack() {
-        // Pas d’auto-CPS ici. On garde w-tap / blockhit pour le “feeling” humain.
         val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
         if (distance < 3f) {
             if (mc.thePlayer != null && mc.thePlayer.heldItem != null) {
@@ -69,7 +66,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     combo--
                     TimeUtils.setTimeout(fun () { tapping = false }, 300)
                 } else if (n.contains("sword")) {
-                    Mouse.rClick(RandomUtils.randomIntInRange(80, 100)) // petit blockhit
+                    Mouse.rClick(RandomUtils.randomIntInRange(80, 100))
                 }
             }
         } else {
@@ -93,11 +90,12 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            // auto-aim OFF / auto-CPS OFF (idempotent)
-            Mouse.stopTracking()
+            // tracking ON en continu
+            Mouse.startTracking()
+
+            // auto-CPS OFF
             Mouse.stopLeftAC()
 
-            // Saut “humain” > 5 blocs
             if (distance > jumpDistanceThreshold) {
                 if (opponent() != null && opponent()!!.heldItem != null && opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow")) {
                     if (WorldUtils.blockInFront(mc.thePlayer, 2f, 0.5f) == Blocks.air) {
@@ -116,7 +114,6 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.stopJumping()
             }
 
-            // Si on charge l’arc et que l’adversaire re-engage: abandon immédiat (double sécurité)
             if (Mouse.isUsingProjectile()) {
                 val facingUs = !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)
                 val tooClose = distance < bowCancelCloseDistance
@@ -141,7 +138,6 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Mouse.rClickUp()
             }
 
-            // ---- Rod windows
             if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
                 if (!Mouse.isUsingProjectile()) useRod()
             }
@@ -150,7 +146,6 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
             }
 
-            // ---- Arc (tirs “safe” uniquement)
             if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5f..30f) ||
                 (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
                 if (distance > 5f && !Mouse.isUsingProjectile() && shotsFired < maxArrows) {
@@ -166,7 +161,6 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
                     else movePriority[1] += 4
                 } else {
-                    // Condition d’origine conservée (ordre inversé) pour patch minimal
                     if (distance in 15.0f..8.0f) {
                         randomStrafe = true
                     } else {
