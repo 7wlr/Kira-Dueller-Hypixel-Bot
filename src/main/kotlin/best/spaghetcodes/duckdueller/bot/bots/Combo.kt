@@ -45,25 +45,10 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
     private var dontStartLeftAC = false
 
-    private val trackingStopDistance = 2.2f
-
-    enum class ArmorEnum {
-        BOOTS, LEGGINGS, CHESTPLATE, HELMET
-    }
-
-    private var armor = hashMapOf(
-        0 to 1,
-        1 to 1,
-        2 to 1,
-        3 to 1
-    )
-
     override fun onGameStart() {
         Movement.startSprinting()
         Movement.startForward()
-        // Auto-tracking ON au départ
-        Mouse.startTracking()
-        // Auto-CPS OFF
+        Mouse.startTracking()              // tracking ON
         Mouse.stopLeftAC()
     }
 
@@ -80,36 +65,28 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             pearls = 5
             lastPearl = 0L
             armor = hashMapOf(
-                0 to 1,
-                1 to 1,
-                2 to 1,
-                3 to 1
+                0 to 1, 1 to 1, 2 to 1, 3 to 1
             )
-            Mouse.stopTracking()
+            Mouse.stopTracking()           // clean
         }, RandomUtils.randomIntInRange(100, 300))
     }
+
+    enum class ArmorEnum { BOOTS, LEGGINGS, CHESTPLATE, HELMET }
+
+    private var armor = hashMapOf(0 to 1, 1 to 1, 2 to 1, 3 to 1)
 
     override fun onTick() {
         if (opponent() != null && mc.theWorld != null && mc.thePlayer != null) {
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            if (!mc.thePlayer.isSprinting) {
-                Movement.startSprinting()
-            }
+            if (!mc.thePlayer.isSprinting) Movement.startSprinting()
 
-            // Auto-tracking intelligent : ON si loin, OFF en mêlée / pendant arc/potions
-            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                if (distance > trackingStopDistance) Mouse.startTracking() else Mouse.stopTracking()
-            } else {
-                Mouse.stopTracking()
-            }
+            // tracking ON en continu
+            Mouse.startTracking()
 
-            // AUTO-CPS OFF
             Mouse.stopLeftAC()
 
-            if (distance < 8f) {
-                Movement.stopJumping()
-            }
+            if (distance < 8f) Movement.stopJumping()
 
             if (combo >= 3 && distance >= 3.2f && mc.thePlayer.onGround) {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
@@ -118,13 +95,10 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             if (distance < 1.5f || (distance < 2.4f && combo >= 1)) {
                 Movement.stopForward()
             } else {
-                if (!tapping) {
-                    Movement.startForward()
-                }
+                if (!tapping) Movement.startForward()
             }
 
             if (WorldUtils.blockInFront(mc.thePlayer, 3f, 1.5f) != Blocks.air) {
-                // wall
                 Mouse.setRunningAway(false)
             }
 
@@ -200,28 +174,19 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                 if (distance < 8f) {
                     if (opponent()!!.isInvisibleToPlayer(mc.thePlayer)) {
                         clear = false
-                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) {
-                            movePriority[0] += 4
-                        } else {
-                            movePriority[1] += 4
-                        }
+                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
                     } else {
                         if (distance < 4f && combo > 2) {
                             randomStrafe = false
                             val rotations = EntityUtils.getRotations(opponent()!!, mc.thePlayer, false)
                             if (rotations != null) {
-                                if (rotations[0] < 0) {
-                                    movePriority[1] += 5
-                                } else {
-                                    movePriority[0] += 5
-                                }
+                                if (rotations[0] < 0) movePriority[1] += 5 else movePriority[0] += 5
                             }
                         } else {
                             randomStrafe = true
                         }
                     }
                 }
-
                 handle(clear, randomStrafe, movePriority)
             }
         }
