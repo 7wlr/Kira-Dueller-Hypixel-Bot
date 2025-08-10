@@ -4,10 +4,6 @@ import best.spaghetcodes.duckdueller.DuckDueller
 import best.spaghetcodes.duckdueller.bot.player.*
 import best.spaghetcodes.duckdueller.core.KeyBindings
 import best.spaghetcodes.duckdueller.utils.*
-import com.google.gson.JsonArray
-import com.google.gson.JsonElement
-import com.google.gson.JsonNull
-import com.google.gson.JsonObject
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import net.minecraft.client.Minecraft
@@ -18,7 +14,6 @@ import net.minecraft.client.multiplayer.ServerData
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.network.Packet
 import net.minecraft.network.play.server.S19PacketEntityStatus
-import net.minecraft.network.play.server.S3EPacketTeams
 import net.minecraft.network.play.server.S45PacketTitle
 import net.minecraft.util.EnumChatFormatting
 import net.minecraftforge.client.event.ClientChatReceivedEvent
@@ -29,10 +24,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent
 import net.minecraftforge.fml.common.gameevent.TickEvent.ClientTickEvent
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientConnectedToServerEvent
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent
-import java.math.RoundingMode
-import java.text.DecimalFormat
 import java.util.Timer
-import kotlin.concurrent.thread
 
 /**
  * Base class for all bots
@@ -50,13 +42,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     private var attackedID = -1
-
-    private var statKeys: Map<String, String> = mapOf("wins" to "", "losses" to "", "ws" to "")
-
-    private var playerCache: HashMap<String, String> = hashMapOf()
-    private var playersSent: ArrayList<String> = arrayListOf()
-    private var playersQuit: ArrayList<String> = arrayListOf()
-    private var playersLost: ArrayList<String> = arrayListOf()
 
     private var opponent: EntityPlayer? = null
     private var opponentTimer: Timer? = null
@@ -117,11 +102,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     protected open fun beforeStart() {}
 
     /**
-     * Called before the bot leaves the game (dodge)
-     */
-    protected open fun beforeLeave() {}
-
-    /**
      * Called when the opponent entity is found
      */
     protected open fun onFoundOpponent() {}
@@ -130,14 +110,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
      * Called every tick
      */
     protected open fun onTick() {}
-
-    /********
-     * Protected Methods
-     ********/
-
-    protected fun setStatKeys(keys: Map<String, String>) {
-        statKeys = keys
-    }
 
     /********
      * Base Methods
@@ -164,24 +136,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         }
                     }
                 }
-                is S3EPacketTeams -> { // use this for stat checking
-                    if (packet.action == 3 && packet.name == "§7§k") { // action 3 is ADD
-                        val players = packet.players
-                        for (player in players) {
-                            if (playersQuit.contains(player)) {
-                                playersQuit.remove(player)
-                            }
-                            TimeUtils.setTimeout(fun () { // timeout to allow ingame state to update
-                                handlePlayer(player)
-                            }, 1500)
-                        }
-                    } else if (packet.action == 4 && packet.name == "§7§k") { // action 4 is REMOVE
-                        val players = packet.players
-                        for (player in players) {
-                            playersQuit.add(player)
-                        }
-                    }
-                }
                 is S45PacketTitle -> { // use this to determine who won the duel
                     if (mc.theWorld != null) {
                         TimeUtils.setTimeout(fun () {
@@ -200,8 +154,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                                         iWon = true
                                     } else {
                                         Session.losses++
-                                        ChatUtils.info("Adding $p to the list of players to dodge...")
-                                        playersLost.add(p)
                                         winner = p
                                         loser = mc.thePlayer.displayNameString
                                         iWon = false
@@ -241,24 +193,23 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
                                     if (DuckDueller.config?.sendWebhookMessages == true) {
                                         if (DuckDueller.config?.webhookURL != "") {
-                                            val opponentName = if (iWon) loser else winner
-                                            val faceUrl = if (playerCache.containsKey(opponentName)) {
-                                                "https://crafatar.com/avatars/${playerCache[opponentName]}"
-                                            } else {
-                                                "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png"
-                                            }
-
                                             val duration = StateManager.lastGameDuration / 1000
 
                                             // Send the webhook embed
-                                            val fields = WebHook.buildFields(arrayListOf(mapOf("name" to "Winner", "value" to winner, "inline" to "true"), mapOf("name" to "Loser", "value" to loser, "inline" to "true"), mapOf("name" to "Bot Started", "value" to "<t:${(Session.startTime / 1000).toInt()}:R>", "inline" to "false")))
+                                            val fields = WebHook.buildFields(arrayListOf(
+                                                mapOf("name" to "Winner", "value" to winner, "inline" to "true"), 
+                                                mapOf("name" to "Loser", "value" to loser, "inline" to "true"), 
+                                                mapOf("name" to "Bot Started", "value" to "<t:${(Session.startTime / 1000).toInt()}:R>", "inline" to "false")
+                                            ))
                                             val footer = WebHook.buildFooter(ChatUtils.removeFormatting(Session.getSession()), "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
                                             val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-                                            val thumbnail = WebHook.buildThumbnail(faceUrl)
+                                            val thumbnail = WebHook.buildThumbnail("https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
 
                                             WebHook.sendEmbed(
                                                 DuckDueller.config?.webhookURL!!,
-                                                WebHook.buildEmbed("${if (iWon) ":smirk:" else ":confused:"} Game ${if (iWon) "WON" else "LOST"}!", "Game Duration: `${duration}`s", fields, footer, author, thumbnail, if (iWon) 0x66ed8a else 0xed6d66))
+                                                WebHook.buildEmbed("${if (iWon) ":smirk:" else ":confused:"} Game ${if (iWon) "WON" else "LOST"}!", 
+                                                    "Game Duration: `${duration}`s", fields, footer, author, thumbnail, 
+                                                    if (iWon) 0x66ed8a else 0xed6d66))
                                         } else {
                                             ChatUtils.error("Webhook URL hasn't been set!")
                                         }
@@ -267,7 +218,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                             }
                         }, 1000)
                     }
-
                 }
             }
         }
@@ -325,38 +275,15 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         val unformatted = ev.message.unformattedText
         if (toggled() && mc.thePlayer != null) {
 
-            if (unformatted.contains("The game starts in 2 seconds!")) {
-                println(playersSent.joinToString(", "))
-                var found = false
-                if (playersSent.contains(mc.thePlayer.displayNameString)) {
-                    if (playersSent.size > 1) {
-                        found = true
-                    }
-                } else {
-                    if (playersSent.size > 0) {
-                        found = true
-                    }
-                }
-
-                if (!found && DuckDueller.config?.dodgeNoStats == true) {
-                    ChatUtils.info("No stats found, dodging...")
-                    leaveGame()
-                    sendDodgeWebhook("")
-                    TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(4000, 6000))
-                }
-            } else if (unformatted.contains("The game starts in 1 second!")) {
+            if (unformatted.contains("The game starts in 1 second!")) {
                 beforeStart()
-            }
-
-            if (unformatted.contains("Are you sure? Type /lobby again")) {
-                leaveGame()
             }
 
             if (unformatted.contains("Opponent:")) {
                 gameStart()
             }
 
-            if (unformatted.contains("Accuracy") && !calledGameEnd) {
+            if (unformatted.contains("Melee") && !calledGameEnd) {
                 calledGameEnd = true
                 gameEnd()
             }
@@ -369,12 +296,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                 Mouse.stopLeftAC()
                 TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(6000, 8000))
             }
-
-            if (unformatted.contains("Woah there, slow down!") && DuckDueller.config?.strictDodging == true) {
-                disconnect()
-                TimeUtils.setTimeout(this::reconnect, RandomUtils.randomIntInRange(4000, 5000))
-            }
-
         }
 
         if (unformatted.contains("Your new API key is ")) {
@@ -409,8 +330,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
             WebHook.sendEmbed(
                 DuckDueller.config?.webhookURL!!,
-                WebHook.buildEmbed("Reconnected!", "The bot successfully reconnected!", JsonArray(), JsonObject(), author, thumbnail, 0x66ed8a))
-
+                WebHook.buildEmbed("Reconnected!", "The bot successfully reconnected!", com.google.gson.JsonArray(), com.google.gson.JsonObject(), author, thumbnail, 0x66ed8a))
 
             reconnectTimer?.cancel()
             TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(6000, 8000))
@@ -427,7 +347,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
             WebHook.sendEmbed(
                 DuckDueller.config?.webhookURL!!,
-                WebHook.buildEmbed("Disconnected!", "The bot was disconnected! Attempting to reconnect...", JsonArray(), JsonObject(), author, thumbnail, 0xed6d66))
+                WebHook.buildEmbed("Disconnected!", "The bot was disconnected! Attempting to reconnect...", com.google.gson.JsonArray(), com.google.gson.JsonObject(), author, thumbnail, 0xed6d66))
 
             TimeUtils.setTimeout(fun () {
                 reconnectTimer = TimeUtils.setInterval(this::reconnect, 0, 30000)
@@ -440,8 +360,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
      ********/
 
     private fun resetVars() {
-        playersSent.clear()
-        playersQuit.clear()
         calledFoundOpponent = false
         opponentTimer?.cancel()
         opponent = null
@@ -453,6 +371,8 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
     private fun gameStart() {
         if (toggled()) {
+            onJoinGame()
+            
             if (DuckDueller.config?.sendStartMessage == true) {
                 TimeUtils.setTimeout(fun () {
                     ChatUtils.sendAsPlayer("/ac " + (DuckDueller.config?.startMessage ?: "glhf!"))
@@ -500,159 +420,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                     onFoundOpponent()
                 }
             }
-        }
-    }
-
-    /**
-     * Called for each player that joins
-     */
-    private fun handlePlayer(player: String) {
-        thread { // move into new thread to avoid blocking the main thread
-            if (StateManager.state == StateManager.States.GAME) { // make sure we're in-game, to not spam the api
-                if (player.length > 2) { // hypixel sends a bunch of fake 1-2 char entities
-                    var uuid: String? = null
-                    if (playerCache.containsKey(player)) { // check if the player is in the cache
-                        uuid = playerCache[player]
-                    } else {
-                        uuid = HttpUtils.usernameToUUID(player)
-                    }
-                    println(player)
-
-                    if (uuid == null) { // nicked or fake player
-                        if (DuckDueller.config?.dodgeLostTo == true && playersLost.contains(player)) {
-                            beforeLeave()
-                            leaveGame()
-                            TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(4000, 6000))
-                        }
-                    } else {
-                        playerCache[player] = uuid // cache this player
-                        if (!playersSent.contains(player)) { // don't send the same player twice
-                            if (mc.thePlayer != null) {
-                                if (player == mc.thePlayer.displayNameString) { // if the player is the bot
-                                    onJoinGame()
-                                } else {
-                                    val stats = HttpUtils.getPlayerStats(uuid) ?: return@thread
-                                    handleStats(stats, player)
-                                }
-                            } else {
-                                val stats = HttpUtils.getPlayerStats(uuid) ?: return@thread
-                                handleStats(stats, player)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    /**
-     * Handle the response from the hypixel api
-     */
-    private fun handleStats(stats: JsonObject, player: String) {
-        if (toggled() && stats.get("success").asBoolean) {
-            if (statKeys.containsKey("wins") && statKeys.containsKey("losses") && statKeys.containsKey("ws")) {
-                fun getStat(key: String): JsonElement? {
-                    var tmpObj = stats
-
-                    for (p in key.split(".")) {
-                        if (tmpObj.has(p) && tmpObj.get(p).isJsonObject)
-                            tmpObj = tmpObj.get(p).asJsonObject
-                        else if (tmpObj.has(p))
-                            return tmpObj.get(p)
-                        else
-                            return null
-                    }
-                    return null
-                }
-
-                if (stats.get("player") == JsonNull.INSTANCE) {
-                    return
-                }
-
-                if (playersQuit.contains(player)) {
-                    return
-                }
-
-                if (!playersSent.contains(player)) {
-                    playersSent.add(player)
-                } else {
-                    return
-                }
-
-                val wins = getStat(statKeys["wins"]!!)?.asInt ?: 0
-                val losses = getStat(statKeys["losses"]!!)?.asInt ?: 0
-                val ws = getStat(statKeys["ws"]!!)?.asInt ?: 0
-
-                val df = DecimalFormat("#.##")
-                df.roundingMode = RoundingMode.DOWN
-
-                val wlr = wins.toDouble() / (if (losses == 0) 1.0 else losses.toDouble())
-
-
-                ChatUtils.info("$player ${EnumChatFormatting.GOLD} >> ${EnumChatFormatting.GOLD}Wins: ${EnumChatFormatting.GREEN}$wins ${EnumChatFormatting.GOLD}WLR: ${EnumChatFormatting.GREEN}${df.format(wlr)} ${EnumChatFormatting.GOLD}WS: ${EnumChatFormatting.GREEN}$ws")
-
-                if (DuckDueller.config?.sendWebhookStats == true) {
-                    val fields = WebHook.buildFields(arrayListOf(mapOf("name" to "Wins", "value" to "$wins", "inline" to "true"), mapOf("name" to "W/L", "value" to df.format(wlr), "inline" to "true"), mapOf("name" to "WS", "value" to "$ws", "inline" to "true")))
-                    val footer = WebHook.buildFooter(ChatUtils.removeFormatting(Session.getSession()), "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-                    val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-                    val thumbnail = WebHook.buildThumbnail("https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-
-                    WebHook.sendEmbed(
-                        DuckDueller.config?.webhookURL!!,
-                        WebHook.buildEmbed("Stats of $player:", "", fields, footer, author, thumbnail, 0x581ff2)
-                    )
-                }
-
-
-                var dodge = false
-
-                if (DuckDueller.config?.enableDodging == true) {
-                    val config = DuckDueller.config
-                    if (wins > config?.dodgeWins!!) {
-                        dodge = true
-                    } else if (wlr > config.dodgeWLR) {
-                        dodge = true
-                    } else if (ws > config.dodgeWS) {
-                        dodge = true
-                    } else if (DuckDueller.config?.dodgeLostTo == true) {
-                        if (playersLost.contains(player)) {
-                            dodge = true
-                        }
-                    }
-                }
-
-                if (dodge) {
-                    beforeLeave()
-                    leaveGame()
-                    sendDodgeWebhook(player)
-                    TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(4000, 6000))
-                }
-            }
-        } else if (toggled()) {
-            ChatUtils.error("Error getting stats! Check the log for more information.")
-            println("Error getting stats! success == false")
-            println(DuckDueller.gson.toJson(stats))
-        }
-    }
-
-    private fun sendDodgeWebhook(player: String) {
-        if (DuckDueller.config?.sendWebhookDodge == true) {
-            val footer = WebHook.buildFooter(ChatUtils.removeFormatting(Session.getSession()), "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            val thumbnail = WebHook.buildThumbnail("https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-
-            WebHook.sendEmbed(
-                DuckDueller.config?.webhookURL!!,
-                WebHook.buildEmbed("Dodged someone!", if (player != "") "Dodged $player." else "Dodged a nick!", JsonArray(), footer, author, thumbnail, 0x581ff2)
-            )
-        }
-    }
-
-    private fun leaveGame() {
-        if (toggled() && StateManager.state != StateManager.States.PLAYING) {
-            TimeUtils.setTimeout(fun () {
-                ChatUtils.sendAsPlayer("/l")
-            }, RandomUtils.randomIntInRange(100, 300))
         }
     }
 
