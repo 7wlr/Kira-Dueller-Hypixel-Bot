@@ -22,15 +22,15 @@ object StateManager {
     @SubscribeEvent(priority = EventPriority.HIGHEST)
     fun onChat(ev: ClientChatReceivedEvent) {
         val unformatted = ev.message.unformattedText
-        if (unformatted.matches(Regex(".* has joined \\(./2\\)!"))) {
+        if (unformatted.matches(Regex(".* a rejoint \\(./2\\)!"))) {
             state = States.GAME
-            if (unformatted.matches(Regex(".* has joined \\(2/2\\)!"))) {
+            if (unformatted.matches(Regex(".* a rejoint \\(2/2\\)!"))) {
                 gameFull = true
             }
         } else if (unformatted.contains("Opponent:")) {
             state = States.PLAYING
             gameStartedAt = System.currentTimeMillis()
-        } else if (unformatted.contains("Accuracy")) {
+        } else if (unformatted.contains("Melee")) {
             state = States.GAME
             gameFull = false
             lastGameDuration = System.currentTimeMillis() - gameStartedAt
