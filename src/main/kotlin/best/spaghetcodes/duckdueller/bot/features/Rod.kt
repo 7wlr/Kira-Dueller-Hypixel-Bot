@@ -12,7 +12,7 @@ import net.minecraft.client.Minecraft
  * Canne Hypixel Classic "human-like":
  * - Lancer réel (clic court),
  * - On GARDE la canne le temps de vol estimé selon la distance,
- * - Puis on revient épée. AUCUN auto-CPS.
+ * - Puis on revient épée (sans auto-CPS).
  */
 interface Rod {
 
@@ -44,7 +44,7 @@ interface Rod {
         Inventory.setInvItem("rod")
         Mouse.rClick(clickMs)
 
-        // Fin de la phase projectile peu après le lancer (on reste avec la canne en main)
+        // Fin de la phase "projectile" peu après (on reste avec la canne en main)
         TimeUtils.setTimeout({
             Mouse.setUsingProjectile(false)
         }, RandomUtils.randomIntInRange(40, 80))
