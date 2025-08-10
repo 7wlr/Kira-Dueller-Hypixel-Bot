@@ -1,10 +1,7 @@
 name: Build DuckDueller
 
 on:
-  push:
-    branches: ["*"]
-  pull_request:
-    branches: ["*"]
+  # Manuel uniquement dans l’onglet Actions
   workflow_dispatch:
 
 jobs:
@@ -23,25 +20,25 @@ jobs:
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v1
 
-      # Java 17 recommandé ici (Forge 1.8.9 + loom + pack200 adapter OK).
+      # Java 17
       - name: Set up Temurin JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '17'
 
-      # Cache Gradle performant + télémétrie build scan désactivée par défaut
+      # Cache Gradle performant
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # Build complet (nettoyage + build). --no-daemon pour CI
+      # Build complet
       - name: Gradle Clean & Build
         run: ./gradlew --no-daemon clean build
 
-      # Récupère tous les jars (shadow/dev/sources/remapped selon config)
+      # Artifacts
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
