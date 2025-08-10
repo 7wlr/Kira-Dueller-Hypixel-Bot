@@ -59,6 +59,9 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     override fun onGameStart() {
         Movement.startSprinting()
         Movement.startForward()
+        // AUTO-AIM OFF / AUTO-CPS OFF
+        Mouse.stopTracking()
+        Mouse.stopLeftAC()
     }
 
     override fun onGameEnd() {
@@ -79,6 +82,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                 2 to 1,
                 3 to 1
             )
+            Mouse.stopTracking()
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
@@ -90,21 +94,11 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                 Movement.startSprinting()
             }
 
-            if (distance < (DuckDueller.config?.maxDistanceAttack ?: 10)) {
-                if (mc.thePlayer.heldItem != null && mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
-                    if (!dontStartLeftAC) {
-                        Mouse.startLeftAC()
-                    }
-                }
-            } else {
-                Mouse.stopLeftAC()
-            }
+            // AUTO-CPS OFF
+            Mouse.stopLeftAC()
 
-            if (distance < (DuckDueller.config?.maxDistanceLook ?: 150)) {
-                Mouse.startTracking()
-            } else {
-                Mouse.stopTracking()
-            }
+            // AUTO-AIM OFF
+            Mouse.stopTracking()
 
             if (distance < 8) {
                 Movement.stopJumping()
