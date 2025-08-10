@@ -3,363 +3,308 @@ package best.spaghetcodes.duckdueller.gui
 import best.spaghetcodes.duckdueller.DuckDueller
 import best.spaghetcodes.duckdueller.bot.Session
 import best.spaghetcodes.duckdueller.utils.ChatUtils
-import net.minecraft.client.Minecraft
 import net.minecraft.client.gui.GuiButton
 import net.minecraft.client.gui.GuiScreen
 import net.minecraft.client.gui.GuiTextField
-import net.minecraft.client.gui.ScaledResolution
-import net.minecraft.client.renderer.GlStateManager
-import net.minecraft.util.EnumChatFormatting
 import org.lwjgl.input.Keyboard
 import org.lwjgl.opengl.GL11
 import java.awt.Color
-import kotlin.math.cos
-import kotlin.math.sin
+import kotlin.math.max
+import kotlin.math.min
 
 class CustomConfigGUI : GuiScreen() {
-    
-    private var currentTab = 0  // Changed from enum to Int for simplicity
-    private val tabNames = listOf("General", "Combat", "Dodging", "Webhook", "Stats")
+
+    private var currentTab = 0
+    private val tabNames = listOf("General", "Combat", "Stats")
     private var fadeIn = 0f
-    
-    // Text fields
+
+    // champs éditables
     private lateinit var apiKeyField: GuiTextField
-    private lateinit var webhookField: GuiTextField
-    
-    // Theme colors
-    private val primaryColor = Color(0, 240, 255, 255).rgb  // Cyan
+
+    // couleurs
+    private val primaryColor = Color(0, 240, 255, 255).rgb  // cyan KIRA
     private val backgroundColor = Color(15, 15, 25, 240).rgb
     private val cardColor = Color(25, 25, 40, 200).rgb
-    
+
+    // zones cliquables simples
+    private data class Rect(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val onClick: () -> Unit)
+    private val hotspots = mutableListOf<Rect>()
+
     override fun initGui() {
         super.initGui()
         fadeIn = 0f
-        
-        // Initialize text fields
+        Keyboard.enableRepeatEvents(true)
+
+        // champs
         val centerX = width / 2
-        apiKeyField = GuiTextField(0, fontRendererObj, centerX - 100, 100, 200, 20)
-        apiKeyField.maxStringLength = 36
-        apiKeyField.text = DuckDueller.config?.apiKey ?: ""
-        
-        webhookField = GuiTextField(1, fontRendererObj, centerX - 100, 150, 200, 20)
-        webhookField.maxStringLength = 200
-        webhookField.text = DuckDueller.config?.webhookURL ?: ""
-        
-        // Add save button
+        apiKeyField = GuiTextField(0, fontRendererObj, centerX - 140, 100, 280, 20).apply {
+            maxStringLength = 36
+            text = DuckDueller.config?.apiKey ?: ""
+        }
+
+        // boutons
         buttonList.clear()
-        buttonList.add(GuiButton(100, width / 2 - 50, height - 30, 100, 20, "Save & Close"))
+        buttonList.add(GuiButton(100, width / 2 - 60, height - 30, 120, 20, "Save & Close"))
     }
-    
+
+    override fun onGuiClosed() {
+        super.onGuiClosed()
+        Keyboard.enableRepeatEvents(false)
+    }
+
+    override fun updateScreen() {
+        super.updateScreen()
+        apiKeyField.updateCursorCounter()
+    }
+
     override fun drawScreen(mouseX: Int, mouseY: Int, partialTicks: Float) {
-        // Animate fade in
-        if (fadeIn < 1f) fadeIn += 0.05f
-        
-        // Draw gradient background
-        drawGradientRect(0, 0, width, height, 
-            Color(10, 10, 20, (250 * fadeIn).toInt()).rgb, 
-            Color(30, 10, 50, (250 * fadeIn).toInt()).rgb)
-        
-        // Draw main container
+        hotspots.clear()
+        if (fadeIn < 1f) fadeIn = min(1f, fadeIn + 0.05f)
+
+        // fond dégradé
+        drawGradientRect(
+            0, 0, width, height,
+            Color(10, 10, 20, (250 * fadeIn).toInt()).rgb,
+            Color(30, 10, 50, (250 * fadeIn).toInt()).rgb
+        )
+
         val containerX = 40
         val containerY = 40
-        val containerWidth = width - 80
-        val containerHeight = height - 80
-        
-        // Container background
-        drawRect(containerX, containerY, containerX + containerWidth, containerY + containerHeight, backgroundColor)
-        
-        // Draw border
-        drawBorder(containerX, containerY, containerWidth, containerHeight, primaryColor)
-        
-        // Draw title
-        val title = "§lKIRA CONFIG"
-        drawCenteredString(fontRendererObj, title, width / 2, 15, primaryColor)
-        
-        // Draw tabs
+        val containerW = width - 80
+        val containerH = height - 80
+
+        // conteneur
+        drawRect(containerX, containerY, containerX + containerW, containerY + containerH, backgroundColor)
+        drawBorder(containerX, containerY, containerW, containerH, primaryColor)
+
+        // titre
+        drawCenteredString(fontRendererObj, "§lKIRA CONFIG", width / 2, 15, primaryColor)
+
+        // onglets
         drawTabs(containerX, containerY - 25, mouseX, mouseY)
-        
-        // Draw content based on current tab
+
+        // contenu
         val contentX = containerX + 20
         val contentY = containerY + 20
-        
         when (currentTab) {
             0 -> drawGeneralTab(contentX, contentY)
             1 -> drawCombatTab(contentX, contentY)
-            2 -> drawDodgingTab(contentX, contentY)
-            3 -> drawWebhookTab(contentX, contentY)
-            4 -> drawStatsTab(contentX, contentY)
+            2 -> drawStatsTab(contentX, contentY)
         }
-        
-        // Draw status
+
+        // statut + version
         val status = if (DuckDueller.bot?.toggled() == true) "§aONLINE" else "§cOFFLINE"
         drawString(fontRendererObj, "Status: $status", width - 80, height - 10, -1)
-        
-        // Draw version
-        drawString(fontRendererObj, "§7v1.0 by Nix", 5, height - 10, Color.GRAY.rgb)
-        
+        drawString(fontRendererObj, "§7KIRA UI", 5, height - 10, Color.GRAY.rgb)
+
         super.drawScreen(mouseX, mouseY, partialTicks)
     }
-    
-    private fun drawBorder(x: Int, y: Int, width: Int, height: Int, color: Int) {
-        // Top
-        drawHorizontalLine(x, x + width, y, color)
-        // Bottom
-        drawHorizontalLine(x, x + width, y + height, color)
-        // Left
-        drawVerticalLine(x, y, y + height, color)
-        // Right
-        drawVerticalLine(x + width, y, y + height, color)
+
+    private fun drawBorder(x: Int, y: Int, w: Int, h: Int, color: Int) {
+        drawHorizontalLine(x, x + w, y, color)
+        drawHorizontalLine(x, x + w, y + h, color)
+        drawVerticalLine(x, y, y + h, color)
+        drawVerticalLine(x + w, y, y + h, color)
     }
-    
+
+    private fun addHotspot(x: Int, y: Int, w: Int, h: Int, onClick: () -> Unit) {
+        hotspots += Rect(x, y, x + w, y + h, onClick)
+    }
+
+    private fun drawButton(x: Int, y: Int, w: Int, h: Int, label: String, active: Boolean = true) {
+        val bg = when {
+            !active -> Color(60, 60, 60, 120).rgb
+            else -> Color(40, 40, 60, 140).rgb
+        }
+        drawRect(x, y, x + w, y + h, bg)
+        drawCenteredString(fontRendererObj, label, x + w / 2, y + 6, if (active) -1 else Color(160,160,160).rgb)
+    }
+
     private fun drawTabs(x: Int, y: Int, mouseX: Int, mouseY: Int) {
         var tabX = x
         tabNames.forEachIndexed { index, name ->
-            val isSelected = index == currentTab
-            val isHovered = mouseX in tabX..(tabX + 100) && mouseY in y..(y + 25)
-            
-            val bgColor = when {
-                isSelected -> Color(0, 240, 255, 100).rgb
-                isHovered -> Color(100, 100, 120, 150).rgb
-                else -> Color(40, 40, 60, 100).rgb
-            }
-            
-            // Tab background
-            drawRect(tabX, y, tabX + 100, y + 25, bgColor)
-            
-            // Tab text
-            val textColor = if (isSelected) primaryColor else -1
-            drawCenteredString(fontRendererObj, name, tabX + 50, y + 8, textColor)
-            
+            val selected = index == currentTab
+            val bg = if (selected) Color(0, 240, 255, 100).rgb else Color(40, 40, 60, 100).rgb
+            drawRect(tabX, y, tabX + 100, y + 25, bg)
+            drawCenteredString(fontRendererObj, name, tabX + 50, y + 8, if (selected) primaryColor else -1)
+            addHotspot(tabX, y, 100, 25) { currentTab = index }
             tabX += 102
         }
     }
-    
+
+    private fun selector(label: String, x: Int, y: Int, get: () -> Int, set: (Int) -> Unit, options: List<String>) {
+        val cur = min(max(0, get()), options.lastIndex)
+        drawString(fontRendererObj, "$label:", x, y, -1)
+        // boutons - / +
+        drawButton(x + 110, y - 4, 18, 18, "«")
+        addHotspot(x + 110, y - 4, 18, 18) {
+            val v = if (cur <= 0) options.lastIndex else cur - 1
+            set(v)
+        }
+        drawRect(x + 132, y - 6, x + 282, y + 14, cardColor)
+        drawCenteredString(fontRendererObj, options[cur], x + 207, y, primaryColor)
+        drawButton(x + 286, y - 4, 18, 18, "»")
+        addHotspot(x + 286, y - 4, 18, 18) {
+            val v = if (cur >= options.lastIndex) 0 else cur + 1
+            set(v)
+        }
+    }
+
+    private fun toggle(label: String, x: Int, y: Int, get: () -> Boolean, set: (Boolean) -> Unit) {
+        val v = get()
+        drawString(fontRendererObj, label, x, y, -1)
+        val boxX = x + 260; val boxY = y - 2; val w = 60; val h = 18
+        drawRect(boxX, boxY, boxX + w, boxY + h, if (v) Color(30, 90, 30, 200).rgb else Color(90, 30, 30, 200).rgb)
+        drawCenteredString(fontRendererObj, if (v) "ON" else "OFF", boxX + w/2, boxY + 5, if (v) Color(0x55FF55).rgb else Color(0xFF5555).rgb)
+        addHotspot(boxX, boxY, w, h) { set(!get()) }
+    }
+
+    private fun number(label: String, x: Int, y: Int, get: () -> Int, set: (Int) -> Unit, minV: Int, maxV: Int, step: Int = 1) {
+        val v = get()
+        drawString(fontRendererObj, "$label", x, y, -1)
+        drawButton(x + 200, y - 4, 18, 18, "–")
+        addHotspot(x + 200, y - 4, 18, 18) { set(max(minV, v - step)) }
+        drawRect(x + 222, y - 6, x + 282, y + 14, cardColor)
+        drawCenteredString(fontRendererObj, v.toString(), x + 252, y, primaryColor)
+        drawButton(x + 286, y - 4, 18, 18, "+")
+        addHotspot(x + 286, y - 4, 18, 18) { set(min(maxV, v + step)) }
+    }
+
+    private fun decimal(label: String, x: Int, y: Int, get: () -> Float, set: (Float) -> Unit, minV: Float, maxV: Float, step: Float = 0.1f) {
+        val v = get()
+        drawString(fontRendererObj, "$label", x, y, -1)
+        drawButton(x + 200, y - 4, 18, 18, "–")
+        addHotspot(x + 200, y - 4, 18, 18) { set(max(minV, (v - step))) }
+        drawRect(x + 222, y - 6, x + 282, y + 14, cardColor)
+        drawCenteredString(fontRendererObj, String.format("%.2f", v), x + 252, y, primaryColor)
+        drawButton(x + 286, y - 4, 18, 18, "+")
+        addHotspot(x + 286, y - 4, 18, 18) { set(min(maxV, (v + step))) }
+    }
+
     private fun drawGeneralTab(x: Int, y: Int) {
-        var yOffset = y
-        
-        drawString(fontRendererObj, "§lGENERAL SETTINGS", x, yOffset, primaryColor)
-        yOffset += 25
-        
-        // Bot selector
-        drawString(fontRendererObj, "Current Bot: ${getBotName()}", x, yOffset, -1)
-        yOffset += 20
-        
-        // API Key
-        drawString(fontRendererObj, "API Key:", x, yOffset, -1)
-        yOffset += 15
+        var yOff = y
+        drawString(fontRendererObj, "§lGENERAL SETTINGS", x, yOff, primaryColor); yOff += 25
+
+        val cfg = DuckDueller.config ?: return
+
+        // Sélecteur de bot
+        val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo")
+        selector("Current Bot", x, yOff, { cfg.currentBot }, { v ->
+            cfg.currentBot = v
+            // sécurité: on force le swap immédiatement
+            val b = cfg.bots[v]
+            if (b != null) {
+                DuckDueller.swapBot(b)
+            }
+        }, botNames)
+        yOff += 24
+
+        // API Key (affichée / modifiable — utile si tu gardes les stats/webhooks)
+        drawString(fontRendererObj, "API Key:", x, yOff, -1); yOff += 15
         apiKeyField.xPosition = x
-        apiKeyField.yPosition = yOffset
+        apiKeyField.yPosition = yOff
         apiKeyField.drawTextBox()
-        yOffset += 30
-        
-        // Toggles
-        drawToggle("Lobby Movement", x, yOffset, DuckDueller.config?.lobbyMovement ?: true)
-        yOffset += 25
-        
-        drawToggle("Fast Requeue", x, yOffset, DuckDueller.config?.fastRequeue ?: true)
-        yOffset += 25
-        
-        drawToggle("Paper Requeue", x, yOffset, DuckDueller.config?.paperRequeue ?: true)
-        yOffset += 25
-        
-        // Values
-        drawValue("Disconnect After Games", x, yOffset, DuckDueller.config?.disconnectAfterGames ?: 0)
-        yOffset += 25
-        
-        drawValue("Disconnect After Minutes", x, yOffset, DuckDueller.config?.disconnectAfterMinutes ?: 0)
+        yOff += 26
+
+        // Switches
+        toggle("Lobby Movement", x, yOff, { cfg.lobbyMovement }, { cfg.lobbyMovement = it }); yOff += 20
+        toggle("Fast Requeue", x, yOff, { cfg.fastRequeue }, { cfg.fastRequeue = it }); yOff += 20
+        toggle("Paper Requeue", x, yOff, { cfg.paperRequeue }, { cfg.paperRequeue = it }); yOff += 20
+        toggle("Disable Chat Messages", x, yOff, { cfg.disableChatMessages }, { cfg.disableChatMessages = it }); yOff += 24
+
+        // Valeurs
+        number("Disconnect After Games", x, yOff, { cfg.disconnectAfterGames }, { cfg.disconnectAfterGames = it }, 0, 10000, 10); yOff += 20
+        number("Disconnect After Minutes", x, yOff, { cfg.disconnectAfterMinutes }, { cfg.disconnectAfterMinutes = it }, 0, 500, 5); yOff += 24
+        number("Auto Requeue Delay (ms)", x, yOff, { cfg.autoRqDelay }, { cfg.autoRqDelay = it }, 500, 5000, 50); yOff += 20
+        number("Requeue After No Game (s)", x, yOff, { cfg.rqNoGame }, { cfg.rqNoGame = it }, 15, 60, 1); yOff += 24
+
+        // AutoGG / Start
+        toggle("Enable AutoGG", x, yOff, { cfg.sendAutoGG }, { cfg.sendAutoGG = it }); yOff += 20
+        number("AutoGG Delay (ms)", x, yOff, { cfg.ggDelay }, { cfg.ggDelay = it }, 50, 1000, 50); yOff += 20
+        drawString(fontRendererObj, "AutoGG Message:", x, yOff, -1); yOff += 15
+        // on n’ouvre pas de 2nd champ texte pour rester compact → message modifiable via Vigilant si besoin
+
+        toggle("Game Start Message", x, yOff, { cfg.sendStartMessage }, { cfg.sendStartMessage = it }); yOff += 20
+        number("Start Message Delay (ms)", x, yOff, { cfg.startMessageDelay }, { cfg.startMessageDelay = it }, 50, 1000, 50)
     }
-    
+
     private fun drawCombatTab(x: Int, y: Int) {
-        var yOffset = y
-        
-        drawString(fontRendererObj, "§lCOMBAT SETTINGS", x, yOffset, primaryColor)
-        yOffset += 25
-        
-        drawValue("Min CPS", x, yOffset, DuckDueller.config?.minCPS ?: 10)
-        yOffset += 25
-        
-        drawValue("Max CPS", x, yOffset, DuckDueller.config?.maxCPS ?: 14)
-        yOffset += 25
-        
-        drawValue("Horizontal Look Speed", x, yOffset, DuckDueller.config?.lookSpeedHorizontal ?: 10)
-        yOffset += 25
-        
-        drawValue("Vertical Look Speed", x, yOffset, DuckDueller.config?.lookSpeedVertical ?: 5)
-        yOffset += 25
-        
-        val lookRand = DuckDueller.config?.lookRand ?: 0.3f
-        drawString(fontRendererObj, "Look Randomization: $lookRand", x, yOffset, -1)
-        yOffset += 25
-        
-        drawValue("Max Look Distance", x, yOffset, DuckDueller.config?.maxDistanceLook ?: 150)
-        yOffset += 25
-        
-        drawValue("Max Attack Distance", x, yOffset, DuckDueller.config?.maxDistanceAttack ?: 5)
+        var yOff = y
+        drawString(fontRendererObj, "§lCOMBAT SETTINGS", x, yOff, primaryColor); yOff += 25
+
+        val cfg = DuckDueller.config ?: return
+
+        number("Min CPS", x, yOff, { cfg.minCPS }, { cfg.minCPS = it }, 6, 15, 1); yOff += 20
+        number("Max CPS", x, yOff, { cfg.maxCPS }, { cfg.maxCPS = it }, 9, 18, 1); yOff += 24
+
+        number("Horizontal Look Speed", x, yOff, { cfg.lookSpeedHorizontal }, { cfg.lookSpeedHorizontal = it }, 1, 50, 1); yOff += 20
+        number("Vertical Look Speed", x, yOff, { cfg.lookSpeedVertical }, { cfg.lookSpeedVertical = it }, 1, 50, 1); yOff += 20
+        decimal("Look Randomization", x, yOff, { cfg.lookRand }, { cfg.lookRand = it }, 0f, 2f, 0.05f); yOff += 24
+
+        number("Max Look Distance", x, yOff, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); yOff += 20
+        number("Max Attack Distance", x, yOff, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1)
     }
-    
-    private fun drawDodgingTab(x: Int, y: Int) {
-        var yOffset = y
-        
-        drawString(fontRendererObj, "§lQUEUE DODGING", x, yOffset, primaryColor)
-        yOffset += 25
-        
-        drawToggle("Enable Dodging", x, yOffset, DuckDueller.config?.enableDodging ?: true)
-        yOffset += 25
-        
-        if (DuckDueller.config?.enableDodging == true) {
-            drawValue("Max Wins", x, yOffset, DuckDueller.config?.dodgeWins ?: 4000)
-            yOffset += 25
-            
-            drawValue("Max Winstreak", x, yOffset, DuckDueller.config?.dodgeWS ?: 15)
-            yOffset += 25
-            
-            val wlr = DuckDueller.config?.dodgeWLR ?: 3.0f
-            drawString(fontRendererObj, "Max W/L Ratio: $wlr", x, yOffset, -1)
-            yOffset += 25
-            
-            drawToggle("Dodge Lost To", x, yOffset, DuckDueller.config?.dodgeLostTo ?: true)
-            yOffset += 25
-            
-            drawToggle("Dodge No Stats", x, yOffset, DuckDueller.config?.dodgeNoStats ?: true)
-            yOffset += 25
-            
-            drawToggle("Strict Dodging", x, yOffset, DuckDueller.config?.strictDodging ?: false)
-        }
-    }
-    
-    private fun drawWebhookTab(x: Int, y: Int) {
-        var yOffset = y
-        
-        drawString(fontRendererObj, "§lWEBHOOK SETTINGS", x, yOffset, primaryColor)
-        yOffset += 25
-        
-        drawToggle("Send Webhook Messages", x, yOffset, DuckDueller.config?.sendWebhookMessages ?: false)
-        yOffset += 25
-        
-        if (DuckDueller.config?.sendWebhookMessages == true) {
-            drawString(fontRendererObj, "Webhook URL:", x, yOffset, -1)
-            yOffset += 15
-            webhookField.xPosition = x
-            webhookField.yPosition = yOffset
-            webhookField.width = 350
-            webhookField.drawTextBox()
-            yOffset += 30
-            
-            drawToggle("Send Queue Stats", x, yOffset, DuckDueller.config?.sendWebhookStats ?: false)
-            yOffset += 25
-            
-            drawToggle("Send Dodge Alerts", x, yOffset, DuckDueller.config?.sendWebhookDodge ?: false)
-            yOffset += 25
-            
-            drawToggle("Send AutoGG", x, yOffset, DuckDueller.config?.sendAutoGG ?: true)
-            yOffset += 25
-            
-            drawToggle("Send Start Message", x, yOffset, DuckDueller.config?.sendStartMessage ?: false)
-        }
-    }
-    
+
     private fun drawStatsTab(x: Int, y: Int) {
-        var yOffset = y
-        
-        drawString(fontRendererObj, "§lSESSION STATISTICS", x, yOffset, primaryColor)
-        yOffset += 25
-        
+        var yOff = y
+        drawString(fontRendererObj, "§lSESSION STATISTICS", x, yOff, primaryColor); yOff += 25
+
         val wins = Session.wins
         val losses = Session.losses
         val wlr = if (losses == 0) wins.toFloat() else wins.toFloat() / losses
-        val winrate = if (wins + losses == 0) 0f else (wins.toFloat() / (wins + losses)) * 100
-        
-        drawStatCard("WINS", x, yOffset, wins.toString(), Color.GREEN.rgb)
-        drawStatCard("LOSSES", x + 120, yOffset, losses.toString(), Color.RED.rgb)
-        drawStatCard("W/L RATIO", x + 240, yOffset, String.format("%.2f", wlr), primaryColor)
-        yOffset += 60
-        
-        drawStatCard("WIN RATE", x, yOffset, String.format("%.1f%%", winrate), Color.CYAN.rgb)
-        drawStatCard("GAMES", x + 120, yOffset, (wins + losses).toString(), Color.YELLOW.rgb)
-        
+        val total = wins + losses
+        val winrate = if (total == 0) 0f else (wins.toFloat() / total) * 100f
+
+        drawStatCard("WINS", x, yOff, wins.toString(), Color.GREEN.rgb)
+        drawStatCard("LOSSES", x + 120, yOff, losses.toString(), Color.RED.rgb)
+        drawStatCard("W/L RATIO", x + 240, yOff, String.format("%.2f", wlr), primaryColor)
+        yOff += 60
+
+        drawStatCard("WIN RATE", x, yOff, String.format("%.1f%%", winrate), Color.CYAN.rgb)
+        drawStatCard("GAMES", x + 120, yOff, total.toString(), Color.YELLOW.rgb)
+
         if (Session.startTime > 0) {
-            val duration = (System.currentTimeMillis() - Session.startTime) / 1000 / 60
-            drawStatCard("TIME", x + 240, yOffset, "${duration}m", Color.MAGENTA.rgb)
+            val minutes = max(0L, (System.currentTimeMillis() - Session.startTime) / 1000 / 60)
+            drawStatCard("TIME", x + 240, yOff, "${minutes}m", Color.MAGENTA.rgb)
         }
     }
-    
-    private fun drawToggle(label: String, x: Int, y: Int, enabled: Boolean) {
-        val color = if (enabled) "§a" else "§c"
-        val status = if (enabled) "ON" else "OFF"
-        drawString(fontRendererObj, "$label: $color$status", x, y, -1)
-    }
-    
-    private fun drawValue(label: String, x: Int, y: Int, value: Int) {
-        drawString(fontRendererObj, "$label: §b$value", x, y, -1)
-    }
-    
+
     private fun drawStatCard(title: String, x: Int, y: Int, value: String, color: Int) {
-        // Background
         drawRect(x, y, x + 100, y + 50, cardColor)
-        
-        // Title
         drawString(fontRendererObj, title, x + 5, y + 5, Color.GRAY.rgb)
-        
-        // Value
         GL11.glPushMatrix()
         GL11.glTranslatef((x + 50).toFloat(), (y + 25).toFloat(), 0f)
         GL11.glScalef(1.5f, 1.5f, 1f)
         drawCenteredString(fontRendererObj, value, 0, 0, color)
         GL11.glPopMatrix()
     }
-    
-    private fun getBotName(): String {
-        val botIndex = DuckDueller.config?.currentBot ?: 0
-        val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo")
-        return if (botIndex in botNames.indices) botNames[botIndex] else "Unknown"
-    }
-    
+
     override fun mouseClicked(mouseX: Int, mouseY: Int, mouseButton: Int) {
         super.mouseClicked(mouseX, mouseY, mouseButton)
-        
-        // Handle tab clicks
-        var tabX = 40
-        val tabY = 15
-        tabNames.forEachIndexed { index, _ ->
-            if (mouseX in tabX..(tabX + 100) && mouseY in tabY..(tabY + 25)) {
-                currentTab = index
-            }
-            tabX += 102
-        }
-        
-        // Handle text fields
+        hotspots.firstOrNull { mouseX in it.x1..it.x2 && mouseY in it.y1..it.y2 }?.onClick?.invoke()
         apiKeyField.mouseClicked(mouseX, mouseY, mouseButton)
-        webhookField.mouseClicked(mouseX, mouseY, mouseButton)
     }
-    
+
     override fun keyTyped(typedChar: Char, keyCode: Int) {
         if (keyCode == Keyboard.KEY_ESCAPE) {
-            saveConfig()
-            mc.displayGuiScreen(null)
-            return
+            saveAndClose(); return
         }
-        
         apiKeyField.textboxKeyTyped(typedChar, keyCode)
-        webhookField.textboxKeyTyped(typedChar, keyCode)
+        super.keyTyped(typedChar, keyCode)
     }
-    
+
     override fun actionPerformed(button: GuiButton) {
         when (button.id) {
-            100 -> {
-                saveConfig()
-                mc.displayGuiScreen(null)
-            }
+            100 -> saveAndClose()
         }
     }
-    
-    private fun saveConfig() {
-        // Save the configuration
+
+    private fun saveAndClose() {
         DuckDueller.config?.apiKey = apiKeyField.text
-        DuckDueller.config?.webhookURL = webhookField.text
         DuckDueller.config?.writeData()
-        
         ChatUtils.info("Configuration saved!")
+        mc.displayGuiScreen(null)
     }
-    
+
     override fun doesGuiPauseGame(): Boolean = false
 }
