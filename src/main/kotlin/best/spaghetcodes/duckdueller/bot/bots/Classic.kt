@@ -33,6 +33,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var strafeDir = 1                 // -1 = gauche, +1 = droite
     private var lastStrafeSwitch = 0L         // dernier switch de côté
     private var stagnantSince = 0L            // début d’une distance quasi stable (pour break-orbit)
+    private var cornerBreakUntil = 0L         // fenêtre forcée de “décrochage” (anti-corner)
 
     // --- Rod control ---
     private var rodLockUntil = 0L
@@ -53,8 +54,12 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         rodLockUntil = 0L
         lastStrafeSwitch = 0L
         stagnantSince = 0L
-        // FIX: remplace randomBoolean() par int 0/1
+        cornerBreakUntil = 0L
+        // aléa initial de côté
         strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
+
+        // anti “block d’épée” fantôme dès l’init
+        Mouse.rClickUp()
 
         // Tir d’ouverture (full charge via Bow.kt) si aucune action en cours
         TimeUtils.setTimeout({
@@ -125,6 +130,22 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             Mouse.startTracking()
             Mouse.stopLeftAC()
 
+            // --- Anti “block d’épée” non désiré ---
+            val holdingSword = mc.thePlayer.heldItem != null &&
+                mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")
+            val oppSpeed = kotlin.math.abs(opp.motionX) + kotlin.math.abs(opp.motionZ)
+            val farAndStill = (distance > 11.5f && oppSpeed < 0.04)
+
+            // On n’autorise le block à l’épée QUE si loin & immobile ; sinon on lève.
+            if (holdingSword) {
+                if (!farAndStill && Mouse.rClickDown) {
+                    Mouse.rClickUp()
+                } else if (farAndStill && !Mouse.isUsingProjectile() && !Mouse.rClickDown) {
+                    // petit block court (défensif vs bow/placement) et on relâche aussitôt
+                    Mouse.rClick(RandomUtils.randomIntInRange(120, 180))
+                }
+            }
+
             // Sauts “humains”
             if (distance > jumpDistanceThreshold) {
                 if (opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")) {
@@ -166,7 +187,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             // Fenêtrage (façon OP) : ni rod ni bow si une autre action est en cours
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
-                // --- Anti-rod mid-range (3.4..5.2), seulement si l’adversaire APPROCHE & nous fait face & combo faible ---
+                // --- Anti-rod mid-range (3.4..5.2), seulement si APPROCHE & face & combo faible ---
                 val minCd = if (distance < 5.3f) 650 else 900
                 val cdOK = (now - lastRodUse) >= minCd
                 if (cdOK &&
@@ -219,14 +240,26 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
             }
 
-            // --- Strafe / priorités : corrige l’unilatéral + casse l’orbite ---
+            // --- Anti-corner & strafe ---
+            // Détection coin/bloc devant en mêlée ⇒ forcer un “décrochage” latéral court
+            val blockAheadClose = WorldUtils.blockInFront(mc.thePlayer, 1.2f, 1.0f) != Blocks.air
+            val deltaDist = if (prevDistance > 0f) kotlin.math.abs(distance - prevDistance) else 999f
+            val cornerLikely = (distance < 3.8f && (blockAheadClose || deltaDist < 0.02f))
+
+            if (cornerLikely && now >= cornerBreakUntil) {
+                strafeDir = -strafeDir
+                cornerBreakUntil = now + RandomUtils.randomIntInRange(280, 420)
+                if (mc.thePlayer.onGround) {
+                    Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
+                }
+            }
+
             if (!clear) {
                 if (EntityUtils.entityFacingAway(mc.thePlayer, opp)) {
-                    // Fuite : on chase tout droit avec un léger biais
+                    // Fuite : chase tout droit avec un léger biais
                     if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
                 } else {
-                    // Milieu/close-range : on contrôle vraiment le côté
-                    // 1) S’aligner sur le côté “intelligent” en fonction de l’angle relatif (si dispo)
+                    // Contrôle de côté “intelligent”
                     val rotations = EntityUtils.getRotations(opp, mc.thePlayer, false)
                     if (rotations != null && now - lastStrafeSwitch > 350) {
                         val preferSide = if (rotations[0] < 0) +1 else -1  // yaw<0 → strafe droite, sinon gauche
@@ -236,10 +269,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                         }
                     }
 
-                    // 2) Break-orbit : si on tourne en rond (distance quasi stable), on inverse
+                    // Break-orbit : distance quasi stable ⇒ inverser
                     if (distance in 1.8f..3.6f) {
-                        val delta = if (prevDistance > 0f) kotlin.math.abs(distance - prevDistance) else 999f
-                        if (delta < 0.03f) {
+                        if (deltaDist < 0.03f) {
                             if (stagnantSince == 0L) stagnantSince = now
                             else if (now - stagnantSince > 550 && now - lastStrafeSwitch > 300) {
                                 strafeDir = -strafeDir
@@ -249,14 +281,14 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                         } else stagnantSince = 0L
                     } else stagnantSince = 0L
 
-                    // 3) Alternance contrôlée : on ne garde jamais le même côté trop longtemps en mêlée
+                    // Alternance contrôlée
                     if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(950, 1200)) {
                         strafeDir = -strafeDir
                         lastStrafeSwitch = now
                     }
 
-                    // 4) Appliquer la priorité au côté décidé
-                    val weight = if (distance < 4f) 7 else 5
+                    // Si on est en fenêtre “cornerBreak”, forcer le strafe côté choisi plus fort
+                    val weight = if (now < cornerBreakUntil) 8 else if (distance < 4f) 7 else 5
                     if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
 
                     // Random strafe utile surtout mid-long range
