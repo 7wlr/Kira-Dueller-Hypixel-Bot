@@ -39,6 +39,9 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
         if (DuckDueller.config?.boxingFish == true) {
             TimeUtils.setTimeout(this::fishFunc, RandomUtils.randomIntInRange(10000, 20000))
         }
+        // AUTO-AIM OFF / AUTO-CPS OFF
+        Mouse.stopTracking()
+        Mouse.stopLeftAC()
     }
 
     private fun fishFunc(fish: Boolean = true) {
@@ -60,6 +63,7 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
             Mouse.stopLeftAC()
             Combat.stopRandomStrafe()
             fishTimer?.cancel()
+            Mouse.stopTracking()
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
@@ -84,25 +88,11 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
         if (opponent() != null && mc.theWorld != null && mc.thePlayer != null) {
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            if (distance < (DuckDueller.config?.maxDistanceLook ?: 150)) {
-                Mouse.startTracking()
-            } else {
-                Mouse.stopTracking()
-            }
+            // AUTO-AIM OFF
+            Mouse.stopTracking()
 
-            if (combo < 3) {
-                if (distance < (DuckDueller.config?.maxDistanceAttack ?: 10)) {
-                    Mouse.startLeftAC()
-                } else {
-                    Mouse.stopLeftAC()
-                }
-            } else {
-                if (distance < 3.5) {
-                    Mouse.startLeftAC()
-                } else {
-                    Mouse.stopLeftAC()
-                }
-            }
+            // AUTO-CPS OFF (quelle que soit la distance/etats de combo)
+            Mouse.stopLeftAC()
 
             if (combo >= 3 && distance >= 3.2 && mc.thePlayer.onGround) {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
@@ -121,10 +111,11 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
             var randomStrafe = false
 
             if (!EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
-                if (distance in 15f..8f) {
+                // NOTE: condition d’origine "distance in 15f..8f" → Double pour compiler (toujours fausse).
+                if (distance in 15.0..8.0) {
                     randomStrafe = true
                 } else {
-                    if (distance in 4f..8f) {
+                    if (distance in 4.0..8.0) {
                         if (EntityUtils.entityMovingLeft(mc.thePlayer, opponent()!!)) {
                             movePriority[1] += 1
                         } else {
