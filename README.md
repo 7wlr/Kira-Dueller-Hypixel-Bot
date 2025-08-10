@@ -3,16 +3,13 @@
 ![alt](https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/KiraBanner.png)
 
 <h3 align="center" style="color: #ff4949">
-Duck Dueller has reached the end of active development. 
-I might make updates sometimes, but official support has ended.
-<br><br>
-I will be collaborating on a new bot, keep checking back for a link to that.
+
 </h3>
 
 <h2 align="center">
-What is Duck Dueller?
+What is Kira?
 </h2>
-Duck Dueller is a free and open-source Hypixel Duels bot, designed to work for Forge 1.8.9! It is planned to support many modes and is highly customizable!
+Kirar is a free and open-source Hypixel Duels bot, designed to work for Forge 1.8.9! It is planned to support many modes and is highly customizable!
 
 <h2 align="center">
    What gamemodes are supported?
@@ -21,7 +18,8 @@ Duck Dueller is a free and open-source Hypixel Duels bot, designed to work for F
 - ✅ Sumo
 - ✅ Classic
 - ✅ Boxing
-- 🚧 OP
+- ✅ OP
+- ✅Combo
 
 *Note: these are the modes the bot will definitely support. There might be more!*
 
