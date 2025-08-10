@@ -16,9 +16,7 @@ import kotlin.math.floor
 
 class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
-    override fun getName(): String {
-        return "OP"
-    }
+    override fun getName(): String = "OP"
 
     init {
         setStatKeys(
@@ -51,18 +49,15 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Movement.startSprinting()
         Movement.startForward()
         TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
-        // AUTO-AIM OFF / AUTO-CPS OFF
-        Mouse.stopTracking()
-        Mouse.stopLeftAC()
+        Mouse.stopTracking()  // auto-aim OFF
+        Mouse.stopLeftAC()    // auto-CPS OFF
     }
 
     override fun onGameEnd() {
         shotsFired = 0
-
         speedPotsLeft = 2
         regenPotsLeft = 2
         gapsLeft = 6
-
         lastSpeedUse = 0L
         lastRegenUse = 0L
         lastPotion = 0L
@@ -82,22 +77,18 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
         if (mc.thePlayer != null && mc.thePlayer.heldItem != null) {
             val n = mc.thePlayer.heldItem.unlocalizedName.lowercase()
-            if (n.contains("rod")) { // wait after hitting with the rod
+            if (n.contains("rod")) {
                 Combat.wTap(300)
                 tapping = true
                 combo--
-                TimeUtils.setTimeout(fun () {
-                    tapping = false
-                }, 300)
+                TimeUtils.setTimeout(fun () { tapping = false }, 300)
             } else if (n.contains("sword")) {
                 if (distance < 2) {
-                    Mouse.rClick(RandomUtils.randomIntInRange(60, 90)) // otherwise just blockhit
+                    Mouse.rClick(RandomUtils.randomIntInRange(60, 90))
                 } else {
                     Combat.wTap(100)
                     tapping = true
-                    TimeUtils.setTimeout(fun () {
-                        tapping = false
-                    }, 100)
+                    TimeUtils.setTimeout(fun () { tapping = false }, 100)
                 }
             }
         }
@@ -105,30 +96,21 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
     override fun onTick() {
         if (opponent() != null && mc.theWorld != null && mc.thePlayer != null) {
-            if (!mc.thePlayer.isSprinting) {
-                Movement.startSprinting()
-            }
+            if (!mc.thePlayer.isSprinting) Movement.startSprinting()
 
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
             var hasSpeed = false
             for (effect in mc.thePlayer.activePotionEffects) {
-                if (effect.effectName.lowercase().contains("speed")) {
-                    hasSpeed = true
-                }
+                if (effect.effectName.lowercase().contains("speed")) hasSpeed = true
             }
 
-            // AUTO-AIM OFF
-            Mouse.stopTracking()
-
-            // AUTO-CPS OFF
-            Mouse.stopLeftAC()
+            Mouse.stopTracking() // auto-aim OFF
+            Mouse.stopLeftAC()   // auto-CPS OFF
 
             if (distance > 8.8) {
                 if (opponent() != null && opponent()!!.heldItem != null && opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow")) {
-                    if (!Mouse.isRunningAway()) {
-                        Movement.stopJumping()
-                    }
+                    if (!Mouse.isRunningAway()) Movement.stopJumping()
                 } else {
                     Movement.startJumping()
                 }
@@ -142,102 +124,90 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             if (distance < 0.7 || (distance < 1.4 && combo >= 1)) {
                 Movement.stopForward()
-            } else {
-                if (!tapping) {
-                    Movement.startForward()
-                }
+            } else if (!tapping) {
+                Movement.startForward()
             }
 
-            if (distance < 1.5 && mc.thePlayer.heldItem != null && !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword") && !Mouse.isUsingPotion()) {
+            if (distance < 1.5 && mc.thePlayer.heldItem != null &&
+                !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword") &&
+                !Mouse.isUsingPotion()) {
                 Inventory.setInvItem("sword")
                 Mouse.rClickUp()
-                // AUTO-CPS OFF: on ne démarre plus Mouse.startLeftAC()
             }
 
-            if (!hasSpeed && speedPotsLeft > 0 && System.currentTimeMillis() - lastSpeedUse > 15000 && System.currentTimeMillis() - lastPotion > 3500) {
+            if (!hasSpeed && speedPotsLeft > 0 &&
+                System.currentTimeMillis() - lastSpeedUse > 15000 &&
+                System.currentTimeMillis() - lastPotion > 3500) {
                 useSplashPotion(speedDamage, distance < 3.5, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
                 speedPotsLeft--
                 lastSpeedUse = System.currentTimeMillis()
             }
 
             if (WorldUtils.blockInFront(mc.thePlayer, 3f, 1.5f) != Blocks.air) {
-                // wall
                 Mouse.setRunningAway(false)
             }
 
-            if (((distance > 3 && mc.thePlayer.health < 12) || mc.thePlayer.health < 9) && combo < 2 && mc.thePlayer.health <= opponent()!!.health) {
-                // time to pot up
-                if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && System.currentTimeMillis() - lastPotion > 3500) {
+            if (((distance > 3 && mc.thePlayer.health < 12) || mc.thePlayer.health < 9) &&
+                combo < 2 && mc.thePlayer.health <= opponent()!!.health) {
+                if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
+                    System.currentTimeMillis() - lastPotion > 3500) {
                     if (regenPotsLeft > 0 && System.currentTimeMillis() - lastRegenUse > 3500) {
                         useSplashPotion(regenDamage, distance < 2, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
                         regenPotsLeft--
                         lastRegenUse = System.currentTimeMillis()
-                    } else {
-                        if (regenPotsLeft == 0 && System.currentTimeMillis() - lastRegenUse > 4000) {
-                            if (gapsLeft > 0 && System.currentTimeMillis() - lastGap > 4000) {
-                                useGap(distance, distance < 2, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
-                                gapsLeft--
-                            }
+                    } else if (regenPotsLeft == 0 && System.currentTimeMillis() - lastRegenUse > 4000) {
+                        if (gapsLeft > 0 && System.currentTimeMillis() - lastGap > 4000) {
+                            useGap(distance, distance < 2, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
+                            gapsLeft--
                         }
                     }
                 }
             }
 
-            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown && System.currentTimeMillis() - lastGap > 2500) {
-                if ((distance in 5.7..6.5 || distance in 9.0..9.5) && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
+            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown &&
+                System.currentTimeMillis() - lastGap > 2500) {
+
+                // Rod windows
+                if ((distance in 5.7..6.5 || distance in 9.0..9.5) &&
+                    !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
                     useRod()
-                } else if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5..30.0) || (distance in 28.0..33.0 && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
+
+                // Bow windows (Double partout)
+                } else if ((EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!) && distance in 3.5..30.0) ||
+                           (distance in 28.0..33.0 && !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))) {
                     if (distance > 10 && shotsFired < maxArrows && System.currentTimeMillis() - lastPotion > 5000) {
                         clear = true
-                        useBow(distance, fun () {
-                            shotsFired++
-                        })
+                        useBow(distance) { shotsFired++ }
                     } else {
                         clear = false
-                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) {
-                            movePriority[0] += 4
-                        } else {
-                            movePriority[1] += 4
-                        }
+                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
+                        else movePriority[1] += 4
                     }
+
                 } else {
                     if (opponent()!!.isInvisibleToPlayer(mc.thePlayer)) {
                         clear = false
-                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) {
-                            movePriority[0] += 4
-                        } else {
-                            movePriority[1] += 4
-                        }
+                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
+                        else movePriority[1] += 4
+                    } else if (EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
+                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
+                        else movePriority[1] += 4
                     } else {
-                        if (EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
-                            if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) {
-                                movePriority[0] += 4
-                            } else {
-                                movePriority[1] += 4
-                            }
+                        // On conserve la condition d’origine inversée pour patch minimal
+                        if (distance in 15.0..8.0) {
+                            randomStrafe = true
                         } else {
-                            // NOTE: condition d’origine "distance in 15f..8f" gardée pour un patch minimal (toujours fausse).
-                            if (distance in 15.0..8.0) {
+                            randomStrafe = false
+                            if (opponent() != null && opponent()!!.heldItem != null &&
+                                (opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow") ||
+                                 opponent()!!.heldItem.unlocalizedName.lowercase().contains("rod"))) {
                                 randomStrafe = true
-                            } else {
-                                randomStrafe = false
-                                if (opponent() != null && opponent()!!.heldItem != null && (opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow") || opponent()!!.heldItem.unlocalizedName.lowercase().contains("rod"))) {
-                                    randomStrafe = true
-                                    if (distance < 15) {
-                                        Movement.stopJumping()
-                                    }
-                                } else {
-                                    if (distance < 8) {
-                                        val swap = floor(combo.toDouble() / RandomUtils.randomIntInRange(3, 6).toDouble())
-                                        val rotations = EntityUtils.getRotations(opponent()!!, mc.thePlayer, false)
-                                        if (rotations != null) {
-                                            if (rotations[0] < 0) {
-                                                movePriority[1] += 5
-                                            } else {
-                                                movePriority[0] += 5
-                                            }
-                                        }
-                                    }
+                                if (distance < 15) Movement.stopJumping()
+                            } else if (distance < 8) {
+                                val swap = floor(combo.toDouble() / RandomUtils.randomIntInRange(3, 6).toDouble())
+                                val rotations = EntityUtils.getRotations(opponent()!!, mc.thePlayer, false)
+                                if (rotations != null) {
+                                    if (rotations[0] < 0) movePriority[1] += 5 else movePriority[0] += 5
                                 }
                             }
                         }
