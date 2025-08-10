@@ -48,6 +48,9 @@ class Sumo : BotBase("/play duels_sumo_duel") {
         LobbyMovement.stop()
         Movement.startSprinting()
         Movement.startForward()
+        // AUTO-AIM OFF / AUTO-CPS OFF garantis par défaut
+        Mouse.stopTracking()
+        Mouse.stopLeftAC()
     }
 
     override fun onGameEnd() {
@@ -55,6 +58,7 @@ class Sumo : BotBase("/play duels_sumo_duel") {
             Movement.clearAll()
             Mouse.stopLeftAC()
             Combat.stopRandomStrafe()
+            Mouse.stopTracking()
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
@@ -72,7 +76,8 @@ class Sumo : BotBase("/play duels_sumo_duel") {
     }
 
     override fun onFoundOpponent() {
-        Mouse.startTracking()
+        // AUTO-AIM OFF (on laisse ton autre mod gérer la visée)
+        Mouse.stopTracking()
     }
 
     fun leftEdge(distance: Float): Boolean {
@@ -100,15 +105,13 @@ class Sumo : BotBase("/play duels_sumo_duel") {
                 Movement.startSprinting()
             }
 
-            Mouse.startTracking()
+            // AUTO-AIM OFF
+            Mouse.stopTracking()
 
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
-            if (distance > (DuckDueller.config?.maxDistanceAttack ?: 5)) {
-                Mouse.stopLeftAC()
-            } else {
-                Mouse.startLeftAC()
-            }
+            // AUTO-CPS OFF (jamais de startLeftAC)
+            Mouse.stopLeftAC()
 
             val movePriority = arrayListOf(0, 0)
             var clear = false
