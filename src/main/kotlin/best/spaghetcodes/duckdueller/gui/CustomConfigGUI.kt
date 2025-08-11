@@ -1,416 +1,334 @@
-package best.spaghetcodes.duckdueller.core
+package best.spaghetcodes.duckdueller.gui
 
 import best.spaghetcodes.duckdueller.DuckDueller
-import best.spaghetcodes.duckdueller.bot.bots.*
-import best.spaghetcodes.duckdueller.gui.CustomConfigGUI
-import gg.essential.vigilance.Vigilant
-import gg.essential.vigilance.data.Property
-import gg.essential.vigilance.data.PropertyType
+import best.spaghetcodes.duckdueller.bot.Session
+import best.spaghetcodes.duckdueller.utils.ChatUtils
+import net.minecraft.client.gui.GuiButton
 import net.minecraft.client.gui.GuiScreen
-import java.io.File
+import net.minecraft.client.gui.ScaledResolution
+import org.lwjgl.input.Keyboard
+import org.lwjgl.input.Mouse
+import org.lwjgl.opengl.GL11
+import java.awt.Color
+import kotlin.math.max
+import kotlin.math.min
 
-class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = ConfigSorter()) {
+class CustomConfigGUI : GuiScreen() {
 
-    /*
-        GENERAL
-     */
+    private var currentTab = 0
+    private val tabNames = listOf("General", "Combat", "Misc", "Stats")
+    private var fadeIn = 0f
 
-    @Property(
-        type = PropertyType.SELECTOR,
-        name = "Current Bot",
-        description = "The bot you want to use",
-        category = "General",
-        options = ["Sumo", "Boxing", "Classic", "OP", "Combo"]
-    )
-    var currentBot = 0
+    private var scroll = 0
+    private var maxScroll = 0
 
-    @Property(
-        type = PropertyType.TEXT,
-        name = "API Key",
-        description = "This account's API key, can also be set using \"/api new\".",
-        placeholder = "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx",
-        category = "General",
-    )
-    var apiKey = ""
+    private val primaryColor = Color(0, 240, 255, 255).rgb
+    private val backgroundColor = Color(15, 15, 25, 240).rgb
+    private val cardColor = Color(25, 25, 40, 200).rgb
+    private val cardShadow = Color(10, 10, 20, 140).rgb
 
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Lobby Movement",
-        description = "Whether or not the bot should move in pre-game lobbies.",
-        category = "General",
-    )
-    var lobbyMovement = true
+    private data class Rect(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val onClick: () -> Unit)
+    private val hotspots = mutableListOf<Rect>()
 
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Disable Chat Messages",
-        description = "When this is enabled, the bot will not send any chat messages.",
-        category = "General",
-    )
-    var disableChatMessages = false
+    override fun initGui() {
+        super.initGui()
+        fadeIn = 0f
+        scroll = 0
+        maxScroll = 0
+        Keyboard.enableRepeatEvents(true)
 
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Throw After X Games",
-        description = "After X games the bot will underperform and throw the game. 0 = disabled.",
-        category = "General",
-        min = 0,
-        max = 1000,
-        increment = 10
-    )
-    var throwAfterGames = 0
-
-    @Property(
-        type = PropertyType.SLIDER,
-        name = "Disconnect After X Games",
-        description = "After X games the bot will toggle off and disconnect. 0 = disabled.",
-        category = "General",
-        min = 0,
-        max = 10000
-    )
-    var disconnectAfterGames = 0
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Disconnect After X Minutes",
-        description = "After X minutes the bot will toggle off and disconnect. 0 = disabled",
-        category = "General",
-        min = 0,
-        max = 500,
-        increment = 30
-    )
-    var disconnectAfterMinutes = 0
-
-    /*
-        COMBAT
-     */
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Min CPS",
-        description = "The minimum CPS that the bot will be clicking at.",
-        category = "Combat",
-        min = 6,
-        max = 15,
-        increment = 1
-    )
-    var minCPS = 10
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Max CPS",
-        description = "The maximum CPS that the bot will be clicking at.",
-        category = "Combat",
-        min = 9,
-        max = 18,
-        increment = 1
-    )
-    var maxCPS = 14
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Horizontal Look Speed",
-        description = "Horizontal look speed.",
-        category = "Combat",
-        min = 1,
-        max = 50,
-        increment = 1
-    )
-    var lookSpeedHorizontal = 10
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Vertical Look Speed",
-        description = "Vertical look speed.",
-        category = "Combat",
-        min = 1,
-        max = 50,
-        increment = 1
-    )
-    var lookSpeedVertical = 5
-
-    @Property(
-        type = PropertyType.DECIMAL_SLIDER,
-        name = "Look Randomization",
-        description = "Random offset added to view movement.",
-        category = "Combat",
-        minF = 0f,
-        maxF = 2f
-    )
-    var lookRand = 0.3f
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Max Look Distance",
-        description = "Max distance for tracking.",
-        category = "Combat",
-        min = 10,
-        max = 200,
-        increment = 5
-    )
-    var maxDistanceLook = 150
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Max Attack Distance",
-        description = "Max distance for attacking.",
-        category = "Combat",
-        min = 3,
-        max = 6,
-        increment = 1
-    )
-    var maxDistanceAttack = 5
-
-    /*
-        Auto GG
-     */
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Enable AutoGG",
-        description = "Send a gg message after every game",
-        category = "AutoGG",
-    )
-    var sendAutoGG = true
-
-    @Property(
-        type = PropertyType.TEXT,
-        name = "AutoGG Message",
-        description = "AutoGG message the bot sends after every game",
-        category = "AutoGG",
-    )
-    var ggMessage = "gg"
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "AutoGG Delay",
-        description = "How long to wait after the game before sending the message",
-        category = "AutoGG",
-        min = 50,
-        max = 1000,
-        increment = 50
-    )
-    var ggDelay = 100
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Game Start Message",
-        description = "Send a message as soon as the game starts",
-        category = "AutoGG",
-    )
-    var sendStartMessage = false
-
-    @Property(
-        type = PropertyType.TEXT,
-        name = "Start Message",
-        description = "Message to send at the beginning of the game",
-        category = "AutoGG",
-    )
-    var startMessage = "GL HF!"
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Start Message Delay",
-        description = "How long to wait before sending the start message",
-        category = "AutoGG",
-        min = 50,
-        max = 1000,
-        increment = 50
-    )
-    var startMessageDelay = 100
-
-    /*
-        Auto Requeue
-     */
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Auto Requeue Delay",
-        description = "How long to wait after a game before re-queueing",
-        category = "Auto Requeue",
-        min = 500,
-        max = 5000,
-        increment = 50
-    )
-    var autoRqDelay = 2500
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Requeue After No Game",
-        description = "How long to wait before re-queueing if no game starts",
-        category = "Auto Requeue",
-        min = 15,
-        max = 60,
-        increment = 5
-    )
-    var rqNoGame = 30
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Paper Requeue",
-        description = "Use the paper to requeue",
-        category = "Auto Requeue",
-    )
-    var paperRequeue = true
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Fast Requeue",
-        description = "Faster Requeue (no rewards)",
-        category = "Auto Requeue",
-    )
-    var fastRequeue = true
-
-    /*
-        Queue Dodging (guardé mais non exposé dans la GUI custom)
-     */
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Enable Queue Dodging",
-        description = "Whether or not the bot should dodge people based on stats",
-        category = "Queue Dodging",
-    )
-    var enableDodging = false
-
-    @Property(
-        type = PropertyType.SLIDER,
-        name = "Dodge Wins",
-        description = "How many wins a player can have before being dodged",
-        category = "Queue Dodging",
-        min = 500,
-        max = 20000
-    )
-    var dodgeWins = 4000
-
-    @Property(
-        type = PropertyType.NUMBER,
-        name = "Dodge WS",
-        description = "How large a player's winstreak can be before being dodged",
-        category = "Queue Dodging",
-        min = 10,
-        max = 100,
-        increment = 5
-    )
-    var dodgeWS = 15
-
-    @Property(
-        type = PropertyType.DECIMAL_SLIDER,
-        name = "Dodge W/L",
-        description = "How large a player's w/l ratio can be before being dodged",
-        category = "Queue Dodging",
-        minF = 2f,
-        maxF = 15f,
-    )
-    var dodgeWLR = 3.0f
-
-    @Property(
-        type = PropertyType.PARAGRAPH,
-        name = "Specific Players to Dodge",
-        description = "Players to dodge regardless of stats (comma separated)",
-        category = "Queue Dodging",
-    )
-    var dodgePlayersList = ""
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Dodge Lost To",
-        description = "Whether or not the bot should dodge people it already lost against",
-        category = "Queue Dodging",
-    )
-    var dodgeLostTo = true
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Dodge No Stats",
-        description = "Whether or not the bot should dodge when no stats are found (nicked player or hypixel error)",
-        category = "Queue Dodging",
-    )
-    var dodgeNoStats = true
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Strict Dodging",
-        description = "If Hypixel prevents the bot from leaving (woah there, slow down!), it will disconnect and reconnect to dodge.",
-        category = "Queue Dodging",
-    )
-    var strictDodging = false
-
-    /*
-        Webhook (gardé mais non exposé dans la GUI custom)
-     */
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Send Webhook Messages",
-        description = "Whether or not the bot should send a discord webhook message after each game.",
-        category = "Webhook",
-    )
-    var sendWebhookMessages = false
-
-    @Property(
-        type = PropertyType.TEXT,
-        name = "Discord Webhook URL",
-        description = "The webhook URL to send messages to.",
-        category = "Webhook",
-    )
-    var webhookURL = ""
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Send Queue Stats",
-        description = "Should the bot send the stats of the player in the lobby to the webhook?",
-        category = "Webhook",
-    )
-    var sendWebhookStats = false
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Send Dodge Alerts",
-        description = "If enabled, the bot will send a webhook whenever it dodged a player/nick.",
-        category = "Webhook",
-    )
-    var sendWebhookDodge = false
-
-    /*
-        Misc
-     */
-
-    @Property(
-        type = PropertyType.SWITCH,
-        name = "Boxing Fish",
-        description = "Switch between the sword and the fish in boxing.",
-        category = "Misc",
-    )
-    var boxingFish = false
-
-    val bots = mapOf(0 to Sumo(), 1 to Boxing(), 2 to Classic(), 3 to OP(), 4 to Combo())
-
-    init {
-        addDependency("webhookURL", "sendWebhookMessages")
-
-        addDependency("ggMessage", "sendAutoGG")
-        addDependency("ggDelay", "sendAutoGG")
-
-        addDependency("startMessage", "sendStartMessage")
-        addDependency("startMessageDelay", "sendStartMessage")
-
-        addDependency("dodgeWins", "enableDodging")
-        addDependency("dodgeWS", "enableDodging")
-        addDependency("dodgeWLR", "enableDodging")
-        addDependency("dodgeLostTo", "enableDodging")
-        addDependency("dodgeNoStats", "enableDodging")
-
-        registerListener("currentBot") { bot: Int ->
-            if (bots.keys.contains(bot)) {
-                DuckDueller.swapBot(bots[bot]!!)
-            }
-        }
-
-        initialize()
+        buttonList.clear()
+        buttonList.add(GuiButton(100, width / 2 - 60, height - 30, 120, 20, "Save & Close"))
     }
 
-    fun getCustomGui(): GuiScreen {
-        return CustomConfigGUI()
+    override fun onGuiClosed() {
+        super.onGuiClosed()
+        Keyboard.enableRepeatEvents(false)
+    }
+
+    override fun handleMouseInput() {
+        super.handleMouseInput()
+        val dWheel = Mouse.getEventDWheel()
+        if (dWheel != 0) {
+            val delta = if (dWheel > 0) -30 else 30
+            scroll = (scroll + delta).coerceIn(0, maxScroll)
+        }
+    }
+
+    override fun drawScreen(mouseX: Int, mouseY: Int, partialTicks: Float) {
+        hotspots.clear()
+        if (fadeIn < 1f) fadeIn = min(1f, fadeIn + 0.05f)
+
+        drawGradientRect(
+            0, 0, width, height,
+            Color(10, 10, 20, (250 * fadeIn).toInt()).rgb,
+            Color(30, 10, 50, (250 * fadeIn).toInt()).rgb
+        )
+
+        val containerX = 40
+        val containerY = 40
+        val containerW = width - 80
+        val containerH = height - 80
+
+        drawRect(containerX + 2, containerY + 2, containerX + containerW + 2, containerY + containerH + 2, cardShadow)
+        drawRect(containerX, containerY, containerX + containerW, containerY + containerH, backgroundColor)
+        drawBorder(containerX, containerY, containerW, containerH, primaryColor)
+
+        drawCenteredString(fontRendererObj, "§lKIRA CONFIG", width / 2, 15, primaryColor)
+
+        drawTabs(containerX, containerY - 25)
+
+        val contentX = containerX + 20
+        val contentY = containerY + 20
+        val innerW = containerW - 40
+        val innerH = containerH - 40
+
+        scissor(contentX, contentY, innerW, innerH) {
+            val endY = when (currentTab) {
+                0 -> drawGeneralTab(contentX, contentY)
+                1 -> drawCombatTab(contentX, contentY)
+                2 -> drawMiscTab(contentX, contentY)
+                else -> drawStatsTab(contentX, contentY)
+            }
+            val contentH = (endY - contentY).coerceAtLeast(0)
+            maxScroll = (contentH - innerH).coerceAtLeast(0)
+            if (scroll > maxScroll) scroll = maxScroll
+        }
+
+        drawScrollbar(contentX + innerW - 4, contentY, innerH)
+
+        val status = if (DuckDueller.bot?.toggled() == true) "§aONLINE" else "§cOFFLINE"
+        drawString(fontRendererObj, "Status: $status", width - 80, height - 10, -1)
+        drawString(fontRendererObj, "§7KIRA UI", 5, height - 10, Color.GRAY.rgb)
+
+        super.drawScreen(mouseX, mouseY, partialTicks)
+    }
+
+    private fun drawBorder(x: Int, y: Int, w: Int, h: Int, color: Int) {
+        drawHorizontalLine(x, x + w, y, color)
+        drawHorizontalLine(x, x + w, y + h, color)
+        drawVerticalLine(x, y, y + h, color)
+        drawVerticalLine(x + w, y, y + h, color)
+    }
+
+    private fun addHotspot(x: Int, y: Int, w: Int, h: Int, onClick: () -> Unit) {
+        hotspots += Rect(x, y, x + w, y + h, onClick)
+    }
+
+    private fun drawButton(x: Int, y: Int, w: Int, h: Int, label: String, active: Boolean = true) {
+        val bg = if (active) Color(40, 40, 60, 160).rgb else Color(60, 60, 60, 120).rgb
+        drawRect(x, y, x + w, y + h, bg)
+        drawCenteredString(fontRendererObj, label, x + w / 2, y + 6, if (active) -1 else Color(160,160,160).rgb)
+    }
+
+    private fun drawTabs(x: Int, y: Int) {
+        var tabX = x
+        tabNames.forEachIndexed { index, name ->
+            val selected = index == currentTab
+            val bg = if (selected) Color(0, 240, 255, 100).rgb else Color(40, 40, 60, 100).rgb
+            drawRect(tabX, y, tabX + 100, y + 25, bg)
+            drawCenteredString(fontRendererObj, name, tabX + 50, y + 8, if (selected) primaryColor else -1)
+            addHotspot(tabX, y, 100, 25) {
+                currentTab = index
+                scroll = 0
+            }
+            tabX += 102
+        }
+    }
+
+    private fun selector(label: String, x: Int, y: Int, get: () -> Int, set: (Int) -> Unit, options: List<String>) {
+        val cur = min(max(0, get()), options.lastIndex)
+        drawString(fontRendererObj, "$label:", x, y - scroll, -1)
+        drawButton(x + 110, y - 4 - scroll, 18, 18, "«")
+        addHotspot(x + 110, y - 4 - scroll, 18, 18) {
+            val v = if (cur <= 0) options.lastIndex else cur - 1
+            set(v)
+        }
+        drawRect(x + 132, y - 6 - scroll, x + 282, y + 14 - scroll, cardColor)
+        drawCenteredString(fontRendererObj, options[cur], x + 207, y - scroll, primaryColor)
+        drawButton(x + 286, y - 4 - scroll, 18, 18, "»")
+        addHotspot(x + 286, y - 4 - scroll, 18, 18) {
+            val v = if (cur >= options.lastIndex) 0 else cur + 1
+            set(v)
+        }
+    }
+
+    private fun toggle(label: String, x: Int, y: Int, get: () -> Boolean, set: (Boolean) -> Unit) {
+        val v = get()
+        drawString(fontRendererObj, label, x, y - scroll, -1)
+        val boxX = x + 260; val boxY = y - 2 - scroll; val w = 60; val h = 18
+        drawRect(boxX, boxY, boxX + w, boxY + h, if (v) Color(30, 90, 30, 200).rgb else Color(90, 30, 30, 200).rgb)
+        drawCenteredString(fontRendererObj, if (v) "ON" else "OFF", boxX + w/2, boxY + 5, if (v) Color(0x55FF55).rgb else Color(0xFF5555).rgb)
+        addHotspot(boxX, boxY, w, h) { set(!get()) }
+    }
+
+    private fun number(label: String, x: Int, y: Int, get: () -> Int, set: (Int) -> Unit, minV: Int, maxV: Int, step: Int = 1) {
+        val v = get()
+        drawString(fontRendererObj, label, x, y - scroll, -1)
+        drawButton(x + 200, y - 4 - scroll, 18, 18, "–")
+        addHotspot(x + 200, y - 4 - scroll, 18, 18) { set(max(minV, v - step)) }
+        drawRect(x + 222, y - 6 - scroll, x + 282, y + 14 - scroll, cardColor)
+        drawCenteredString(fontRendererObj, v.toString(), x + 252, y - scroll, primaryColor)
+        drawButton(x + 286, y - 4 - scroll, 18, 18, "+")
+        addHotspot(x + 286, y - 4 - scroll, 18, 18) { set(min(maxV, v + step)) }
+    }
+
+    private fun decimal(label: String, x: Int, y: Int, get: () -> Float, set: (Float) -> Unit, minV: Float, maxV: Float, step: Float = 0.05f) {
+        val v = get()
+        drawString(fontRendererObj, label, x, y - scroll, -1)
+        drawButton(x + 200, y - 4 - scroll, 18, 18, "–")
+        addHotspot(x + 200, y - 4 - scroll, 18, 18) { set(max(minV, (v - step))) }
+        drawRect(x + 222, y - 6 - scroll, x + 282, y + 14 - scroll, cardColor)
+        drawCenteredString(fontRendererObj, String.format("%.2f", v), x + 252, y - scroll, primaryColor)
+        drawButton(x + 286, y - 4 - scroll, 18, 18, "+")
+        addHotspot(x + 286, y - 4 - scroll, 18, 18) { set(min(maxV, (v + step))) }
+    }
+
+    private fun drawGeneralTab(x: Int, yStart: Int): Int {
+        var y = yStart
+        drawString(fontRendererObj, "§lGENERAL SETTINGS", x, y - scroll, primaryColor); y += 25
+
+        val cfg = DuckDueller.config ?: return y
+
+        val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo")
+        selector("Current Bot", x, y, { cfg.currentBot }, { v ->
+            cfg.currentBot = v
+            DuckDueller.config?.bots?.get(v)?.let { DuckDueller.swapBot(it) }
+        }, botNames)
+        y += 24
+
+        // Champ API SUPPRIMÉ volontairement de la GUI
+
+        toggle("Lobby Movement", x, y, { cfg.lobbyMovement }, { cfg.lobbyMovement = it }); y += 20
+        toggle("Fast Requeue", x, y, { cfg.fastRequeue }, { cfg.fastRequeue = it }); y += 20
+        toggle("Paper Requeue", x, y, { cfg.paperRequeue }, { cfg.paperRequeue = it }); y += 20
+        toggle("Disable Chat Messages", x, y, { cfg.disableChatMessages }, { cfg.disableChatMessages = it }); y += 24
+
+        number("Disconnect After Games", x, y, { cfg.disconnectAfterGames }, { cfg.disconnectAfterGames = it }, 0, 10000, 10); y += 20
+        number("Disconnect After Minutes", x, y, { cfg.disconnectAfterMinutes }, { cfg.disconnectAfterMinutes = it }, 0, 500, 5); y += 24
+        number("Auto Requeue Delay (ms)", x, y, { cfg.autoRqDelay }, { cfg.autoRqDelay = it }, 500, 5000, 50); y += 20
+        number("Requeue After No Game (s)", x, y, { cfg.rqNoGame }, { cfg.rqNoGame = it }, 15, 60, 1); y += 24
+
+        toggle("Enable AutoGG", x, y, { cfg.sendAutoGG }, { cfg.sendAutoGG = it }); y += 20
+        number("AutoGG Delay (ms)", x, y, { cfg.ggDelay }, { cfg.ggDelay = it }, 50, 1000, 50); y += 20
+        drawString(fontRendererObj, "AutoGG Message: ${cfg.ggMessage}", x, y - scroll, -1); y += 20
+
+        toggle("Game Start Message", x, y, { cfg.sendStartMessage }, { cfg.sendStartMessage = it }); y += 20
+        number("Start Message Delay (ms)", x, y, { cfg.startMessageDelay }, { cfg.startMessageDelay = it }, 50, 1000, 50); y += 20
+
+        return y
+    }
+
+    private fun drawCombatTab(x: Int, yStart: Int): Int {
+        var y = yStart
+        drawString(fontRendererObj, "§lCOMBAT SETTINGS", x, y - scroll, primaryColor); y += 25
+
+        val cfg = DuckDueller.config ?: return y
+
+        number("Min CPS", x, y, { cfg.minCPS }, { cfg.minCPS = it }, 6, 15, 1); y += 20
+        number("Max CPS", x, y, { cfg.maxCPS }, { cfg.maxCPS = it }, 9, 18, 1); y += 24
+
+        number("Horizontal Look Speed", x, y, { cfg.lookSpeedHorizontal }, { cfg.lookSpeedHorizontal = it }, 1, 50, 1); y += 20
+        number("Vertical Look Speed", x, y, { cfg.lookSpeedVertical }, { cfg.lookSpeedVertical = it }, 1, 50, 1); y += 20
+        decimal("Look Randomization", x, y, { cfg.lookRand }, { cfg.lookRand = it }, 0f, 2f, 0.05f); y += 24
+
+        number("Max Look Distance", x, y, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); y += 20
+        number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 20
+
+        return y
+    }
+
+    private fun drawMiscTab(x: Int, yStart: Int): Int {
+        var y = yStart
+        drawString(fontRendererObj, "§lMISC", x, y - scroll, primaryColor); y += 25
+
+        val cfg = DuckDueller.config ?: return y
+
+        toggle("Boxing: Use Fish", x, y, { cfg.boxingFish }, { cfg.boxingFish = it }); y += 24
+
+        return y
+    }
+
+    private fun drawStatsTab(x: Int, yStart: Int): Int {
+        var y = yStart
+        drawString(fontRendererObj, "§lSESSION STATISTICS", x, y - scroll, primaryColor); y += 25
+
+        val wins = Session.wins
+        val losses = Session.losses
+        val wlr = if (losses == 0) wins.toFloat() else wins.toFloat() / losses
+        val total = wins + losses
+        val winrate = if (total == 0) 0f else (wins.toFloat() / total) * 100f
+
+        drawStatCard("WINS", x, y - scroll, wins.toString(), Color.GREEN.rgb)
+        drawStatCard("LOSSES", x + 120, y - scroll, losses.toString(), Color.RED.rgb)
+        drawStatCard("W/L RATIO", x + 240, y - scroll, String.format("%.2f", wlr), primaryColor); y += 60
+
+        drawStatCard("WIN RATE", x, y - scroll, String.format("%.1f%%", winrate), Color.CYAN.rgb)
+        drawStatCard("GAMES", x + 120, y - scroll, total.toString(), Color.YELLOW.rgb)
+
+        if (Session.startTime > 0) {
+            val minutes = max(0L, (System.currentTimeMillis() - Session.startTime) / 1000 / 60)
+            drawStatCard("TIME", x + 240, y - scroll, "${minutes}m", Color.MAGENTA.rgb)
+        }
+        y += 60
+
+        return y
+    }
+
+    private fun drawStatCard(title: String, x: Int, y: Int, value: String, color: Int) {
+        drawRect(x + 2, y + 2, x + 102, y + 52, cardShadow)
+        drawRect(x, y, x + 100, y + 50, cardColor)
+        drawString(fontRendererObj, title, x + 5, y + 5, Color.GRAY.rgb)
+        GL11.glPushMatrix()
+        GL11.glTranslatef((x + 50).toFloat(), (y + 25).toFloat(), 0f)
+        GL11.glScalef(1.5f, 1.5f, 1f)
+        drawCenteredString(fontRendererObj, value, 0, 0, color)
+        GL11.glPopMatrix()
+    }
+
+    override fun mouseClicked(mouseX: Int, mouseY: Int, mouseButton: Int) {
+        super.mouseClicked(mouseX, mouseY, mouseButton)
+        hotspots.firstOrNull { mouseX in it.x1..it.x2 && mouseY in it.y1..it.y2 }?.onClick?.invoke()
+    }
+
+    override fun keyTyped(typedChar: Char, keyCode: Int) {
+        if (keyCode == Keyboard.KEY_ESCAPE) {
+            saveAndClose(); return
+        }
+        super.keyTyped(typedChar, keyCode)
+    }
+
+    override fun actionPerformed(button: GuiButton) {
+        when (button.id) {
+            100 -> saveAndClose()
+        }
+    }
+
+    private fun saveAndClose() {
+        DuckDueller.config?.writeData()
+        ChatUtils.info("Configuration saved!")
+        mc.displayGuiScreen(null)
+    }
+
+    override fun doesGuiPauseGame(): Boolean = false
+
+    private inline fun scissor(x: Int, y: Int, w: Int, h: Int, draw: () -> Unit) {
+        val sf = ScaledResolution(mc).scaleFactor
+        GL11.glEnable(GL11.GL_SCISSOR_TEST)
+        GL11.glScissor(x * sf, (height - (y + h)) * sf, w * sf, h * sf)
+        try {
+            draw()
+        } finally {
+            GL11.glDisable(GL11.GL_SCISSOR_TEST)
+        }
+    }
+
+    private fun drawScrollbar(x: Int, y: Int, innerH: Int) {
+        if (maxScroll <= 0) return
+        drawRect(x, y, x + 2, y + innerH, Color(60, 60, 80, 120).rgb)
+        val contentH = maxScroll + innerH
+        val thumbH = max(20, (innerH.toFloat() * innerH / contentH).toInt())
+        val thumbY = y + ((innerH - thumbH).toFloat() * (scroll.toFloat() / maxScroll)).toInt()
+        drawRect(x - 1, thumbY, x + 3, thumbY + thumbH, primaryColor)
     }
 }
