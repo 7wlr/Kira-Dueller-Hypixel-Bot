@@ -190,6 +190,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (distance > 5.0f && blockAhead && p.onGround) {
             Movement.singleJump(RandomUtils.randomIntInRange(140, 220))
         }
+        // Micro aide anti-collage dans les 2 premières secondes
+        if (now - gameStartAt < 2000 && distance > 5.0f && p.onGround) {
+            Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
+        }
 
         // obstacle proche (jamais collé)
         var needJump = false
@@ -268,7 +272,11 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
         } else {
-            if (Mouse.rClickDown) Mouse.rClickUp()
+            // ⚠️ NE PAS casser un clic droit projectile : on ne relève QUE si on n'utilise PAS de projectile
+            if (Mouse.rClickDown && !usingProjectile) {
+                Mouse.rClickUp()
+            }
+            // reset flags parade
             parryFromBow = false
             parryExtendedUntil = 0L
         }
