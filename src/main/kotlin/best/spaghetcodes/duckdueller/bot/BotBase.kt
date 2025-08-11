@@ -244,7 +244,8 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     @SubscribeEvent
-    fun onClientTick(_: ClientTickEvent) {
+    @Suppress("UNUSED_PARAMETER")
+    fun onClientTick(ev: ClientTickEvent) {
         registerPacketListener()
         if (toggled) {
             onTick()
@@ -394,7 +395,8 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     @SubscribeEvent
-    fun onConnect(_: ClientConnectedToServerEvent) {
+    @Suppress("UNUSED_PARAMETER")
+    fun onConnect(event: ClientConnectedToServerEvent) {
         if (toggled()) {
             println("Reconnect successful!")
             val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
@@ -409,7 +411,8 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     @SubscribeEvent
-    fun onDisconnect(_: ClientDisconnectionFromServerEvent) {
+    @Suppress("UNUSED_PARAMETER")
+    fun onDisconnect(event: ClientDisconnectionFromServerEvent) {
         if (toggled()) {
             println("Disconnected from server, reconnecting...")
             val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
