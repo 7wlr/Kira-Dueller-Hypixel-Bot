@@ -19,7 +19,8 @@ object KeyBindings {
     }
 
     @SubscribeEvent
-    fun onTick(_: ClientTickEvent) {
+    @Suppress("UNUSED_PARAMETER")
+    fun onTick(event: ClientTickEvent) {
         if (configGuiKeyBinding.isPressed) {
             EssentialAPI.getGuiUtil().openScreen(DuckDueller.config?.getCustomGui())
         }
