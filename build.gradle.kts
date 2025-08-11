@@ -9,7 +9,7 @@ plugins {
 }
 
 group = "best.spaghetcodes"
-version = "0.1.0"
+version = "1"
 
 loom {
     runConfigs {
