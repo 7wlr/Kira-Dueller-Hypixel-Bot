@@ -4,28 +4,37 @@ import best.spaghetcodes.duckdueller.bot.player.Inventory
 import best.spaghetcodes.duckdueller.bot.player.Mouse
 import best.spaghetcodes.duckdueller.utils.RandomUtils
 import best.spaghetcodes.duckdueller.utils.TimeUtils
+import net.minecraft.client.Minecraft
 
 /**
  * Canne Hypixel Classic :
- * - Switch → léger pré-délai → clic droit bref (lancer) → attendre court temps de vol → retour épée.
- * - Pas d’auto-CPS ici.
+ * - UsingProjectile = true AVANT le switch,
+ * - Switch → léger pré-délai → clic droit bref (lancer) → court temps de vol → retour épée.
  */
 interface Rod {
+
+    val mc: Minecraft get() = Minecraft.getMinecraft()
 
     fun useRod() {
         if (Mouse.isUsingProjectile()) return
 
-        // switch rod + petit settle
+        Mouse.stopLeftAC()
+        Mouse.setUsingProjectile(true)
+
         Inventory.setInvItem("rod")
         val preDelay = RandomUtils.randomIntInRange(50, 90)
         val clickMs = RandomUtils.randomIntInRange(80, 110)
-        val settleAfter = RandomUtils.randomIntInRange(260, 420) // ~temps de vol court “safe” Hypixel
+        val settleAfter = RandomUtils.randomIntInRange(260, 420)
 
         TimeUtils.setTimeout({
-            Mouse.setUsingProjectile(true)
+            // sécurité: vérifier qu'on a bien la rod en main
+            val held = mc.thePlayer?.heldItem
+            if (held == null || !held.unlocalizedName.lowercase().contains("rod")) {
+                Inventory.setInvItem("rod")
+            }
+
             Mouse.rClick(clickMs)
 
-            // revenir épée après un court temps de vol pour garantir la prise côté serveur
             TimeUtils.setTimeout({
                 Inventory.setInvItem("sword")
                 TimeUtils.setTimeout({
