@@ -183,7 +183,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (combo >= 3) Movement.clearLeftRight()
     }
 
-    // Lancer rod confirmé + "double-trigger" en mêlée/KB vertical
+    // Lancer rod confirmé + backup click post-press en mêlée/KB vertical
     private fun castRodConfirmed(distanceNow: Float) {
         val now = System.currentTimeMillis()
         Mouse.stopLeftAC()
@@ -207,10 +207,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val rodAlreadyHeld = heldNow != null && heldNow.unlocalizedName.lowercase().contains("rod")
         val delay = if (!rodAlreadyHeld || beingComboedClose) 50 else 0 // 1 tick si nécessaire
 
-        // Empêche tout reswitch auto pendant l’action
-        forceKeepRodUntil = now + delay + clickMs + 180L
+        // Empêche le reswitch épée pendant l’action
+        forceKeepRodUntil = now + delay + clickMs + 220L
 
-        // 1) clic principal
+        // 1) clic principal (immédiat ou +1 tick si nécessaire)
         if (delay == 0) {
             Mouse.rClick(clickMs)
         } else {
@@ -219,13 +219,14 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             TimeUtils.setTimeout({ Mouse.rClick(clickMs) }, 50)
         }
 
-        // 2) "backup click" (seulement très proche / combo vertical) → fiabilise le 10% restant
+        // 2) backup click APRÈS la fin du clic principal (évite le chevauchement)
         if (veryClose) {
-            val backupDelay = delay + 50 // toujours au tick suivant du clic principal
+            val backupDelay = delay + clickMs + 20
             TimeUtils.setTimeout({
                 val held = mc.thePlayer?.heldItem
-                // On rejoue un micro-clic uniquement si on tient encore la rod
-                if (held != null && held.unlocalizedName.lowercase().contains("rod")) {
+                if (held != null &&
+                    held.unlocalizedName.lowercase().contains("rod") &&
+                    !Mouse.rClickDown) {
                     Mouse.rClick(RandomUtils.randomIntInRange(55, 75))
                 }
             }, backupDelay)
@@ -260,27 +261,38 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
         lastHurtTime = ht
 
-        if (now - gameStartAt < earlyJumpDurationMs) {
-            Movement.startJumping()
+        // --- Gestion des sauts (pas de saut sous hit, sauf si l’ennemi est de dos) ---
+        val oppAway = EntityUtils.entityFacingAway(p, opp)
+        val comboed = (p.hurtTime > 0 || now < noJumpUntil)
+        if (comboed && !oppAway) {
+            Movement.stopJumping()
         } else {
-            var needJump = false
-            if (distance > noJumpCloseDist) {
-                if (WorldUtils.blockInFront(p, 2f, 0.5f) != Blocks.air && p.onGround) {
-                    needJump = true
-                    Movement.singleJump(RandomUtils.randomIntInRange(150, 240))
-                }
-            }
-            val canJump = (now >= noJumpUntil) && !Mouse.rClickDown
-            if (distance <= noJumpCloseDist) {
-                Movement.stopJumping()
+            if (now - gameStartAt < earlyJumpDurationMs) {
+                Movement.startJumping()
             } else {
-                if (distance > jumpDistanceThreshold) {
-                    if (canJump && !needJump) Movement.startJumping() else Movement.stopJumping()
-                } else if (!needJump) {
+                var needJump = false
+                if (distance > noJumpCloseDist) {
+                    if (WorldUtils.blockInFront(p, 2f, 0.5f) != Blocks.air && p.onGround) {
+                        needJump = true
+                        // Ne pas forcer un singleJump si on vient de prendre un coup (sauf dos tourné)
+                        if (!comboed || oppAway) {
+                            Movement.singleJump(RandomUtils.randomIntInRange(150, 240))
+                        }
+                    }
+                }
+                val canJump = (now >= noJumpUntil) && !Mouse.rClickDown
+                if (distance <= noJumpCloseDist) {
                     Movement.stopJumping()
+                } else {
+                    if (distance > jumpDistanceThreshold) {
+                        if (canJump && !needJump) Movement.startJumping() else Movement.stopJumping()
+                    } else if (!needJump) {
+                        Movement.stopJumping()
+                    }
                 }
             }
         }
+        // ---------------------------------------------------------------------------
 
         if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
         val dx = abs(opp.posX - oppLastX)
@@ -295,7 +307,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val bowDrawLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
         val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
 
-        // Annuler l’arc au contact (ne JAMAIS couper la rod)
+        // Annuler l’ARC au contact (ne JAMAIS couper la rod)
         if (projectileActive && Mouse.rClickDown) {
             if (projectileKind == KIND_BOW && distance < bowCancelCloseDist) {
                 Mouse.rClickUp()
@@ -307,7 +319,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Parade épée (évite les parades gratuites très tôt si l’adversaire est immobile et très loin)
+        // Parade épée (pas de micro-parades gratuites très tôt si l’ennemi est immobile et très loin)
         if (holdingSword) {
             if (Mouse.rClickDown) {
                 val movingHard = (!isStill && !(oppHasBow && bowSlowFrames >= bowSlowFramesNeeded)) || approaching
@@ -459,7 +471,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             strafeDir = -strafeDir
             cornerBreakUntil = now + RandomUtils.randomIntInRange(280, 420)
             if (p.onGround && distance >= singleJumpMinDist) {
-                Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
+                // Ne pas sauter si on vient de prendre un hit (sauf si l’ennemi est de dos)
+                if (!comboed || oppAway) {
+                    Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
+                }
             }
         }
 
