@@ -10,11 +10,9 @@ import net.minecraft.client.Minecraft
 
 /**
  * Canne Hypixel Classic "human-like":
- * - Lancer réel (clic court),
+ * - Lancer réel (clic court) après un léger pré-délai pour fiabiliser le switch,
  * - On GARDE la canne le temps de vol estimé selon la distance,
  * - Puis on revient épée (sans auto-CPS).
- *
- * Note: pas de setUsingProjectile ici pour ne pas interférer avec le tracking.
  */
 interface Rod {
 
@@ -40,17 +38,27 @@ interface Rod {
             else      -> RandomUtils.randomIntInRange(420, 520)
         }
 
-        Mouse.stopLeftAC()
-
+        // Sélectionne la canne puis laisse un très court délai pour fiabiliser le switch
         Inventory.setInvItem("rod")
-        Mouse.rClick(clickMs)
+        val preDelay = RandomUtils.randomIntInRange(50, 90)
 
-        // Retour épée APRÈS le temps de vol, pour laisser connecter le flotteur
         TimeUtils.setTimeout({
-            if (mc_.thePlayer.heldItem != null &&
-                !mc_.thePlayer.heldItem.unlocalizedName.lowercase().contains("bow")) {
-                Inventory.setInvItem("sword")
-            }
-        }, clickMs + travelMs + RandomUtils.randomIntInRange(80, 140))
+            Mouse.setUsingProjectile(true)
+            // Clic droit bref pour lancer la ligne
+            Mouse.rClick(clickMs)
+
+            // Retour épée APRÈS le temps de vol, pour laisser connecter le flotteur
+            TimeUtils.setTimeout({
+                val held = mc_.thePlayer?.heldItem
+                if (held == null || !held.unlocalizedName.lowercase().contains("bow")) {
+                    Inventory.setInvItem("sword")
+                }
+
+                // Fin d'utilisation projectile
+                TimeUtils.setTimeout({
+                    Mouse.setUsingProjectile(false)
+                }, RandomUtils.randomIntInRange(80, 140))
+            }, clickMs + travelMs + RandomUtils.randomIntInRange(80, 140))
+        }, preDelay)
     }
 }
