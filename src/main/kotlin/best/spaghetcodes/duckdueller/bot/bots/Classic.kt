@@ -12,6 +12,8 @@ import best.spaghetcodes.duckdueller.bot.player.Movement
 import best.spaghetcodes.duckdueller.utils.*
 import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
+import kotlin.math.abs
+import kotlin.math.max
 
 class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
@@ -27,32 +29,50 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         )
     }
 
+    // ————— Constantes de tuning (toutes utilisées) —————
     private val jumpDistanceThreshold = 5.0f
+    private val noJumpCloseDist = 2.2f
+    private val fullDrawMsMin = 820
+    private val fullDrawMsMax = 980
+    private val openShotMinDist = 9.0f
+    private val parryMinDist = 11.0f
+    private val stillFrameThreshold = 0.0125   // delta (x/z) par tick considéré “immobile”
+    private val stillFramesNeeded = 10         // ~0.5s à 20 TPS
+    private val parryCooldownMs = 900L
+    private val parryHoldMinMs = 650L
+    private val parryHoldMaxMs = 1050L
+    private val bowCancelApproachDist = 6.0f
+    private val singleJumpMinDist = 2.8f
 
-    // --- Strafe state ---
+    // ————— États —————
     private var strafeDir = 1
     private var lastStrafeSwitch = 0L
     private var stagnantSince = 0L
     private var cornerBreakUntil = 0L
 
-    // --- Rod control ---
     private var rodLockUntil = 0L
     private var lastRodUse = 0L
     private var prevDistance = -1f
 
-    // --- Parade épée / états associés ---
     private var gameStartAt = 0L
     private var lastSwordBlock = 0L
-    private var oppStillSince = 0L
     private var holdBlockUntil = 0L
 
-    // --- Anti jump après avoir été touché ---
     private var noJumpUntil = 0L
     private var lastHurtTime = 0
 
-    var shotsFired = 0
-    var maxArrows = 5
+    private var shotsFired = 0
+    private val maxArrows = 5
 
+    // suivi immobilité robuste (compte de frames quasi immobiles)
+    private var oppLastX = 0.0
+    private var oppLastZ = 0.0
+    private var stillFrames = 0
+
+    // verrou d’arc pour forcer la charge complète
+    private var bowHardLockUntil = 0L
+
+    // ————— Lifecycle —————
     override fun onGameStart() {
         Mouse.startTracking()
         Movement.startSprinting()
@@ -67,30 +87,38 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         cornerBreakUntil = 0L
         strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
 
-        Mouse.rClickUp()               // jamais bloqué d’entrée
+        Mouse.rClickUp()
         gameStartAt = System.currentTimeMillis()
         lastSwordBlock = 0L
-        oppStillSince = 0L
         holdBlockUntil = 0L
 
         noJumpUntil = 0L
         lastHurtTime = 0
 
-        // Tir d’ouverture (full charge via Bow.kt) si aucune action en cours
+        shotsFired = 0
+        bowHardLockUntil = 0L
+        stillFrames = 0
+        oppLastX = 0.0
+        oppLastZ = 0.0
+
+        // Tir d’ouverture (charge complète) si l’adversaire est à bonne distance
         TimeUtils.setTimeout({
             val opp = opponent()
-            if (opp != null && shotsFired < maxArrows && !Mouse.isUsingProjectile()) {
+            if (opp != null && !Mouse.isUsingProjectile()) {
                 val d = EntityUtils.getDistanceNoY(mc.thePlayer, opp)
-                useBow(d) { shotsFired++ }
+                if (d >= openShotMinDist && shotsFired < maxArrows) {
+                    val now = System.currentTimeMillis()
+                    bowHardLockUntil = now + RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
+                    useBow(d) { shotsFired++ }
+                }
             }
-        }, RandomUtils.randomIntInRange(300, 500))
+        }, RandomUtils.randomIntInRange(350, 650))
     }
 
     override fun onGameEnd() {
-        shotsFired = 0
         Mouse.stopLeftAC()
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
-        TimeUtils.setTimeout(fun () {
+        TimeUtils.setTimeout({
             i?.cancel()
             Mouse.stopTracking()
             Movement.clearAll()
@@ -98,7 +126,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }, RandomUtils.randomIntInRange(200, 400))
     }
 
-    var tapping = false
+    // ————— Combat hooks —————
+    private var tapping = false
 
     override fun onAttack() {
         val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
@@ -106,288 +135,255 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             if (mc.thePlayer != null && mc.thePlayer.heldItem != null) {
                 val n = mc.thePlayer.heldItem.unlocalizedName.lowercase()
                 if (n.contains("rod")) {
-                    // W-Tap long après hit à la rod (affiché)
                     ChatUtils.info("W-Tap 300")
                     Combat.wTap(300)
                     tapping = true
                     combo--
-                    TimeUtils.setTimeout(fun () { tapping = false }, 300)
+                    TimeUtils.setTimeout({ tapping = false }, 300)
                 }
-                // pas de block-hit à l’épée — l’attaque est gérée par ton autre mod
             }
         } else {
-            // Petit W-Tap pour maintenir la pression (affiché)
             ChatUtils.info("W-Tap 100")
             Combat.wTap(100)
             tapping = true
-            TimeUtils.setTimeout(fun () { tapping = false }, 100)
+            TimeUtils.setTimeout({ tapping = false }, 100)
         }
         if (combo >= 3) Movement.clearLeftRight()
     }
 
+    // ————— Tick principal —————
     override fun onTick() {
+        val p = mc.thePlayer ?: return
+        val w = mc.theWorld ?: return
+        val opp = opponent() ?: return
+
+        if (!p.isSprinting) Movement.startSprinting()
+        Mouse.startTracking()
+        Mouse.stopLeftAC()
+
+        val now = System.currentTimeMillis()
+        val distance = EntityUtils.getDistanceNoY(p, opp)
+        val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
+
+        // Bloque le jump juste après avoir été touché
+        val ht = p.hurtTime
+        if (ht > 0 && lastHurtTime == 0) {
+            noJumpUntil = now + RandomUtils.randomIntInRange(340, 520)
+        }
+        lastHurtTime = ht
+
+        // Détecte obstacles très proches → mini jump dirigé (mais pas si cible trop proche)
         var needJump = false
-        if (mc.thePlayer != null) {
-            if (WorldUtils.blockInFront(mc.thePlayer, 2f, 0.5f) != Blocks.air && mc.thePlayer.onGround) {
+        if (distance > noJumpCloseDist) {
+            if (WorldUtils.blockInFront(p, 2f, 0.5f) != Blocks.air && p.onGround) {
                 needJump = true
-                Movement.singleJump(RandomUtils.randomIntInRange(150, 250))
+                Movement.singleJump(RandomUtils.randomIntInRange(150, 240))
             }
         }
-        if (opponent() != null && mc.theWorld != null && mc.thePlayer != null) {
-            if (!mc.thePlayer.isSprinting) Movement.startSprinting()
 
-            val opp = opponent()!!
-            val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opp)
-            val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
-            val now = System.currentTimeMillis()
+        // ——— Immobilité de l’adversaire : frames quasi immobiles ———
+        if (oppLastX == 0.0 && oppLastZ == 0.0) {
+            oppLastX = opp.posX; oppLastZ = opp.posZ
+        }
+        val dx = abs(opp.posX - oppLastX)
+        val dz = abs(opp.posZ - oppLastZ)
+        if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
+        oppLastX = opp.posX; oppLastZ = opp.posZ
+        val isStill = stillFrames >= stillFramesNeeded
 
-            Mouse.startTracking()
-            Mouse.stopLeftAC()
+        val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
+        val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
 
-            // --- Anti jump après coup : si on vient d’être touché, bloque le jump un court instant
-            val ht = mc.thePlayer.hurtTime
-            if (ht > 0 && lastHurtTime == 0) {
-                noJumpUntil = now + RandomUtils.randomIntInRange(360, 520)
+        // ——— Charge d'arc “hard lock” : ne pas casser la charge avant l’échéance, sauf danger proche ———
+        if (Mouse.isUsingProjectile()) {
+            if (distance < bowCancelApproachDist || approaching) {
+                // danger : relâche tôt (Bow.kt libère sur rClickUp)
+                Mouse.rClickUp()
+                bowHardLockUntil = 0L
+            } else if (now >= bowHardLockUntil && bowHardLockUntil != 0L) {
+                // charge complète atteinte : on laisse Bow.kt relâcher à pleine puissance
+                // (pas d’action ici, on évite juste toute annulation)
             }
-            lastHurtTime = ht
+        }
 
-            // --- Détection "immobile" de l’adversaire (vitesse lissée)
-            val oppSpeed = kotlin.math.abs(opp.motionX) + kotlin.math.abs(opp.motionZ)
-            val isStill = oppSpeed < 0.035
-            if (isStill) {
-                if (oppStillSince == 0L) oppStillSince = now
-            } else {
-                oppStillSince = 0L
-            }
-            val stillMs = if (oppStillSince == 0L) 0 else (now - oppStillSince)
-
-            // --- Parade épée : garder si l’autre est immobile, couper quand il bouge (mais pas 100%)
-            val holdingSword = mc.thePlayer.heldItem != null &&
-                mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")
-            val oppHasBow = opp.heldItem != null &&
-                opp.heldItem.unlocalizedName.lowercase().contains("bow")
-            val sinceStart = now - gameStartAt
-
-            if (holdingSword) {
-                // Si on bloque déjà : on continue tant que l’adversaire reste immobile,
-                // sinon on relâche avec une proba (pour ne pas être 100% lisible).
-                if (Mouse.rClickDown) {
-                    val startedMoving = (oppSpeed > 0.07) || approaching
-                    if (startedMoving) {
-                        // 75% de chance d’arrêter immédiatement, 25% de tenir un peu pour "bait"
-                        val stopNow = RandomUtils.randomIntInRange(0, 99) < 75
-                        if (stopNow || now >= holdBlockUntil) {
-                            Mouse.rClickUp()
-                        }
-                    } else if (now >= holdBlockUntil) {
-                        // durée prévue écoulée : on lâche pour ne pas rester figé trop longtemps
+        // ——— Logique de parade ÉPÉE ———
+        if (holdingSword) {
+            if (Mouse.rClickDown) {
+                // on tient la parade : on coupe dès qu’il bouge OU dès que la fenêtre prévue expire
+                val moving = !isStill || approaching
+                if (moving || now >= holdBlockUntil) {
+                    // 80% arrêt immédiat, 20% on garde un peu (bait)
+                    val stopNow = RandomUtils.randomIntInRange(0, 99) < 80
+                    if (stopNow) {
                         Mouse.rClickUp()
+                    } else {
+                        // on prolonge légèrement mais max 300ms pour éviter le “block inutile”
+                        holdBlockUntil = max(holdBlockUntil, now + RandomUtils.randomIntInRange(120, 300))
                     }
-                } else {
-                    // Conditions d’entrée en block :
-                    // - pas au tout début
-                    // - assez loin
-                    // - adversaire immobile depuis un petit délai
-                    // - pas en projectile
-                    // - si arc en main : plus prompt ; sinon, petite chance de "fake block"
-                    val needStillMs = if (oppHasBow) RandomUtils.randomIntInRange(260, 420)
-                                      else RandomUtils.randomIntInRange(380, 560)
-                    val fakeBlockChance = if (oppHasBow) 100 else 25 // 100% si arc, sinon 25%
-                    val allowFake = RandomUtils.randomIntInRange(0, 99) < fakeBlockChance
+                }
+            } else {
+                // conditions d’entrée : pas trop tôt, assez loin, ennemi immobile, LoS propre, pas d’arc en cours
+                val sinceStart = now - gameStartAt
+                val canStartParry =
+                    sinceStart > 1500 &&
+                    distance >= parryMinDist &&
+                    isStill &&
+                    !Mouse.isUsingProjectile() &&
+                    WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
+                    (now - lastSwordBlock) > parryCooldownMs
 
-                    val readyToStartBlock =
-                        sinceStart > 2000 &&
-                        distance > 12f &&
-                        stillMs >= needStillMs &&
-                        !Mouse.isUsingProjectile() &&
-                        (oppHasBow || allowFake) &&
-                        (now - lastSwordBlock) > 900
-
-                    if (readyToStartBlock) {
-                        val dur = if (oppHasBow)
-                            RandomUtils.randomIntInRange(780, 1050)
-                        else
-                            RandomUtils.randomIntInRange(650, 900)
+                if (canStartParry) {
+                    // Ne pas être 100% lisible : 65% de chance de parer
+                    if (RandomUtils.randomIntInRange(0, 99) < 65) {
+                        val dur = RandomUtils.randomIntInRange(parryHoldMinMs.toInt(), parryHoldMaxMs.toInt())
                         holdBlockUntil = now + dur
                         lastSwordBlock = now
                         Mouse.rClick(dur)
-
-                        // Évitement de flèches : injecter un strafe court et aléatoire
-                        if (oppHasBow && distance > 10f) {
-                            if (now - lastStrafeSwitch > 220) {
-                                if (RandomUtils.randomIntInRange(0, 1) == 0) strafeDir = -strafeDir
-                                lastStrafeSwitch = now
-                            }
-                        }
-                    } else if (Mouse.rClickDown) {
-                        // sécurité : ne jamais rester bloqué si les conditions ne sont plus vraies
-                        Mouse.rClickUp()
                     }
+                } else if (Mouse.rClickDown) {
+                    // sécurité : jamais coincé en parade si conditions cassées
+                    Mouse.rClickUp()
                 }
             }
+        } else {
+            // si pas épée, on ne veut pas de parade active
+            if (Mouse.rClickDown) Mouse.rClickUp()
+        }
 
-            // Empêche de sauter pendant qu’on bloque, et pendant le no-jump post-hit
-            val canJump = (now >= noJumpUntil) && !Mouse.rClickDown
-
-            // Sauts “humains” (avec canJump)
+        // ——— Saut : jamais très proche, ni pendant un “noJumpUntil”, ni pendant une parade ———
+        val canJump = (now >= noJumpUntil) && !Mouse.rClickDown
+        if (distance <= noJumpCloseDist) {
+            Movement.stopJumping()
+        } else {
             if (distance > jumpDistanceThreshold) {
-                if (oppHasBow) {
-                    if (WorldUtils.blockInFront(mc.thePlayer, 2f, 0.5f) == Blocks.air) {
-                        if (!EntityUtils.entityFacingAway(mc.thePlayer, opp) && !needJump) {
-                            Movement.stopJumping()
-                        } else {
-                            if (canJump) Movement.startJumping() else Movement.stopJumping()
-                        }
-                    } else {
-                        if (canJump) Movement.startJumping() else Movement.stopJumping()
-                    }
-                } else {
-                    if (canJump) Movement.startJumping() else Movement.stopJumping()
-                }
+                if (canJump && !needJump) Movement.startJumping() else Movement.stopJumping()
             } else if (!needJump) {
                 Movement.stopJumping()
             }
+        }
 
-            val movePriority = arrayListOf(0, 0)
-            var clear = false
-            var randomStrafe = false
+        // ——— Gestion des déplacements de base ———
+        if (distance < 1f || (distance < 2.7f && combo >= 1)) {
+            Movement.stopForward()
+        } else if (!tapping) {
+            Movement.startForward()
+        }
 
-            if (distance < 1f || (distance < 2.7f && combo >= 1)) {
-                Movement.stopForward()
-            } else if (!tapping) {
-                Movement.startForward()
+        if (!Mouse.isUsingProjectile() && now >= rodLockUntil && !Mouse.rClickDown) {
+            if (distance < 1.5f && p.heldItem != null && !p.heldItem.unlocalizedName.lowercase().contains("sword")) {
+                Inventory.setInvItem("sword")
             }
+        }
 
-            if (!Mouse.isUsingProjectile() && now >= rodLockUntil && !Mouse.rClickDown) {
-                if (distance < 1.5f && mc.thePlayer.heldItem != null &&
-                    !mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")) {
-                    Inventory.setInvItem("sword")
+        // ——— Fenêtres rod/bow ———
+        if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
+
+            val cdOK = (now - lastRodUse) >= if (distance < 5.3f) 650 else 900
+
+            // (A) Anti-bow mid-range
+            if (cdOK && oppHasBow && distance in 4.8f..7.2f && !EntityUtils.entityFacingAway(p, opp) && now >= rodLockUntil) {
+                val lockMs = if (distance < 6f) RandomUtils.randomIntInRange(300, 360) else RandomUtils.randomIntInRange(340, 420)
+                rodLockUntil = now + lockMs
+                lastRodUse = now
+                useRod()
+
+            // (B) Anti-rod mid classique
+            } else if (cdOK &&
+                distance in 3.4f..5.2f &&
+                !EntityUtils.entityFacingAway(p, opp) &&
+                approaching &&
+                combo <= 1 &&
+                now >= rodLockUntil) {
+
+                val lockMs = when {
+                    distance < 4.0f -> RandomUtils.randomIntInRange(260, 320)
+                    distance < 4.6f -> RandomUtils.randomIntInRange(300, 360)
+                    else            -> RandomUtils.randomIntInRange(340, 420)
+                }
+                rodLockUntil = now + lockMs
+                lastRodUse = now
+                useRod()
+
+            // (C) Fenêtre 5.7..6.5 ajustée
+            } else if (cdOK &&
+                distance in 5.7f..6.5f &&
+                !EntityUtils.entityFacingAway(p, opp) &&
+                approaching &&
+                combo <= 1 &&
+                now >= rodLockUntil) {
+
+                val lockMs = if (distance < 6.1f) RandomUtils.randomIntInRange(320, 380) else RandomUtils.randomIntInRange(360, 440)
+                rodLockUntil = now + lockMs
+                lastRodUse = now
+                useRod()
+
+            // (D) Bow : tirs “safe” (et full charge via Bow.kt + hard lock)
+            } else if ((EntityUtils.entityFacingAway(p, opp) && distance in 3.5f..30f) ||
+                       (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(p, opp))) {
+                if (distance > 10f && shotsFired < maxArrows) {
+                    bowHardLockUntil = now + RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
+                    useBow(distance) { shotsFired++ }
                 }
             }
+        }
 
-            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
+        // Pas de singleJump anti-corner si trop proche
+        if (combo >= 3 && distance >= singleJumpMinDist && p.onGround) {
+            Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
+        }
 
-                // Cooldown global rod
-                val minCd = if (distance < 5.3f) 650 else 900
-                val cdOK = (now - lastRodUse) >= minCd
+        // ——— Anti-corner & Strafe ———
+        val movePriority = arrayListOf(0, 0)
+        var clear = false
+        var randomStrafe = false
 
-                // --- (A) Anti-bow mid-range: casse le "rod → arrow" à 5–6 blocs ---
-                if (cdOK &&
-                    oppHasBow &&
-                    distance in 4.8f..7.2f &&
-                    !EntityUtils.entityFacingAway(mc.thePlayer, opp) &&
-                    now >= rodLockUntil) {
-
-                    val lockMs = if (distance < 6f)
-                        RandomUtils.randomIntInRange(300, 360)
-                    else
-                        RandomUtils.randomIntInRange(340, 420)
-                    rodLockUntil = now + lockMs
-                    lastRodUse = now
-                    useRod()
-
-                // --- (B) Anti-rod mid-range classique (approche & face & combo faible) ---
-                } else if (cdOK &&
-                           distance in 3.4f..5.2f &&
-                           !EntityUtils.entityFacingAway(mc.thePlayer, opp) &&
-                           approaching &&
-                           combo <= 1 &&
-                           now >= rodLockUntil) {
-
-                    val lockMs = when {
-                        distance < 4.0f -> RandomUtils.randomIntInRange(260, 320)
-                        distance < 4.6f -> RandomUtils.randomIntInRange(300, 360)
-                        else            -> RandomUtils.randomIntInRange(340, 420)
-                    }
-                    rodLockUntil = now + lockMs
-                    lastRodUse = now
-                    useRod()
-
-                // --- (C) Fenêtre 5.7..6.5 resserrée (approche & face & combo faible) ---
-                } else if (cdOK &&
-                           distance in 5.7f..6.5f &&
-                           !EntityUtils.entityFacingAway(mc.thePlayer, opp) &&
-                           approaching &&
-                           combo <= 1 &&
-                           now >= rodLockUntil) {
-
-                    val lockMs = if (distance < 6.1f)
-                        RandomUtils.randomIntInRange(320, 380)
-                    else
-                        RandomUtils.randomIntInRange(360, 440)
-                    rodLockUntil = now + lockMs
-                    lastRodUse = now
-                    useRod()
-
-                // --- (D) Bow windows (safe shots) ---
-                } else if ((EntityUtils.entityFacingAway(mc.thePlayer, opp) && distance in 3.5f..30f) ||
-                           (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(mc.thePlayer, opp))) {
-                    if (distance > 10f && shotsFired < maxArrows) {
-                        clear = true
-                        useBow(distance) { shotsFired++ }
-                    } else {
-                        clear = false
-                        if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
-                        else movePriority[1] += 4
-                    }
-                }
+        val blockAheadClose = WorldUtils.blockInFront(p, 1.2f, 1.0f) != Blocks.air
+        val deltaDist = if (prevDistance > 0f) abs(distance - prevDistance) else 999f
+        val cornerLikely = (distance < 3.8f && (blockAheadClose || deltaDist < 0.02f))
+        if (cornerLikely && now >= cornerBreakUntil) {
+            strafeDir = -strafeDir
+            cornerBreakUntil = now + RandomUtils.randomIntInRange(280, 420)
+            if (p.onGround && distance >= singleJumpMinDist) {
+                Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
             }
+        }
 
-            if (combo >= 3 && distance >= 3.2f && mc.thePlayer.onGround) {
-                Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
-            }
-
-            // --- Anti-corner & strafe ---
-            val blockAheadClose = WorldUtils.blockInFront(mc.thePlayer, 1.2f, 1.0f) != Blocks.air
-            val deltaDist = if (prevDistance > 0f) kotlin.math.abs(distance - prevDistance) else 999f
-            val cornerLikely = (distance < 3.8f && (blockAheadClose || deltaDist < 0.02f))
-
-            if (cornerLikely && now >= cornerBreakUntil) {
-                strafeDir = -strafeDir
-                cornerBreakUntil = now + RandomUtils.randomIntInRange(280, 420)
-                if (mc.thePlayer.onGround) {
-                    Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
-                }
-            }
-
-            if (!clear) {
-                if (EntityUtils.entityFacingAway(mc.thePlayer, opp)) {
-                    if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
-                } else {
-                    val rotations = EntityUtils.getRotations(opp, mc.thePlayer, false)
-                    if (rotations != null && now - lastStrafeSwitch > 350) {
-                        val preferSide = if (rotations[0] < 0) +1 else -1
-                        if (preferSide != strafeDir) {
-                            strafeDir = preferSide
-                            lastStrafeSwitch = now
-                        }
-                    }
-                    if (distance in 1.8f..3.6f) {
-                        if (deltaDist < 0.03f) {
-                            if (stagnantSince == 0L) stagnantSince = now
-                            else if (now - stagnantSince > 550 && now - lastStrafeSwitch > 300) {
-                                strafeDir = -strafeDir
-                                lastStrafeSwitch = now
-                                stagnantSince = 0L
-                            }
-                        } else stagnantSince = 0L
-                    } else stagnantSince = 0L
-
-                    if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(950, 1200)) {
-                        strafeDir = -strafeDir
+        if (!clear) {
+            if (EntityUtils.entityFacingAway(p, opp)) {
+                if (WorldUtils.leftOrRightToPoint(p, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
+            } else {
+                val rotations = EntityUtils.getRotations(opp, p, false)
+                if (rotations != null && now - lastStrafeSwitch > 350) {
+                    val preferSide = if (rotations[0] < 0) +1 else -1
+                    if (preferSide != strafeDir) {
+                        strafeDir = preferSide
                         lastStrafeSwitch = now
                     }
-
-                    val weight = if (now < cornerBreakUntil) 8 else if (distance < 4f) 7 else 5
-                    if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
-
-                    // quand l’adversaire tient un arc, on autorise un strafe plus "aléatoire"
-                    randomStrafe = (distance in 8.0f..15.0f) || (oppHasBow && distance > 8.0f)
                 }
-            }
+                if (distance in 1.8f..3.6f) {
+                    if (deltaDist < 0.03f) {
+                        if (stagnantSince == 0L) stagnantSince = now
+                        else if (now - stagnantSince > 550 && now - lastStrafeSwitch > 300) {
+                            strafeDir = -strafeDir
+                            lastStrafeSwitch = now
+                            stagnantSince = 0L
+                        }
+                    } else stagnantSince = 0L
+                } else stagnantSince = 0L
 
-            handle(clear, randomStrafe, movePriority)
-            prevDistance = distance
+                if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(950, 1200)) {
+                    strafeDir = -strafeDir
+                    lastStrafeSwitch = now
+                }
+
+                val weight = if (now < cornerBreakUntil) 8 else if (distance < 4f) 7 else 5
+                if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
+
+                randomStrafe = (distance in 8.0f..15.0f) || (oppHasBow && distance > 8.0f)
+            }
         }
+
+        handle(clear, randomStrafe, movePriority)
+        prevDistance = distance
     }
 }
