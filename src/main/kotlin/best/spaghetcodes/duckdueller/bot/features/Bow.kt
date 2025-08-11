@@ -1,81 +1,46 @@
 package best.spaghetcodes.duckdueller.bot.features
 
-import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.player.Inventory
 import best.spaghetcodes.duckdueller.bot.player.Mouse
-import best.spaghetcodes.duckdueller.utils.EntityUtils
 import best.spaghetcodes.duckdueller.utils.RandomUtils
 import best.spaghetcodes.duckdueller.utils.TimeUtils
-import net.minecraft.client.Minecraft
 
 /**
  * Arc (Hypixel Classic):
- * - Full charge par défaut (~1150–1300 ms).
- * - Si pression: on relâche immédiatement, puis on repasse épée APRÈS un petit délai (sinon le tir peut être annulé).
- * - AUCUN auto-CPS ici.
+ * - Switch → léger pré-délai → clic droit maintenu (full draw) → retour épée.
+ * - Pas d’auto-CPS ici (géré ailleurs).
  */
 interface Bow {
 
     val bowMinHoldMs: Int get() = 1150
     val bowMaxHoldMs: Int get() = 1300
 
-    /** Distance où on force le release immédiat si l’ennemi est trop près. */
+    /** Distance où l’appelant peut décider d’annuler si pression (géré côté bot). */
     val bowCancelCloseDistance: Float get() = 6.0f
 
     /**
-     * Tient l’arc jusqu’au full-charge, sauf pression (release anticipé).
-     * @param distance Float (aligné avec EntityUtils.getDistanceNoY)
-     * @param afterShot callback UNE fois après que la flèche est réellement partie
+     * Tire une flèche (full charge). L'appelant gère la pression/annulation éventuelle.
+     * @param distance fournie pour compat, non utilisée ici (logique press côté bot).
+     * @param afterShot callback après le tir.
      */
     fun useBow(distance: Float, afterShot: () -> Unit = {}) {
         if (Mouse.isUsingProjectile()) return
 
-        // Sélectionne l'arc puis attend un court instant pour garantir le switch côté client/serveur
+        // switch arc + petit settle
         Inventory.setInvItem("bow")
         val preDelay = RandomUtils.randomIntInRange(60, 110)
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
 
         TimeUtils.setTimeout({
             Mouse.setUsingProjectile(true)
-            Mouse.rClick(hold) // maintient puis relâche après 'hold' ms
+            Mouse.rClick(hold) // maintient puis relâche
 
-            val self = this as? BotBase
-            var fired = false
-
-            // Surveille la pression pendant la charge
-            val interval = TimeUtils.setInterval({
-                val player = Minecraft.getMinecraft().thePlayer ?: return@setInterval
-                val opp = self?.opponent() ?: return@setInterval
-                if (fired) return@setInterval
-
-                val d: Float = EntityUtils.getDistanceNoY(player, opp)
-                val facingUs = !EntityUtils.entityFacingAway(player, opp)
-
-                // Pression réelle: trop près, ou proche ET il nous fixe.
-                val pressure = (d < bowCancelCloseDistance) || (facingUs && d <= 8f)
-                if (pressure) {
-                    fired = true
-                    Mouse.rClickUp()          // lâcher maintenant → la flèche part
-                    Mouse.setUsingProjectile(false)
-                    TimeUtils.setTimeout({
-                        Inventory.setInvItem("sword")
-                        afterShot()
-                    }, RandomUtils.randomIntInRange(70, 110))
-                }
-            }, 50, 50)
-
-            // Full charge atteint → repasse épée juste après (petit délai pour ne pas annuler le tir)
+            // laisser la release partir puis revenir épée
             TimeUtils.setTimeout({
-                interval?.cancel()
-                if (!fired) {
-                    fired = true
-                    Mouse.setUsingProjectile(false)
-                    TimeUtils.setTimeout({
-                        Inventory.setInvItem("sword")
-                        afterShot()
-                    }, RandomUtils.randomIntInRange(70, 110))
-                }
-            }, hold + RandomUtils.randomIntInRange(20, 40))
+                Mouse.setUsingProjectile(false)
+                Inventory.setInvItem("sword")
+                afterShot()
+            }, hold + RandomUtils.randomIntInRange(90, 150))
         }, preDelay)
     }
 }
