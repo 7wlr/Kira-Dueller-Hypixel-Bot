@@ -302,9 +302,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 val sinceStart = now - gameStartAt
                 val stillButFar = isStill && distance > 16f
                 val canStartParry =
-                    sinceStart > 2000 &&                   // pas de micro-parade trop tôt
+                    sinceStart > 2000 &&
                     distance >= parryMinDist &&
-                    ((isStill && distance <= 16f) || bowDrawLikely) && // immobile mais pas trop loin, OU arc probable
+                    ((isStill && distance <= 16f) || bowDrawLikely) &&
                     !projectileActive &&
                     WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
                     (now - lastSwordBlock) > parryCooldownMs
@@ -369,7 +369,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // (B) Anti-rod (inclut courte distance : seuil abaissé à 2.4f pour “melee reset” fiable)
+            // (B) Anti-rod (inclut courte distance : seuil abaissé à 2.4f)
             if (cdOK &&
                 distance in 2.4f..5.2f &&
                 !EntityUtils.entityFacingAway(p, opp) &&
@@ -416,7 +416,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     pendingProjectileUntil = now + 60L
                     actionLockUntil = now + (fullDrawMsMax + 100)
                     projectileKind = KIND_BOW
-                    useBow(d = distance) { shotsFired++ }
+                    useBow(distance) { shotsFired++ } // ← FIX: param correct
                     projectileGraceUntil = bowHardLockUntil + 120
                     return
                 }
