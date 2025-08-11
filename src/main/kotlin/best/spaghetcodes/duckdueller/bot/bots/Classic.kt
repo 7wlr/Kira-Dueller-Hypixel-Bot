@@ -42,11 +42,11 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val parryHoldMaxMs = 1050L
     private val parryStickMinMs = 1000L
     private val parryStickMaxMs = 1800L
-    private val bowCancelApproachDist = 6.0f
+    private val bowCancelCloseDist = 4.8f           // n’annule que très proche
     private val singleJumpMinDist = 2.8f
     private val bowSlowThreshold = 0.06
     private val bowSlowFramesNeeded = 3
-    private val earlyJumpDurationMs = 3000L   // jump continu 3s au start
+    private val earlyJumpDurationMs = 3000L         // jump continu 3s au start
 
     // États
     private var strafeDir = 1
@@ -68,7 +68,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var shotsFired = 0
     private val maxArrows = 5
 
-    // suivi immobilité / “slow walk arc”
+    // suivi immobilité / “slow walk bow”
     private var oppLastX = 0.0
     private var oppLastZ = 0.0
     private var stillFrames = 0
@@ -77,8 +77,15 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     // verrous projectiles
     private var bowHardLockUntil = 0L
     private var projectileGraceUntil = 0L    // grâce pendant/juste après l’action projectile
-    private var pendingProjectileUntil = 0L  // protège l’instant AVANT que Bow/Rod ne posent leur flag
-    private var actionLockUntil = 0L         // verrou fort pour le tick courant + ~200-300ms
+    private var pendingProjectileUntil = 0L  // protège l’instant avant que Bow/Rod ne posent leur flag
+    private var actionLockUntil = 0L         // verrou fort tick courant + ~300ms
+
+    // fallback pour rod si le clic n’est pas parti
+    private var projectileRetryAt = 0L
+    private var projectileKind = 0           // 0 none, 1 rod, 2 bow
+    private val KIND_NONE = 0
+    private val KIND_ROD = 1
+    private val KIND_BOW = 2
 
     // parade sticky contre l’arc
     private var parryFromBow = false
@@ -111,6 +118,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         projectileGraceUntil = 0L
         pendingProjectileUntil = 0L
         actionLockUntil = 0L
+        projectileRetryAt = 0L
+        projectileKind = KIND_NONE
         parryFromBow = false
         parryExtendedUntil = 0L
         stillFrames = 0
@@ -126,9 +135,10 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 if (d >= openShotMinDist && shotsFired < maxArrows) {
                     val now = System.currentTimeMillis()
                     bowHardLockUntil = now + RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
-                    // Verrou fort pour que rien ne casse la séquence avant que Bow.kt ne pose son flag
                     pendingProjectileUntil = now + 220L
-                    actionLockUntil = now + 320L
+                    actionLockUntil = now + 360L
+                    projectileKind = KIND_BOW
+                    projectileRetryAt = 0L // pas de fallback pour l’arc
                     useBow(d) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                 }
@@ -187,6 +197,14 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val projectileActive =
             Mouse.isUsingProjectile() || now < projectileGraceUntil || now < pendingProjectileUntil || now < actionLockUntil
 
+        // Fallback rod : si le clic n’est pas parti alors qu’on vient de switch
+        if (projectileKind == KIND_ROD && projectileRetryAt != 0L && now >= projectileRetryAt && now < actionLockUntil) {
+            if (!Mouse.rClickDown) {
+                Mouse.rClick(RandomUtils.randomIntInRange(70, 100)) // force le lancer
+            }
+            projectileRetryAt = 0L
+        }
+
         // anti-jump post-hit
         val ht = p.hurtTime
         if (ht > 0 && lastHurtTime == 0) {
@@ -217,7 +235,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // immobilité + “slow walk arc”
+        // immobilité + “slow walk bow”
         if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
         val dx = abs(opp.posX - oppLastX)
         val dz = abs(opp.posZ - oppLastZ)
@@ -231,14 +249,16 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val bowDrawLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
         val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
 
-        // charge arc : on n’annule pas avant l’échéance, sauf danger proche
+        // charge arc : n’annule que si vraiment proche
         if (projectileActive && Mouse.rClickDown) {
-            if (distance < bowCancelApproachDist || approaching) {
+            if (distance < bowCancelCloseDist) {
                 Mouse.rClickUp()
                 bowHardLockUntil = 0L
                 projectileGraceUntil = 0L
                 pendingProjectileUntil = 0L
                 actionLockUntil = 0L
+                projectileKind = KIND_NONE
+                projectileRetryAt = 0L
             }
         }
 
@@ -289,7 +309,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         } else {
             // NE PAS casser un clic projectile actif/pending/lock
-            if (Mouse.rClickDown && !projectileActive) {
+            if (Mouse.rClickDown && !(projectileActive)) {
                 Mouse.rClickUp()
             }
             parryFromBow = false
@@ -323,7 +343,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 rodLockUntil = now + lockMs
                 lastRodUse = now
                 pendingProjectileUntil = now + 220L
-                actionLockUntil = now + 320L
+                actionLockUntil = now + 360L
+                projectileKind = KIND_ROD
+                projectileRetryAt = now + 150L
                 useRod()
                 projectileGraceUntil = now + lockMs + 120
                 return
@@ -345,7 +367,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 rodLockUntil = now + lockMs
                 lastRodUse = now
                 pendingProjectileUntil = now + 220L
-                actionLockUntil = now + 320L
+                actionLockUntil = now + 360L
+                projectileKind = KIND_ROD
+                projectileRetryAt = now + 150L
                 useRod()
                 projectileGraceUntil = now + lockMs + 120
                 return
@@ -363,7 +387,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 rodLockUntil = now + lockMs
                 lastRodUse = now
                 pendingProjectileUntil = now + 220L
-                actionLockUntil = now + 320L
+                actionLockUntil = now + 360L
+                projectileKind = KIND_ROD
+                projectileRetryAt = now + 150L
                 useRod()
                 projectileGraceUntil = now + lockMs + 120
                 return
@@ -375,7 +401,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 if (distance > 10f && shotsFired < maxArrows) {
                     bowHardLockUntil = now + RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
                     pendingProjectileUntil = now + 220L
-                    actionLockUntil = now + 320L
+                    actionLockUntil = now + 360L
+                    projectileKind = KIND_BOW
+                    projectileRetryAt = 0L
                     useBow(distance) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                     return
