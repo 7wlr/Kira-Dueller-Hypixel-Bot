@@ -30,48 +30,52 @@ interface Bow {
     fun useBow(distance: Float, afterShot: () -> Unit = {}) {
         if (Mouse.isUsingProjectile()) return
 
+        // Sélectionne l'arc puis attend un court instant pour garantir le switch côté client/serveur
         Inventory.setInvItem("bow")
+        val preDelay = RandomUtils.randomIntInRange(60, 110)
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
 
-        Mouse.setUsingProjectile(true)
-        Mouse.rClick(hold) // maintient puis relâche après 'hold' ms
-
-        val self = this as? BotBase
-        var fired = false
-
-        // Surveille la pression pendant la charge
-        val interval = TimeUtils.setInterval({
-            val player = Minecraft.getMinecraft().thePlayer ?: return@setInterval
-            val opp = self?.opponent() ?: return@setInterval
-            if (fired) return@setInterval
-
-            val d: Float = EntityUtils.getDistanceNoY(player, opp)
-            val facingUs = !EntityUtils.entityFacingAway(player, opp)
-
-            // Pression réelle: trop près, ou proche ET il nous fixe.
-            val pressure = (d < bowCancelCloseDistance) || (facingUs && d <= 8f)
-            if (pressure) {
-                fired = true
-                Mouse.rClickUp()          // lâcher maintenant → la flèche part
-                Mouse.setUsingProjectile(false)
-                TimeUtils.setTimeout({
-                    Inventory.setInvItem("sword")
-                    afterShot()
-                }, RandomUtils.randomIntInRange(70, 110))
-            }
-        }, 50, 50)
-
-        // Full charge atteint → repasse épée juste après (petit délai pour ne pas annuler le tir)
         TimeUtils.setTimeout({
-            interval?.cancel()
-            if (!fired) {
-                fired = true
-                Mouse.setUsingProjectile(false)
-                TimeUtils.setTimeout({
-                    Inventory.setInvItem("sword")
-                    afterShot()
-                }, RandomUtils.randomIntInRange(70, 110))
-            }
-        }, hold + RandomUtils.randomIntInRange(20, 40))
+            Mouse.setUsingProjectile(true)
+            Mouse.rClick(hold) // maintient puis relâche après 'hold' ms
+
+            val self = this as? BotBase
+            var fired = false
+
+            // Surveille la pression pendant la charge
+            val interval = TimeUtils.setInterval({
+                val player = Minecraft.getMinecraft().thePlayer ?: return@setInterval
+                val opp = self?.opponent() ?: return@setInterval
+                if (fired) return@setInterval
+
+                val d: Float = EntityUtils.getDistanceNoY(player, opp)
+                val facingUs = !EntityUtils.entityFacingAway(player, opp)
+
+                // Pression réelle: trop près, ou proche ET il nous fixe.
+                val pressure = (d < bowCancelCloseDistance) || (facingUs && d <= 8f)
+                if (pressure) {
+                    fired = true
+                    Mouse.rClickUp()          // lâcher maintenant → la flèche part
+                    Mouse.setUsingProjectile(false)
+                    TimeUtils.setTimeout({
+                        Inventory.setInvItem("sword")
+                        afterShot()
+                    }, RandomUtils.randomIntInRange(70, 110))
+                }
+            }, 50, 50)
+
+            // Full charge atteint → repasse épée juste après (petit délai pour ne pas annuler le tir)
+            TimeUtils.setTimeout({
+                interval?.cancel()
+                if (!fired) {
+                    fired = true
+                    Mouse.setUsingProjectile(false)
+                    TimeUtils.setTimeout({
+                        Inventory.setInvItem("sword")
+                        afterShot()
+                    }, RandomUtils.randomIntInRange(70, 110))
+                }
+            }, hold + RandomUtils.randomIntInRange(20, 40))
+        }, preDelay)
     }
 }
