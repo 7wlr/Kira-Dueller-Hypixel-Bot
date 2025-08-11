@@ -41,7 +41,8 @@ class DuckDueller {
     }
 
     @Mod.EventHandler
-    fun init(_: FMLInitializationEvent) {
+    @Suppress("UNUSED_PARAMETER")
+    fun init(event: FMLInitializationEvent) {
         config = Config()
         config?.preload()
 
