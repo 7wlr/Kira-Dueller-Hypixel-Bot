@@ -185,7 +185,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
         lastHurtTime = ht
 
-        // *** Force jump si l’adversaire est loin (>5) et qu’il y a une marche devant ***
+        // *** Force un jump si l’adversaire est loin (>5) ET qu’il y a une marche devant ***
         val blockAhead = WorldUtils.blockInFront(p, 1.5f, 0.9f) != Blocks.air
         if (distance > 5.0f && blockAhead && p.onGround) {
             Movement.singleJump(RandomUtils.randomIntInRange(140, 220))
