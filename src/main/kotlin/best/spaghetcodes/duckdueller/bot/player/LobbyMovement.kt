@@ -72,10 +72,9 @@ object LobbyMovement {
     }
 
     @SubscribeEvent
-    fun onTick(ev: ClientTickEvent) {
+    fun onTick(_: ClientTickEvent) {
         if (DuckDueller.bot?.toggled() == true && tickYawChange != 0f && DuckDueller.mc.thePlayer != null && StateManager.state != StateManager.States.PLAYING) {
             DuckDueller.mc.thePlayer.rotationYaw += tickYawChange
         }
     }
-
 }
