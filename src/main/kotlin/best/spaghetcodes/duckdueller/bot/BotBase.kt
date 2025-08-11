@@ -67,6 +67,9 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
     private var calledGameEnd = false
 
+    // évite les doubles comptages (titre + chat)
+    private var resultCounted = false
+
     fun opponent() = opponent
 
     open fun getName(): String = "Base"
@@ -81,6 +84,42 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     protected open fun onTick() {}
 
     protected fun setStatKeys(keys: Map<String, String>) { statKeys = keys }
+
+    // -------- Résultat via résumé & kill (FR/EN) --------
+
+    private fun parseWinnerFromSummary(lineRaw: String): Pair<String, String>? {
+        val plain = ChatUtils.removeFormatting(lineRaw).replace(Regex("\\s+"), " ").trim()
+        // Ex 1: "Kira GAGNANT!  PlayerB"  -> winner = Kira (gauche)
+        val leftWins = Regex(
+            pattern = "^([A-Za-z0-9_]{2,16})\\s+(?:GAGNANT!?|WINNER!?|GAGNANT|WINNER)\\s+([A-Za-z0-9_]{2,16})$",
+            options = setOf(RegexOption.IGNORE_CASE)
+        )
+        leftWins.matchEntire(plain)?.let { m ->
+            return m.groupValues[1] to m.groupValues[2]
+        }
+        // Ex 2: "Kira   PlayerB GAGNANT!"  -> winner = PlayerB (droite)
+        val rightWins = Regex(
+            pattern = "^([A-Za-z0-9_]{2,16})\\s+([A-Za-z0-9_]{2,16})\\s+(?:GAGNANT!?|WINNER!?|GAGNANT|WINNER)$",
+            options = setOf(RegexOption.IGNORE_CASE)
+        )
+        rightWins.matchEntire(plain)?.let { m ->
+            return m.groupValues[2] to m.groupValues[1]
+        }
+        return null
+    }
+
+    private fun parseKillLine(lineRaw: String): Pair<String, String>? {
+        val plain = ChatUtils.removeFormatting(lineRaw).replace(Regex("\\s+"), " ").trim()
+        // FR: "X a été tué par Y."
+        val fr = Regex("^([A-Za-z0-9_]{2,16}) a été tué par ([A-Za-z0-9_]{2,16})\\.?$", RegexOption.IGNORE_CASE)
+        fr.matchEntire(plain)?.let { m -> return m.groupValues[2] to m.groupValues[1] }
+        // EN: "X was killed by Y."
+        val en = Regex("^([A-Za-z0-9_]{2,16}) was killed by ([A-Za-z0-9_]{2,16})\\.?$", RegexOption.IGNORE_CASE)
+        en.matchEntire(plain)?.let { m -> return m.groupValues[2] to m.groupValues[1] }
+        return null
+    }
+
+    // ----------------------------------------------------
 
     fun onPacket(packet: Packet<*>) {
         if (toggled) {
@@ -120,7 +159,8 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         TimeUtils.setTimeout({
                             if (packet.message != null) {
                                 val unformatted = packet.message.unformattedText.lowercase()
-                                if (unformatted.contains("won the duel!") && mc.thePlayer != null) {
+                                // EN uniquement
+                                if (!resultCounted && unformatted.contains("won the duel!") && mc.thePlayer != null) {
                                     var winner = ""
                                     var loser = ""
                                     var iWon = false
@@ -140,6 +180,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                                         iWon = false
                                     }
 
+                                    resultCounted = true
                                     ChatUtils.info(Session.getSession())
 
                                     if (!iWon) {
@@ -252,6 +293,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                 ChatUtils.info("Current selected bot: ${EnumChatFormatting.GREEN}${getName()}")
                 joinGame()
                 Session.startTime = System.currentTimeMillis()
+                resultCounted = false
             }
         }
     }
@@ -261,8 +303,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         val unformatted = ev.message.unformattedText
         if (toggled() && mc.thePlayer != null) {
 
-            // utilise l’API uniquement si dodging ou envoi de stats webhook
-            val needStats = (DuckDueller.config?.enableDodging == true) || (DuckDueller.config?.sendWebhookStats == true)  // :contentReference[oaicite:0]{index=0}
+            val needStats = (DuckDueller.config?.enableDodging == true) || (DuckDueller.config?.sendWebhookStats == true)
 
             if (unformatted.contains("The game starts in 2 seconds!")) {
                 println(playersSent.joinToString(", "))
@@ -273,7 +314,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                     if (playersSent.size > 0) found = true
                 }
 
-                // Ne dodge JAMAIS si on n’a pas besoin des stats
                 if (!found && DuckDueller.config?.dodgeNoStats == true && needStats) {
                     ChatUtils.info("No stats found, dodging...")
                     leaveGame()
@@ -292,9 +332,42 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                 gameStart()
             }
 
+            // FR: fin de partie détectée par le récapitulatif
             if (unformatted.contains("Melee") && !calledGameEnd) {
                 calledGameEnd = true
                 gameEnd()
+            }
+
+            // Fallback résultat via résumé (FR/EN)
+            if (!resultCounted && (unformatted.contains("GAGNANT") || unformatted.contains("WINNER"))) {
+                parseWinnerFromSummary(unformatted)?.let { (winner, loser) ->
+                    val me = mc.thePlayer.gameProfile.name
+                    val iWon = winner.equals(me, ignoreCase = true)
+                    if (iWon) {
+                        Session.wins++
+                    } else {
+                        Session.losses++
+                        playersLost.add(winner)
+                    }
+                    resultCounted = true
+                    ChatUtils.info(Session.getSession())
+                }
+            }
+
+            // Secours immédiat : ligne de kill (FR/EN)
+            if (!resultCounted) {
+                parseKillLine(unformatted)?.let { (winner, loser) ->
+                    val me = mc.thePlayer.gameProfile.name
+                    val iWon = winner.equals(me, ignoreCase = true)
+                    if (iWon) {
+                        Session.wins++
+                    } else {
+                        Session.losses++
+                        playersLost.add(winner)
+                    }
+                    resultCounted = true
+                    ChatUtils.info(Session.getSession())
+                }
             }
 
             if (unformatted.lowercase().contains("something went wrong trying") || unformatted.lowercase().contains("please don't spam the command")) {
@@ -311,9 +384,9 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
             }
         }
 
-        // On ne stocke la clé API que si on en a besoin (dodging ou queue stats)
+        // On ne stocke la clé API que si besoin (dodging ou queue stats)
         if (unformatted.contains("Your new API key is ")) {
-            val needStats = (DuckDueller.config?.enableDodging == true) || (DuckDueller.config?.sendWebhookStats == true)  // :contentReference[oaicite:1]{index=1}
+            val needStats = (DuckDueller.config?.enableDodging == true) || (DuckDueller.config?.sendWebhookStats == true)
             if (needStats) {
                 val key = ev.message.unformattedText.split("Your new API key is ")[1]
                 DuckDueller.config?.apiKey = key
@@ -378,6 +451,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         opponentCombo = 0
         ticksSinceHit = 0
         ticksSinceGameStart = 0
+        resultCounted = false
     }
 
     private fun gameStart() {
@@ -392,6 +466,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                 quickRefreshTimer?.cancel()
                 opponentTimer = TimeUtils.setInterval(this::bakery, 0, 500)
             }, quickRefresh)
+            resultCounted = false
             onGameStart()
         }
     }
@@ -434,19 +509,16 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         thread {
             if (StateManager.state == StateManager.States.GAME) {
                 if (player.length > 2) {
-                    // UTILISER l’API UNIQUEMENT si dodging OU webhook queue stats
-                    val needStats = (DuckDueller.config?.enableDodging == true) || (DuckDueller.config?.sendWebhookStats == true)  // :contentReference[oaicite:2]{index=2}
+                    val needStats = (DuckDueller.config?.enableDodging == true) || (DuckDueller.config?.sendWebhookStats == true)
 
                     if (!needStats) {
-                        // pas d’API → pas de dodge, juste on marque le join si c’est nous
                         if (mc.thePlayer != null && player == mc.thePlayer.displayNameString) {
                             onJoinGame()
                         }
                         return@thread
                     }
 
-                    var uuid: String? = null
-                    uuid = if (playerCache.containsKey(player)) {
+                    val uuid: String? = if (playerCache.containsKey(player)) {
                         playerCache[player]
                     } else {
                         HttpUtils.usernameToUUID(player)
