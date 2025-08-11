@@ -89,19 +89,11 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
     private fun parseWinnerFromSummary(lineRaw: String): Pair<String, String>? {
         val plain = ChatUtils.removeFormatting(lineRaw).replace(Regex("\\s+"), " ").trim()
-        // Ex 1: "Kira GAGNANT!  PlayerB"  -> winner = Kira (gauche)
-        val leftWins = Regex(
-            pattern = "^([A-Za-z0-9_]{2,16})\\s+(?:GAGNANT!?|WINNER!?|GAGNANT|WINNER)\\s+([A-Za-z0-9_]{2,16})$",
-            options = setOf(RegexOption.IGNORE_CASE)
-        )
+        val leftWins = Regex("^([A-Za-z0-9_]{2,16})\\s+(?:GAGNANT!?|WINNER!?|GAGNANT|WINNER)\\s+([A-Za-z0-9_]{2,16})$", RegexOption.IGNORE_CASE)
         leftWins.matchEntire(plain)?.let { m ->
             return m.groupValues[1] to m.groupValues[2]
         }
-        // Ex 2: "Kira   PlayerB GAGNANT!"  -> winner = PlayerB (droite)
-        val rightWins = Regex(
-            pattern = "^([A-Za-z0-9_]{2,16})\\s+([A-Za-z0-9_]{2,16})\\s+(?:GAGNANT!?|WINNER!?|GAGNANT|WINNER)$",
-            options = setOf(RegexOption.IGNORE_CASE)
-        )
+        val rightWins = Regex("^([A-Za-z0-9_]{2,16})\\s+([A-Za-z0-9_]{2,16})\\s+(?:GAGNANT!?|WINNER!?|GAGNANT|WINNER)$", RegexOption.IGNORE_CASE)
         rightWins.matchEntire(plain)?.let { m ->
             return m.groupValues[2] to m.groupValues[1]
         }
@@ -110,10 +102,8 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
     private fun parseKillLine(lineRaw: String): Pair<String, String>? {
         val plain = ChatUtils.removeFormatting(lineRaw).replace(Regex("\\s+"), " ").trim()
-        // FR: "X a été tué par Y."
         val fr = Regex("^([A-Za-z0-9_]{2,16}) a été tué par ([A-Za-z0-9_]{2,16})\\.?$", RegexOption.IGNORE_CASE)
         fr.matchEntire(plain)?.let { m -> return m.groupValues[2] to m.groupValues[1] }
-        // EN: "X was killed by Y."
         val en = Regex("^([A-Za-z0-9_]{2,16}) was killed by ([A-Za-z0-9_]{2,16})\\.?$", RegexOption.IGNORE_CASE)
         en.matchEntire(plain)?.let { m -> return m.groupValues[2] to m.groupValues[1] }
         return null
@@ -159,26 +149,20 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         TimeUtils.setTimeout({
                             if (packet.message != null) {
                                 val unformatted = packet.message.unformattedText.lowercase()
-                                // EN uniquement
                                 if (!resultCounted && unformatted.contains("won the duel!") && mc.thePlayer != null) {
-                                    var winner = ""
-                                    var loser = ""
-                                    var iWon = false
-
+                                    val me = mc.thePlayer.displayNameString
                                     val p = ChatUtils.removeFormatting(packet.message.unformattedText).split("won")[0].trim()
-                                    if (unformatted.contains(mc.thePlayer.displayNameString.lowercase())) {
-                                        Session.wins++
-                                        winner = mc.thePlayer.displayNameString
-                                        loser = lastOpponentName
-                                        iWon = true
-                                    } else {
-                                        Session.losses++
-                                        ChatUtils.info("Adding $p to the list of players to dodge...")
-                                        playersLost.add(p)
-                                        winner = p
-                                        loser = mc.thePlayer.displayNameString
-                                        iWon = false
-                                    }
+
+                                    val (winner, loser, iWon) =
+                                        if (unformatted.contains(me.lowercase())) {
+                                            Session.wins++
+                                            Triple(me, lastOpponentName, true)
+                                        } else {
+                                            Session.losses++
+                                            ChatUtils.info("Adding $p to the list of players to dodge...")
+                                            playersLost.add(p)
+                                            Triple(p, me, false)
+                                        }
 
                                     resultCounted = true
                                     ChatUtils.info(Session.getSession())
@@ -260,7 +244,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     @SubscribeEvent
-    fun onClientTick(ev: ClientTickEvent) {
+    fun onClientTick(_: ClientTickEvent) {
         registerPacketListener()
         if (toggled) {
             onTick()
@@ -340,7 +324,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
             // Fallback résultat via résumé (FR/EN)
             if (!resultCounted && (unformatted.contains("GAGNANT") || unformatted.contains("WINNER"))) {
-                parseWinnerFromSummary(unformatted)?.let { (winner, loser) ->
+                parseWinnerFromSummary(unformatted)?.let { (winner, _) ->
                     val me = mc.thePlayer.gameProfile.name
                     val iWon = winner.equals(me, ignoreCase = true)
                     if (iWon) {
@@ -356,7 +340,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
             // Secours immédiat : ligne de kill (FR/EN)
             if (!resultCounted) {
-                parseKillLine(unformatted)?.let { (winner, loser) ->
+                parseKillLine(unformatted)?.let { (winner, _) ->
                     val me = mc.thePlayer.gameProfile.name
                     val iWon = winner.equals(me, ignoreCase = true)
                     if (iWon) {
@@ -384,7 +368,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
             }
         }
 
-        // On ne stocke la clé API que si besoin (dodging ou queue stats)
         if (unformatted.contains("Your new API key is ")) {
             val needStats = (DuckDueller.config?.enableDodging == true) || (DuckDueller.config?.sendWebhookStats == true)
             if (needStats) {
@@ -411,7 +394,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     @SubscribeEvent
-    fun onConnect(ev: ClientConnectedToServerEvent) {
+    fun onConnect(_: ClientConnectedToServerEvent) {
         if (toggled()) {
             println("Reconnect successful!")
             val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
@@ -426,7 +409,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     @SubscribeEvent
-    fun onDisconnect(ev: ClientDisconnectionFromServerEvent) {
+    fun onDisconnect(_: ClientDisconnectionFromServerEvent) {
         if (toggled()) {
             println("Disconnected from server, reconnecting...")
             val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
