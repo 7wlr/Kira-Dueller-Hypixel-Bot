@@ -95,10 +95,7 @@
 ### 🔧 Prérequis
 ```
 ✅ Minecraft 1.8.9
-✅ Forge 11.15.1.2318+
-✅ Java 8 ou supérieur
-✅ Compte Hypixel actif
-```
+✅ Forge 
 
 ### 📥 Installation
 1. **Téléchargement**
