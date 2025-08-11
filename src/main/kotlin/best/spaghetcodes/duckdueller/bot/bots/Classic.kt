@@ -40,9 +40,11 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var lastRodUse = 0L
     private var prevDistance = -1f
 
-    // --- Anti block start / cooldown block épée ---
+    // --- Parade épée / états associés ---
     private var gameStartAt = 0L
     private var lastSwordBlock = 0L
+    private var oppStillSince = 0L
+    private var holdBlockUntil = 0L
 
     // --- Anti jump après avoir été touché ---
     private var noJumpUntil = 0L
@@ -68,6 +70,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Mouse.rClickUp()               // jamais bloqué d’entrée
         gameStartAt = System.currentTimeMillis()
         lastSwordBlock = 0L
+        oppStillSince = 0L
+        holdBlockUntil = 0L
 
         noJumpUntil = 0L
         lastHurtTime = 0
@@ -147,24 +151,78 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
             lastHurtTime = ht
 
-            // --- Block épée utile (loin + immobile + arc), jamais au spawn, durée suffisante ---
+            // --- Détection "immobile" de l’adversaire (vitesse lissée)
+            val oppSpeed = kotlin.math.abs(opp.motionX) + kotlin.math.abs(opp.motionZ)
+            val isStill = oppSpeed < 0.035
+            if (isStill) {
+                if (oppStillSince == 0L) oppStillSince = now
+            } else {
+                oppStillSince = 0L
+            }
+            val stillMs = if (oppStillSince == 0L) 0 else (now - oppStillSince)
+
+            // --- Parade épée : garder si l’autre est immobile, couper quand il bouge (mais pas 100%)
             val holdingSword = mc.thePlayer.heldItem != null &&
                 mc.thePlayer.heldItem.unlocalizedName.lowercase().contains("sword")
             val oppHasBow = opp.heldItem != null &&
                 opp.heldItem.unlocalizedName.lowercase().contains("bow")
-            val oppSpeed = kotlin.math.abs(opp.motionX) + kotlin.math.abs(opp.motionZ)
-            val farAndStill = (distance > 12.5f && oppSpeed < 0.04)   // seuil relevé
             val sinceStart = now - gameStartAt
+
             if (holdingSword) {
-                val canHoldBlock = oppHasBow && farAndStill && sinceStart > 2000 &&
-                    (now - lastSwordBlock) > 900 && !Mouse.isUsingProjectile()
-                if (canHoldBlock) {
-                    // block assez long pour encaisser le tir
-                    Mouse.rClick(RandomUtils.randomIntInRange(650, 820))
-                    lastSwordBlock = now
-                } else if (Mouse.rClickDown) {
-                    // on ne reste jamais bloqué si la condition n’est plus vraie
-                    Mouse.rClickUp()
+                // Si on bloque déjà : on continue tant que l’adversaire reste immobile,
+                // sinon on relâche avec une proba (pour ne pas être 100% lisible).
+                if (Mouse.rClickDown) {
+                    val startedMoving = (oppSpeed > 0.07) || approaching
+                    if (startedMoving) {
+                        // 75% de chance d’arrêter immédiatement, 25% de tenir un peu pour "bait"
+                        val stopNow = RandomUtils.randomIntInRange(0, 99) < 75
+                        if (stopNow || now >= holdBlockUntil) {
+                            Mouse.rClickUp()
+                        }
+                    } else if (now >= holdBlockUntil) {
+                        // durée prévue écoulée : on lâche pour ne pas rester figé trop longtemps
+                        Mouse.rClickUp()
+                    }
+                } else {
+                    // Conditions d’entrée en block :
+                    // - pas au tout début
+                    // - assez loin
+                    // - adversaire immobile depuis un petit délai
+                    // - pas en projectile
+                    // - si arc en main : plus prompt ; sinon, petite chance de "fake block"
+                    val needStillMs = if (oppHasBow) RandomUtils.randomIntInRange(260, 420)
+                                      else RandomUtils.randomIntInRange(380, 560)
+                    val fakeBlockChance = if (oppHasBow) 100 else 25 // 100% si arc, sinon 25%
+                    val allowFake = RandomUtils.randomIntInRange(0, 99) < fakeBlockChance
+
+                    val readyToStartBlock =
+                        sinceStart > 2000 &&
+                        distance > 12f &&
+                        stillMs >= needStillMs &&
+                        !Mouse.isUsingProjectile() &&
+                        (oppHasBow || allowFake) &&
+                        (now - lastSwordBlock) > 900
+
+                    if (readyToStartBlock) {
+                        val dur = if (oppHasBow)
+                            RandomUtils.randomIntInRange(780, 1050)
+                        else
+                            RandomUtils.randomIntInRange(650, 900)
+                        holdBlockUntil = now + dur
+                        lastSwordBlock = now
+                        Mouse.rClick(dur)
+
+                        // Évitement de flèches : injecter un strafe court et aléatoire
+                        if (oppHasBow && distance > 10f) {
+                            if (now - lastStrafeSwitch > 220) {
+                                if (RandomUtils.randomIntInRange(0, 1) == 0) strafeDir = -strafeDir
+                                lastStrafeSwitch = now
+                            }
+                        }
+                    } else if (Mouse.rClickDown) {
+                        // sécurité : ne jamais rester bloqué si les conditions ne sont plus vraies
+                        Mouse.rClickUp()
+                    }
                 }
             }
 
@@ -323,7 +381,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     val weight = if (now < cornerBreakUntil) 8 else if (distance < 4f) 7 else 5
                     if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
 
-                    randomStrafe = distance in 8.0f..15.0f
+                    // quand l’adversaire tient un arc, on autorise un strafe plus "aléatoire"
+                    randomStrafe = (distance in 8.0f..15.0f) || (oppHasBow && distance > 8.0f)
                 }
             }
 
