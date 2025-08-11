@@ -34,9 +34,9 @@ class Blitz : BotBase("/play duels_blitz_duel"), MovePriority {
         Movement.startForward()
         Movement.startJumping()
         Mouse.stopLeftAC()
-        
+
         lastKitSwitch = 0L
-        
+
         // Équiper l'épée au début
         Inventory.setInvItem("sword")
     }
@@ -73,7 +73,7 @@ class Blitz : BotBase("/play duels_blitz_duel"), MovePriority {
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val now = System.currentTimeMillis()
 
-        // Gestion des sauts - plus agressif pour le mode Blitz
+        // Sauts (Blitz un peu plus agressif)
         if (distance > 3f) {
             Movement.startJumping()
         } else {
@@ -85,34 +85,32 @@ class Blitz : BotBase("/play duels_blitz_duel"), MovePriority {
             Movement.singleJump(RandomUtils.randomIntInRange(150, 250))
         }
 
-        // Mouvement avant/arrière
+        // Avancer / reculer
         if (distance < 1.2f || (distance < 2.5f && combo >= 1)) {
             Movement.stopForward()
         } else if (!tapping) {
             Movement.startForward()
         }
 
-        // Gestion des objets/kits - spécifique au mode Blitz
+        // Gestion d’objets/kits (Blitz)
         if ((now - lastKitSwitch) > kitSwitchCooldown) {
-            // Logique pour changer d'objets selon la situation
             when {
                 distance > 8f -> {
-                    // Essayer d'utiliser un arc ou des projectiles à longue distance
+                    // Essayer arc/proj à longue distance
                     if (Inventory.setInvItem("bow")) {
                         lastKitSwitch = now
                     }
                 }
                 distance < 3f -> {
-                    // S'assurer d'avoir l'épée en combat rapproché
-                    if (!p.heldItem?.unlocalizedName?.lowercase()?.contains("sword") == true) {
+                    // S'assurer d'avoir l'épée au cac
+                    if (p.heldItem?.unlocalizedName?.lowercase()?.contains("sword") != true) {
                         Inventory.setInvItem("sword")
                         lastKitSwitch = now
                     }
                 }
                 else -> {
-                    // Distance moyenne - garder l'épée ou utiliser des objets spéciaux
+                    // Distance moyenne : objets spéciaux/potions si présents
                     if (Inventory.hasItem("potion")) {
-                        // Utiliser des potions si disponibles
                         if (p.health < 15f && RandomUtils.randomIntInRange(0, 100) < 30) {
                             Inventory.setInvItem("potion")
                             TimeUtils.setTimeout({
@@ -128,7 +126,7 @@ class Blitz : BotBase("/play duels_blitz_duel"), MovePriority {
             }
         }
 
-        // Mouvement strafe - adapté au mode Blitz (plus agressif)
+        // Strafe (Blitz plus agressif)
         val movePriority = arrayListOf(0, 0)
         var clear = false
         var randomStrafe = false
@@ -142,21 +140,18 @@ class Blitz : BotBase("/play duels_blitz_duel"), MovePriority {
         } else {
             when {
                 distance < 3f -> {
-                    // Combat rapproché - mouvement précis
                     val rotations = EntityUtils.getRotations(opp, p, false)
                     if (rotations != null) {
                         if (rotations[0] < 0) movePriority[1] += 6 else movePriority[0] += 6
                     }
                 }
                 distance < 8f -> {
-                    // Distance moyenne - strafe modéré
                     val rotations = EntityUtils.getRotations(opp, p, false)
                     if (rotations != null) {
                         if (rotations[0] < 0) movePriority[1] += 4 else movePriority[0] += 4
                     }
                 }
                 else -> {
-                    // Longue distance - strafe aléatoire
                     randomStrafe = true
                 }
             }
