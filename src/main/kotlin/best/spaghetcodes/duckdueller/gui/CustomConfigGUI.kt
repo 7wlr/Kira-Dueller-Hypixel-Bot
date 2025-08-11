@@ -228,7 +228,7 @@ class CustomConfigGUI : GuiScreen() {
 
         val cfg = DuckDueller.config ?: return y
 
-        val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo")
+        val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo", "ClassicV2", "Bow", "Blitz")
         selector("Current Bot", x, y, { cfg.currentBot }, { v ->
             cfg.currentBot = v
             DuckDueller.config?.bots?.get(v)?.let { DuckDueller.swapBot(it) }

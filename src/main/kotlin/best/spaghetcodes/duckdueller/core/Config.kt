@@ -2,6 +2,8 @@ package best.spaghetcodes.duckdueller.core
 
 import best.spaghetcodes.duckdueller.DuckDueller
 import best.spaghetcodes.duckdueller.bot.bots.*
+import best.spaghetcodes.duckdueller.bot.bots.BowDuel
+import best.spaghetcodes.duckdueller.bot.bots.ClassicV2
 import best.spaghetcodes.duckdueller.gui.CustomConfigGUI
 import gg.essential.vigilance.Vigilant
 import gg.essential.vigilance.data.Property
@@ -16,7 +18,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         name = "Current Bot",
         description = "The bot you want to use",
         category = "General",
-        options = ["Sumo", "Boxing", "Classic", "OP", "Combo"]
+        options = ["Sumo", "Boxing", "Classic", "OP", "Combo", "ClassicV2", "Bow", "Blitz"]
     )
     var currentBot = 0
 
@@ -134,7 +136,16 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
     @Property(type = PropertyType.SWITCH, name = "Boxing Fish", description = "Switch between the sword and the fish in boxing.", category = "Misc")
     var boxingFish = false
 
-    val bots = mapOf(0 to Sumo(), 1 to Boxing(), 2 to Classic(), 3 to OP(), 4 to Combo())
+    val bots = mapOf(
+        0 to Sumo(), 
+        1 to Boxing(), 
+        2 to Classic(), 
+        3 to OP(), 
+        4 to Combo(),
+        5 to ClassicV2(),
+        6 to BowDuel(),
+        7 to Blitz()
+    )
 
     init {
         addDependency("webhookURL", "sendWebhookMessages")
