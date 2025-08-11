@@ -91,7 +91,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var parryFromBow = false
     private var parryExtendedUntil = 0L
 
-    // garde-fou anti-reswitch pendant un lancer rod
+    // anti-reswitch pendant un lancer rod
     private var forceKeepRodUntil = 0L
 
     override fun onGameStart() {
@@ -183,7 +183,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (combo >= 3) Movement.clearLeftRight()
     }
 
-    // Lancer rod confirmé, robuste sous KB vertical en mêlée
+    // Lancer rod confirmé + "double-trigger" en mêlée/KB vertical
     private fun castRodConfirmed(distanceNow: Float) {
         val now = System.currentTimeMillis()
         Mouse.stopLeftAC()
@@ -195,22 +195,22 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         projectileKind = KIND_ROD
 
         val beingComboedClose = (mc.thePlayer != null && mc.thePlayer.hurtTime > 0 && distanceNow < 3.0f)
-        val ppu = if (beingComboedClose) 120L else 100L // un peu plus large en combo vertical
+        val veryClose = distanceNow < 2.9f || beingComboedClose
+        val ppu = if (beingComboedClose) 120L else 100L
         pendingProjectileUntil = now + ppu
         actionLockUntil = now + clickMs + settleAfter + 120
         projectileGraceUntil = actionLockUntil
 
         Inventory.setInvItem("rod")
 
-        // Si le client n'affiche pas la rod tout de suite OU si on est en KB vertical proche,
-        // on décale le clic d'UN tick pour garantir la prise en compte.
         val heldNow = mc.thePlayer?.heldItem
         val rodAlreadyHeld = heldNow != null && heldNow.unlocalizedName.lowercase().contains("rod")
-        val delay = if (!rodAlreadyHeld || beingComboedClose) 50 else 0
+        val delay = if (!rodAlreadyHeld || beingComboedClose) 50 else 0 // 1 tick si nécessaire
 
-        // Empêche tout reswitch automatique pendant la fenêtre
+        // Empêche tout reswitch auto pendant l’action
         forceKeepRodUntil = now + delay + clickMs + 180L
 
+        // 1) clic principal
         if (delay == 0) {
             Mouse.rClick(clickMs)
         } else {
@@ -219,6 +219,19 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             TimeUtils.setTimeout({ Mouse.rClick(clickMs) }, 50)
         }
 
+        // 2) "backup click" (seulement très proche / combo vertical) → fiabilise le 10% restant
+        if (veryClose) {
+            val backupDelay = delay + 50 // toujours au tick suivant du clic principal
+            TimeUtils.setTimeout({
+                val held = mc.thePlayer?.heldItem
+                // On rejoue un micro-clic uniquement si on tient encore la rod
+                if (held != null && held.unlocalizedName.lowercase().contains("rod")) {
+                    Mouse.rClick(RandomUtils.randomIntInRange(55, 75))
+                }
+            }, backupDelay)
+        }
+
+        // Retour épée après court temps de vol
         TimeUtils.setTimeout({
             Inventory.setInvItem("sword")
             Mouse.setUsingProjectile(false)
@@ -282,7 +295,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val bowDrawLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
         val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
 
-        // ANNULATION SEULEMENT POUR L’ARC (ne jamais couper la rod)
+        // Annuler l’arc au contact (ne JAMAIS couper la rod)
         if (projectileActive && Mouse.rClickDown) {
             if (projectileKind == KIND_BOW && distance < bowCancelCloseDist) {
                 Mouse.rClickUp()
@@ -355,7 +368,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             Movement.startForward()
         }
 
-        // Pas de reswitch épée si projectile actif/pending/lock OU pendant le garde-fou rod
+        // Pas de reswitch épée si projectile actif/pending/lock OU pendant garde-fou rod
         if (!projectileActive && now >= rodLockUntil && !Mouse.rClickDown && now >= projectileGraceUntil && now >= forceKeepRodUntil) {
             if (distance < 1.5f && p.heldItem != null && !p.heldItem.unlocalizedName.lowercase().contains("sword")) {
                 Inventory.setInvItem("sword")
