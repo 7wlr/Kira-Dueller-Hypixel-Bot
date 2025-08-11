@@ -1,6 +1,5 @@
 package best.spaghetcodes.duckdueller.bot.bots
 
-import best.spaghetcodes.duckdueller.DuckDueller
 import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.StateManager
 import best.spaghetcodes.duckdueller.bot.features.*
@@ -12,7 +11,6 @@ import best.spaghetcodes.duckdueller.utils.*
 import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
 import java.util.Random
-import kotlin.math.floor
 
 class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
@@ -194,22 +192,16 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                         if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
                         else movePriority[1] += 4
                     } else {
-                        if (distance in 15.0f..8.0f) {
-                            randomStrafe = true
-                        } else {
-                            randomStrafe = false
-                            if (opponent() != null && opponent()!!.heldItem != null &&
-                                (opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow") ||
-                                 opponent()!!.heldItem.unlocalizedName.lowercase().contains("rod"))) {
-                                randomStrafe = true
-                                if (distance < 15f) Movement.stopJumping()
-                            } else if (distance < 8f) {
-                                val swap = floor(combo.toDouble() / RandomUtils.randomIntInRange(3, 6).toDouble())
-                                val rotations = EntityUtils.getRotations(opponent()!!, mc.thePlayer, false)
-                                if (rotations != null) {
-                                    if (rotations[0] < 0) movePriority[1] += 5 else movePriority[0] += 5
-                                }
+                        if (distance < 8f) {
+                            val rotations = EntityUtils.getRotations(opponent()!!, mc.thePlayer, false)
+                            if (rotations != null) {
+                                if (rotations[0] < 0) movePriority[1] += 5 else movePriority[0] += 5
                             }
+                        } else {
+                            randomStrafe = (opponent()!!.heldItem != null &&
+                                (opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow") ||
+                                 opponent()!!.heldItem.unlocalizedName.lowercase().contains("rod")))
+                            if (randomStrafe && distance < 15f) Movement.stopJumping()
                         }
                     }
                 }
