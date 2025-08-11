@@ -7,12 +7,16 @@ import best.spaghetcodes.duckdueller.utils.TimeUtils
 import net.minecraft.client.Minecraft
 
 /**
- * Canne Hypixel Classic :
- * - Switch → léger pré-délai → clic droit bref (lancer) → court temps de vol → retour épée.
- * - Pas d’auto-CPS ici.
+ * Canne (Hypixel Classic/OP)
+ * Deux voies :
+ *  - useRod(): chemin "safe" (petit pré-délai) — historiquement bon pour OP
+ *  - useRodImmediate(): chemin immédiat (zéro délai) — pour close/mid range agressif
  */
 interface Rod {
 
+    /**
+     * Chemin "safe" conservé (petit pré-délai).
+     */
     fun useRod() {
         if (Mouse.isUsingProjectile()) return
 
@@ -43,5 +47,31 @@ interface Rod {
                 }, RandomUtils.randomIntInRange(80, 140))
             }, clickMs + settleAfter)
         }, preDelay)
+    }
+
+    /**
+     * Chemin "immédiat" : switch ➜ clic droit tout de suite (zéro délai).
+     * Idéal à très courte distance pour éviter que le clic ne soit "mangé".
+     */
+    fun useRodImmediate() {
+        if (Mouse.isUsingProjectile()) return
+
+        Mouse.stopLeftAC()
+        Mouse.setUsingProjectile(true)
+
+        val clickMs = RandomUtils.randomIntInRange(80, 110)
+        val settleAfter = RandomUtils.randomIntInRange(260, 380)
+
+        // Switch instant + clic droit immédiat
+        Inventory.setInvItem("rod")
+        Mouse.rClick(clickMs)
+
+        // Retour épée après court temps de vol
+        TimeUtils.setTimeout({
+            Inventory.setInvItem("sword")
+            TimeUtils.setTimeout({
+                Mouse.setUsingProjectile(false)
+            }, RandomUtils.randomIntInRange(80, 140))
+        }, clickMs + settleAfter)
     }
 }
