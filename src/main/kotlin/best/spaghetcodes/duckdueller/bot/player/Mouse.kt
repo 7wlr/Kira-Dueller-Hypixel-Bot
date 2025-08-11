@@ -54,7 +54,6 @@ object Mouse {
     }
 
     fun stopLeftAC() {
-        // no need to check for toggled state here
         leftAC = false
     }
 
@@ -87,7 +86,7 @@ object Mouse {
 
     fun setRunningAway(runningAway: Boolean) {
         _runningAway = runningAway
-        runningRotations = null // make sure to clear this, otherwise running away gets buggy asf
+        runningRotations = null
     }
 
     fun isRunningAway(): Boolean {
@@ -123,7 +122,7 @@ object Mouse {
     }
 
     @SubscribeEvent
-    fun onTick(ev: TickEvent.ClientTickEvent) {
+    fun onTick(_: TickEvent.ClientTickEvent) {
         if (DuckDueller.mc.thePlayer != null && DuckDueller.bot?.toggled() == true) {
             if (leftAC) {
                 leftACFunc()
@@ -172,19 +171,11 @@ object Mouse {
                 val maxRotV = (DuckDueller.config?.lookSpeedVertical ?: 5).toFloat() * factor
 
                 if (abs(dyaw) > maxRotH) {
-                    dyaw = if (dyaw > 0) {
-                        maxRotH
-                    } else {
-                        -maxRotH
-                    }
+                    dyaw = if (dyaw > 0) maxRotH else -maxRotH
                 }
 
                 if (abs(dpitch) > maxRotV) {
-                    dpitch = if (dpitch > 0) {
-                        maxRotV
-                    } else {
-                        -maxRotV
-                    }
+                    dpitch = if (dpitch > 0) maxRotV else -maxRotV
                 }
 
                 DuckDueller.mc.thePlayer.rotationYaw += dyaw
@@ -192,5 +183,4 @@ object Mouse {
             }
         }
     }
-
 }
