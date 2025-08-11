@@ -122,7 +122,8 @@ object Mouse {
     }
 
     @SubscribeEvent
-    fun onTick(_: TickEvent.ClientTickEvent) {
+    @Suppress("UNUSED_PARAMETER")
+    fun onTick(event: TickEvent.ClientTickEvent) {
         if (DuckDueller.mc.thePlayer != null && DuckDueller.bot?.toggled() == true) {
             if (leftAC) {
                 leftACFunc()
