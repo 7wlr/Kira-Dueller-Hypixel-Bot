@@ -179,32 +179,40 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (combo >= 3) Movement.clearLeftRight()
     }
 
-    // Lancer rod très rapide : 0 tick par défaut, 1 tick si < 3.6 blocs (fiabilise le switch)
-    private fun castRodQuick(distance: Float) {
+    // Lancer rod “confirmé” : clic immédiat si la rod est déjà en main,
+    // sinon on décale le clic d’UN seul tick (≈50 ms) pour éviter que le client mange l’input
+    private fun castRodConfirmed() {
         val now = System.currentTimeMillis()
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(true)
-        val preDelay = if (distance < 3.6f) 50 else 0 // 1 tick seulement si très proche
-        pendingProjectileUntil = now + 60L
+
         val clickMs = RandomUtils.randomIntInRange(80, 110)
         val settleAfter = RandomUtils.randomIntInRange(260, 380)
 
         projectileKind = KIND_ROD
-        actionLockUntil = now + preDelay + clickMs + settleAfter + 100
-        projectileGraceUntil = now + preDelay + clickMs + settleAfter + 120
+        pendingProjectileUntil = now + 60L
+        actionLockUntil = now + clickMs + settleAfter + 120
+        projectileGraceUntil = actionLockUntil
 
         Inventory.setInvItem("rod")
-        if (preDelay == 0) {
+
+        val heldNow = mc.thePlayer?.heldItem
+        val haveRod = heldNow != null && heldNow.unlocalizedName.lowercase().contains("rod")
+        val delay = if (haveRod) 0 else 50 // 1 tick seulement si nécessaire
+
+        if (delay == 0) {
             Mouse.rClick(clickMs)
         } else {
-            TimeUtils.setTimeout({ Mouse.rClick(clickMs) }, preDelay)
+            actionLockUntil += 50
+            projectileGraceUntil += 50
+            TimeUtils.setTimeout({ Mouse.rClick(clickMs) }, 50)
         }
 
         TimeUtils.setTimeout({
             Inventory.setInvItem("sword")
             Mouse.setUsingProjectile(false)
             projectileKind = KIND_NONE
-        }, preDelay + clickMs + settleAfter)
+        }, delay + clickMs + settleAfter)
     }
 
     override fun onTick() {
@@ -263,6 +271,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val bowDrawLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
         val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
 
+        // n’annule l’arc qu’en contact
         if (projectileActive && Mouse.rClickDown) {
             if (distance < bowCancelCloseDist) {
                 Mouse.rClickUp()
@@ -274,7 +283,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Parade épée
+        // Parade épée (évite les parades “gratuites” au tout début si l’adversaire est juste immobile et très loin)
         if (holdingSword) {
             if (Mouse.rClickDown) {
                 val movingHard = (!isStill && !(oppHasBow && bowSlowFrames >= bowSlowFramesNeeded)) || approaching
@@ -291,15 +300,16 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             } else {
                 val sinceStart = now - gameStartAt
+                val stillButFar = isStill && distance > 16f
                 val canStartParry =
-                    sinceStart > 1500 &&
+                    sinceStart > 2000 &&                   // pas de micro-parade trop tôt
                     distance >= parryMinDist &&
-                    (isStill || bowDrawLikely) &&
+                    ((isStill && distance <= 16f) || bowDrawLikely) && // immobile mais pas trop loin, OU arc probable
                     !projectileActive &&
                     WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
                     (now - lastSwordBlock) > parryCooldownMs
 
-                if (canStartParry) {
+                if (canStartParry && !stillButFar) {
                     if (RandomUtils.randomIntInRange(0, 99) < 65) {
                         val dur = RandomUtils.randomIntInRange(parryHoldMinMs.toInt(), parryHoldMaxMs.toInt())
                         holdBlockUntil = now + dur
@@ -355,19 +365,20 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 lastRodUse = now
                 pendingProjectileUntil = now + 60L
                 actionLockUntil = now + lockMs + 100
-                castRodQuick(distance)
+                castRodConfirmed()
                 return
             }
 
-            // (B) Anti-rod (inclut courte distance approchante)
+            // (B) Anti-rod (inclut courte distance : seuil abaissé à 2.4f pour “melee reset” fiable)
             if (cdOK &&
-                distance in 3.0f..5.2f &&
+                distance in 2.4f..5.2f &&
                 !EntityUtils.entityFacingAway(p, opp) &&
                 (approaching || distance <= 3.5f) &&
                 combo <= 1 &&
                 now >= rodLockUntil) {
 
                 val lockMs = when {
+                    distance < 3.0f -> RandomUtils.randomIntInRange(220, 280)
                     distance < 3.6f -> RandomUtils.randomIntInRange(240, 300)
                     distance < 4.6f -> RandomUtils.randomIntInRange(300, 360)
                     else            -> RandomUtils.randomIntInRange(340, 420)
@@ -376,7 +387,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 lastRodUse = now
                 pendingProjectileUntil = now + 60L
                 actionLockUntil = now + lockMs + 100
-                castRodQuick(distance)
+                castRodConfirmed()
                 return
             }
 
@@ -393,7 +404,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 lastRodUse = now
                 pendingProjectileUntil = now + 60L
                 actionLockUntil = now + lockMs + 100
-                castRodQuick(distance)
+                castRodConfirmed()
                 return
             }
 
@@ -405,7 +416,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     pendingProjectileUntil = now + 60L
                     actionLockUntil = now + (fullDrawMsMax + 100)
                     projectileKind = KIND_BOW
-                    useBow(distance) { shotsFired++ }
+                    useBow(d = distance) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                     return
                 }
