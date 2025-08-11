@@ -22,8 +22,8 @@ object WebHook {
 
         println("Sending webhook with body...")
         println(body.toString())
-        val url = URL(url)
-        val conn = url.openConnection() as HttpsURLConnection
+        val endpoint = URL(url)
+        val conn = endpoint.openConnection() as HttpsURLConnection
         try {
             conn.addRequestProperty("Content-Type", "application/json")
             conn.addRequestProperty("User-Agent", "Duck-Dueller-Webhook")
@@ -42,7 +42,6 @@ object WebHook {
             println(conn.responseMessage)
             println(conn.errorStream)
             e.printStackTrace()
-            // just print all the messages
         }
     }
 
@@ -90,5 +89,4 @@ object WebHook {
         obj.addProperty("icon_url", icon)
         return obj
     }
-
 }
