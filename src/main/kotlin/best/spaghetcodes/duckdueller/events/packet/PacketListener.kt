@@ -12,36 +12,36 @@ class PacketListener : ChannelDuplexHandler() {
 
     @Throws(Exception::class)
     override fun channelRead(ctx: ChannelHandlerContext, msg: Any) {
-        var msg: Any? = msg
+        var obj: Any? = msg
         var get = true
 
-        if (msg is Packet<*>) {
-            val inPacket = (msg as Packet<*>?)?.let { PacketEvent.Incoming(it) }
+        if (obj is Packet<*>) {
+            val inPacket = (obj as Packet<*>?)?.let { PacketEvent.Incoming(it) }
             MinecraftForge.EVENT_BUS.post(inPacket)
 
             if (inPacket?.isCanceled == true) {
                 get = false
             }
-            msg = inPacket?.getPacket()
+            obj = inPacket?.getPacket()
         }
-        if (get) super.channelRead(ctx, msg)
+        if (get) super.channelRead(ctx, obj)
     }
 
     @Throws(Exception::class)
     override fun write(ctx: ChannelHandlerContext, msg: Any, promise: ChannelPromise) {
-        var msg: Any? = msg
+        var obj: Any? = msg
         var send = true
 
-        if (msg is Packet<*>) {
-            val outPacket = (msg as Packet<*>?)?.let { PacketEvent.Outgoing(it) }
+        if (obj is Packet<*>) {
+            val outPacket = (obj as Packet<*>?)?.let { PacketEvent.Outgoing(it) }
             MinecraftForge.EVENT_BUS.post(outPacket)
 
             if (outPacket?.isCanceled == true) {
                 send = false
             }
-            msg = outPacket?.getPacket()
+            obj = outPacket?.getPacket()
         }
-        if (send) super.write(ctx, msg, promise)
+        if (send) super.write(ctx, obj, promise)
     }
 
     @SubscribeEvent
