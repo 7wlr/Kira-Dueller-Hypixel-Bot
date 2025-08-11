@@ -34,14 +34,14 @@ class DuckDueller {
         var bot: BotBase? = null
 
         fun swapBot(b: BotBase) {
-            if (bot != null) MinecraftForge.EVENT_BUS.unregister(bot) // make sure to unregister the current bot
+            if (bot != null) MinecraftForge.EVENT_BUS.unregister(bot)
             bot = b
-            MinecraftForge.EVENT_BUS.register(bot) // register the new bot
+            MinecraftForge.EVENT_BUS.register(bot)
         }
     }
 
     @Mod.EventHandler
-    fun init(event: FMLInitializationEvent) {
+    fun init(_: FMLInitializationEvent) {
         config = Config()
         config?.preload()
 
