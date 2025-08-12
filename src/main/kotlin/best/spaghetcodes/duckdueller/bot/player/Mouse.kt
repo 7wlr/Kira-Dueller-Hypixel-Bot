@@ -28,6 +28,31 @@ object Mouse {
 
     private var splashAim = 0.0
 
+    // ---- Bow ballistic compensation (pitch) : AJOUT MINIMAL ET UTILE ----
+    private fun bowDistanceToOpponent(): Float {
+        val p = DuckDueller.mc.thePlayer ?: return 0f
+        val opp = DuckDueller.bot?.opponent() ?: return 0f
+        return EntityUtils.getDistanceNoY(p, opp)
+    }
+
+    /**
+     * Décalage vertical en degrés à appliquer quand l'arc est bandé.
+     * Valeurs empiriques pour 1.8.9/Hypixel (full draw).
+     * (note: pitch positif = on regarde vers le bas, donc on SOUSTRAIT l'offset)
+     */
+    private fun bowPitchComp(distance: Float): Float {
+        return when {
+            distance < 9f   -> 0.0f
+            distance < 12f  -> 1.0f
+            distance < 16f  -> 1.8f
+            distance < 20f  -> 2.6f
+            distance < 24f  -> 3.6f
+            distance < 28f  -> 4.8f
+            else            -> 5.8f
+        }
+    }
+    // --------------------------------------------------------------------
+
     fun leftClick() {
         if (DuckDueller.bot?.toggled() == true && DuckDueller.mc.thePlayer != null && !DuckDueller.mc.thePlayer.isUsingItem) {
             DuckDueller.mc.thePlayer.swingItem()
@@ -160,6 +185,14 @@ object Mouse {
                 val lookRand = (DuckDueller.config?.lookRand ?: 0).toDouble()
                 var dyaw = ((rotations[0] - DuckDueller.mc.thePlayer.rotationYaw) + RandomUtils.randomDoubleInRange(-lookRand, lookRand)).toFloat()
                 var dpitch = ((rotations[1] - DuckDueller.mc.thePlayer.rotationPitch) + RandomUtils.randomDoubleInRange(-lookRand, lookRand)).toFloat()
+
+                // Compensation de pitch pour l'arc (appliquée uniquement quand l'arc est bandé)
+                val bowOffset =
+                    if (rClickDown &&
+                        DuckDueller.mc.thePlayer?.heldItem?.unlocalizedName?.lowercase()?.contains("bow") == true
+                    ) bowPitchComp(bowDistanceToOpponent())
+                    else 0f
+                dpitch -= bowOffset
 
                 val factor = when (EntityUtils.getDistanceNoY(DuckDueller.mc.thePlayer, DuckDueller.bot?.opponent()!!)) {
                     in 0f..10f -> 1.0f
