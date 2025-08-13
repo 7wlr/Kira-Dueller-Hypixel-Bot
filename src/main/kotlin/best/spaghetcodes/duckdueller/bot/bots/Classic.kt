@@ -29,7 +29,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         )
     }
 
-    // Tuning
+    // -------------------- Tuning --------------------
     private val jumpEnableMaxDist = 8.0f             // seuil "proche" pour la logique saut (≤ 8)
     private val noJumpCloseDist = 2.2f
     private val fullDrawMsMin = 820
@@ -48,7 +48,14 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val bowSlowThreshold = 0.06
     private val bowSlowFramesNeeded = 3
 
-    // États
+    // --- Rod : timings & fenêtres (ajustés) ---
+    private val rodCloseMin = 2.2f                  // break-combo fiable quand on subit le KB proche
+    private val rodCloseMax = 3.6f
+    private val rodCdCloseMs = 520L                 // plus nerveux à courte portée
+    private val rodCdFarMs = 850L
+    // ------------------------------------------------
+
+    // -------------------- États ---------------------
     private var strafeDir = 1
     private var lastStrafeSwitch = 0L
     private var stagnantSince = 0L
@@ -188,7 +195,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (combo >= 3) Movement.clearLeftRight()
     }
 
-    // Lancer rod confirmé + backup click
+    // Lancer rod confirmé + backup click post-press en mêlée/KB vertical
     private fun castRodConfirmed(distanceNow: Float) {
         val now = System.currentTimeMillis()
         Mouse.stopLeftAC()
@@ -210,11 +217,12 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         val heldNow = mc.thePlayer?.heldItem
         val rodAlreadyHeld = heldNow != null && heldNow.unlocalizedName.lowercase().contains("rod")
-        val delay = if (!rodAlreadyHeld || beingComboedClose) 50 else 0
+        val delay = if (!rodAlreadyHeld || beingComboedClose) 50 else 0 // 1 tick si nécessaire
 
         // Empêche le reswitch épée pendant l’action
         forceKeepRodUntil = now + delay + clickMs + 220L
 
+        // 1) clic principal
         if (delay == 0) {
             Mouse.rClick(clickMs)
         } else {
@@ -223,6 +231,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             TimeUtils.setTimeout({ Mouse.rClick(clickMs) }, 50)
         }
 
+        // 2) backup click APRÈS la fin du clic principal (évite le chevauchement)
         if (veryClose) {
             val backupDelay = delay + clickMs + 20
             TimeUtils.setTimeout({
@@ -235,6 +244,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }, backupDelay)
         }
 
+        // Retour épée après court temps de vol
         TimeUtils.setTimeout({
             Inventory.setInvItem("sword")
             Mouse.setUsingProjectile(false)
@@ -263,7 +273,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
         lastHurtTime = ht
 
-        // --- MAJ suivi immobilité & slow-walk bow (PLACÉ AVANT LA LOGIQUE DE SAUT) ---
+        // --- MAJ immobilité & slow-walk (avant logique saut) ---
         if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
         val dx = abs(opp.posX - oppLastX)
         val dz = abs(opp.posZ - oppLastZ)
@@ -275,29 +285,16 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val isStill = stillFrames >= stillFramesNeeded
         val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
         val bowDrawLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
-        // ---------------------------------------------------------------------------
+        // -------------------------------------------------------
 
-        // --- Gestion des sauts (NOUVELLES RÈGLES) ---
+        // --- Règles de saut validées ---
         val oppAway = EntityUtils.entityFacingAway(p, opp)
         val comboed = (p.hurtTime > 0 || now < noJumpUntil)
-
-        // autoriser le saut si:
-        //  - distance > 8 (peu importe la direction)
-        //  - OU distance ≤ 8 et (ennemi de dos OU probable tir d'arc)
         val allowJumpByDistance =
             (distance > 8.0f) || (distance <= jumpEnableMaxDist && (oppAway || bowDrawLikely))
-
-        val canJump = allowJumpByDistance &&
-                !Mouse.rClickDown &&
-                now >= noJumpUntil &&
-                !projectileActive
-
-        if (!canJump || (comboed && !(distance > 8.0f))) {
-            Movement.stopJumping()
-        } else {
-            Movement.startJumping()
-        }
-        // ------------------------------------------------
+        val canJump = allowJumpByDistance && !Mouse.rClickDown && now >= noJumpUntil && !projectileActive
+        if (!canJump || (comboed && !(distance > 8.0f))) Movement.stopJumping() else Movement.startJumping()
+        // -------------------------------
 
         val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
 
@@ -313,7 +310,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Parade épée (rayon réduit, + strafe latéral anti-prédiction)
+        // Parade épée (inchangée : V1 garde sa logique avancée)
         if (holdingSword) {
             if (Mouse.rClickDown) {
                 val movingHard = (!isStill && !(oppHasBow && bowSlowFrames >= bowSlowFramesNeeded)) || approaching
@@ -384,10 +381,25 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Fenêtres rod/bow
+        // ---------------- Fenêtres rod / bow ----------------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
-            val cdOK = (now - lastRodUse) >= if (distance < 5.3f) 650 else 900
+            // (0) BREAK-COMBO : si on vient de prendre un hit et que l’ennemi est tout proche → rod immédiate
+            if (p.hurtTime > 0 &&
+                distance in rodCloseMin..rodCloseMax &&
+                !EntityUtils.entityFacingAway(p, opp) &&
+                (now - lastRodUse) >= rodCdCloseMs &&
+                now >= rodLockUntil) {
+
+                rodLockUntil = now + RandomUtils.randomIntInRange(220, 320)
+                lastRodUse = now
+                pendingProjectileUntil = now + 100L
+                actionLockUntil = now + 360
+                castRodConfirmed(distance)
+                return
+            }
+
+            val cdOK = (now - lastRodUse) >= if (distance < 5.3f) rodCdCloseMs else rodCdFarMs
 
             // (A) Anti-bow mid-range
             if (cdOK && oppHasBow && distance in 4.8f..7.2f &&
@@ -402,11 +414,11 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // (B) Anti-rod (inclut courte distance & cas combo)
+            // (B) Anti-rod / proche & combo (ajusté)
             if (cdOK &&
                 distance in 2.4f..5.2f &&
                 !EntityUtils.entityFacingAway(p, opp) &&
-                (approaching || distance <= 3.5f) &&
+                (approaching || distance <= 3.5f || p.hurtTime > 0) &&
                 combo <= 1 &&
                 now >= rodLockUntil) {
 
@@ -424,7 +436,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // (C) Fenêtre 5.7..6.5
+            // (C) Fenêtre 5.7..6.5 (inchangée)
             if (cdOK &&
                 distance in 5.7f..6.5f &&
                 !EntityUtils.entityFacingAway(p, opp) &&
@@ -441,7 +453,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // (D) Bow “safe”, full charge
+            // (D) Bow “safe”, full charge (inchangé)
             if ((EntityUtils.entityFacingAway(p, opp) && distance in 3.5f..30f) ||
                 (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(p, opp))) {
                 if (distance > 10f && shotsFired < maxArrows) {
@@ -455,8 +467,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
         }
+        // ----------------------------------------------------
 
-        // Anti-corner & Strafe
+        // Anti-corner & Strafe (inchangé)
         val movePriority = arrayListOf(0, 0)
         var clear = false
         var randomStrafe = false
@@ -479,7 +492,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (cornerLikely && now >= cornerBreakUntil) {
             strafeDir = -strafeDir
             cornerBreakUntil = now + RandomUtils.randomIntInRange(280, 420)
-            // singleJump aligné sur la même règle de saut
+            // singleJump aligné sur la règle de saut
             if (allowJumpByDistance && p.onGround && distance >= singleJumpMinDist) {
                 Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
             }
