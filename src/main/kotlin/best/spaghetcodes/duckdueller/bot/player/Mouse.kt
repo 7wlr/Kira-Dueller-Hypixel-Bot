@@ -28,7 +28,7 @@ object Mouse {
 
     private var splashAim = 0.0
 
-    // ---- Bow ballistic compensation (pitch) : AJOUT MINIMAL ET UTILE ----
+    // ---- Bow ballistic compensation (pitch) ----
     private fun bowDistanceToOpponent(): Float {
         val p = DuckDueller.mc.thePlayer ?: return 0f
         val opp = DuckDueller.bot?.opponent() ?: return 0f
@@ -37,21 +37,22 @@ object Mouse {
 
     /**
      * Décalage vertical en degrés à appliquer quand l'arc est bandé.
-     * Valeurs empiriques pour 1.8.9/Hypixel (full draw).
-     * (note: pitch positif = on regarde vers le bas, donc on SOUSTRAIT l'offset)
+     * Adouci à courte portée (tests terrain) ; full draw 1.8.9.
+     * (pitch positif = on regarde vers le bas, donc on SOUSTRAIT l'offset)
      */
     private fun bowPitchComp(distance: Float): Float {
         return when {
-            distance < 9f   -> 0.0f
-            distance < 12f  -> 1.0f
-            distance < 16f  -> 1.8f
-            distance < 20f  -> 2.6f
-            distance < 24f  -> 3.6f
-            distance < 28f  -> 4.8f
-            else            -> 5.8f
+            distance < 10f  -> 0.0f
+            distance < 12f  -> 0.5f
+            distance < 14f  -> 1.0f
+            distance < 16f  -> 1.5f
+            distance < 20f  -> 2.3f
+            distance < 24f  -> 3.2f
+            distance < 28f  -> 4.5f
+            else            -> 5.6f
         }
     }
-    // --------------------------------------------------------------------
+    // --------------------------------------------
 
     fun leftClick() {
         if (DuckDueller.bot?.toggled() == true && DuckDueller.mc.thePlayer != null && !DuckDueller.mc.thePlayer.isUsingItem) {
@@ -150,10 +151,7 @@ object Mouse {
     @Suppress("UNUSED_PARAMETER")
     fun onTick(event: TickEvent.ClientTickEvent) {
         if (DuckDueller.mc.thePlayer != null && DuckDueller.bot?.toggled() == true) {
-            if (leftAC) {
-                leftACFunc()
-            }
-
+            if (leftAC) leftACFunc()
             if (leftClickDur > 0) {
                 leftClickDur--
             } else {
@@ -161,9 +159,7 @@ object Mouse {
             }
         }
         if (DuckDueller.mc.thePlayer != null && DuckDueller.bot?.toggled() == true && tracking && DuckDueller.bot?.opponent() != null) {
-            if (_runningAway) {
-                _usingProjectile = false
-            }
+            if (_runningAway) _usingProjectile = false
             var rotations = EntityUtils.getRotations(DuckDueller.mc.thePlayer, DuckDueller.bot?.opponent(), false)
 
             if (rotations != null) {
@@ -176,9 +172,7 @@ object Mouse {
                 }
 
                 if (_usingPotion) {
-                    if (splashAim == 0.0) {
-                        splashAim = RandomUtils.randomDoubleInRange(80.0, 90.0)
-                    }
+                    if (splashAim == 0.0) splashAim = RandomUtils.randomDoubleInRange(80.0, 90.0)
                     rotations[1] = splashAim.toFloat()
                 }
 
@@ -186,7 +180,7 @@ object Mouse {
                 var dyaw = ((rotations[0] - DuckDueller.mc.thePlayer.rotationYaw) + RandomUtils.randomDoubleInRange(-lookRand, lookRand)).toFloat()
                 var dpitch = ((rotations[1] - DuckDueller.mc.thePlayer.rotationPitch) + RandomUtils.randomDoubleInRange(-lookRand, lookRand)).toFloat()
 
-                // Compensation de pitch pour l'arc (appliquée uniquement quand l'arc est bandé)
+                // Compensation de pitch quand l'arc est bandé
                 val bowOffset =
                     if (rClickDown &&
                         DuckDueller.mc.thePlayer?.heldItem?.unlocalizedName?.lowercase()?.contains("bow") == true
@@ -204,13 +198,8 @@ object Mouse {
                 val maxRotH = (DuckDueller.config?.lookSpeedHorizontal ?: 10).toFloat() * factor
                 val maxRotV = (DuckDueller.config?.lookSpeedVertical ?: 5).toFloat() * factor
 
-                if (abs(dyaw) > maxRotH) {
-                    dyaw = if (dyaw > 0) maxRotH else -maxRotH
-                }
-
-                if (abs(dpitch) > maxRotV) {
-                    dpitch = if (dpitch > 0) maxRotV else -maxRotV
-                }
+                if (abs(dyaw) > maxRotH) dyaw = if (dyaw > 0) maxRotH else -maxRotH
+                if (abs(dpitch) > maxRotV) dpitch = if (dpitch > 0) maxRotV else -maxRotV
 
                 DuckDueller.mc.thePlayer.rotationYaw += dyaw
                 DuckDueller.mc.thePlayer.rotationPitch += dpitch
