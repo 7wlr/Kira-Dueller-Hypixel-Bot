@@ -55,7 +55,7 @@ class DuckDueller {
         MinecraftForge.EVENT_BUS.register(LobbyMovement)
         MinecraftForge.EVENT_BUS.register(KeyBindings)
 
-        // Cast sûr : même si quelqu’un casse le typage de la map bots, on retombe sur Sumo proprement
+        // Cast sûr + fallback Sumo : élimine l'erreur 'Any but BotBase' ici.
         val idx = config?.currentBot ?: 0
         val chosen = (config?.bots?.get(idx) as? BotBase) ?: Sumo()
         swapBot(chosen)
