@@ -135,8 +135,8 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
     @Property(type = PropertyType.SWITCH, name = "Boxing Fish", description = "Switch between the sword and the fish in boxing.", category = "Misc")
     var boxingFish = false
 
-    // IMPORTANT : typer explicitement pour éviter Map<Int, Any>
-    val bots: Map<Int, BotBase> = mapOf(
+    // --- Typage explicite + ordre conservé (utile pour l'UI) ---
+    val bots: Map<Int, BotBase> = linkedMapOf(
         0 to Sumo(),
         1 to Boxing(),
         2 to Classic(),
@@ -146,6 +146,9 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         6 to BowDuel(),
         7 to Blitz()
     )
+
+    /** Accès typé et sûr depuis le reste du code (élimine tout Any aux call-sites). */
+    fun getBot(idx: Int): BotBase? = bots[idx]
 
     init {
         addDependency("webhookURL", "sendWebhookMessages")
@@ -159,10 +162,9 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         addDependency("dodgeLostTo", "enableDodging")
         addDependency("dodgeNoStats", "enableDodging")
 
+        // Toujours utiliser getBot ici -> pas d'Any
         registerListener("currentBot") { idx: Int ->
-            DuckDueller.config?.bots?.get(idx)?.let { anyBot ->
-                (anyBot as? BotBase)?.let { DuckDueller.swapBot(it) }
-            }
+            getBot(idx)?.let { DuckDueller.swapBot(it) }
         }
 
         initialize()
