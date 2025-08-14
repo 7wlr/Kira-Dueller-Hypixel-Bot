@@ -1,7 +1,6 @@
 package best.spaghetcodes.duckdueller.gui
 
 import best.spaghetcodes.duckdueller.DuckDueller
-import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.Session
 import best.spaghetcodes.duckdueller.utils.ChatUtils
 import net.minecraft.client.gui.GuiButton
@@ -127,7 +126,7 @@ class CustomConfigGUI : GuiScreen() {
 
     private fun drawTabs(x: Int, y: Int) {
         var tabX = x
-        tabNames.forEachIndexed { index, name ->
+        listOf("General", "Combat", "Stats").forEachIndexed { index, name ->
             val selected = index == currentTab
             val bg = if (selected) Color(0, 240, 255, 100).rgb else Color(40, 40, 60, 100).rgb
             drawRect(tabX, y, tabX + 100, y + 25, bg)
@@ -195,47 +194,6 @@ class CustomConfigGUI : GuiScreen() {
         addHotspot(x + 286, y - 4 - scroll, 18, 18) { set(min(maxV, (v + step))) }
     }
 
-    private fun textField(label: String, x: Int, y: Int, buf: String, isFocused: Boolean, onFocus: () -> Unit, setBuf: (String) -> Unit): Int {
-        val fieldY = y - scroll
-        drawString(fontRendererObj, label, x, fieldY, -1)
-        val boxX = x + 140
-        val boxY = fieldY - 4
-        val w = 260
-        val h = 18
-        drawRect(boxX - 1, boxY - 1, boxX + w + 1, boxY + h + 1, cardShadow)
-        drawRect(boxX, boxY, boxX + w, boxY + h, cardColor)
-        val textShown = if (isFocused && (System.currentTimeMillis() / 500) % 2L == 0L) "$buf|" else buf
-        drawString(fontRendererObj, textShown, boxX + 4, boxY + 5, primaryColor)
-        addHotspot(boxX, boxY, w, h) { onFocus() }
-        return y + 20
-    }
-
-    private fun drawStatsTab(x: Int, yStart: Int): Int {
-        var y = yStart
-        drawString(fontRendererObj, "§lSESSION STATISTICS", x, y - scroll, primaryColor); y += 25
-
-        val wins = Session.wins
-        val losses = Session.losses
-        val wlr = if (losses == 0) wins.toFloat() else wins.toFloat() / losses
-        val total = wins + losses
-        val winrate = if (total == 0) 0f else (wins.toFloat() / total) * 100f
-
-        drawStatCard("WINS", x, y - scroll, wins.toString(), Color.GREEN.rgb)
-        drawStatCard("LOSSES", x + 120, y - scroll, losses.toString(), Color.RED.rgb)
-        drawStatCard("W/L RATIO", x + 240, y - scroll, String.format("%.2f", wlr), primaryColor); y += 60
-
-        drawStatCard("WIN RATE", x, y - scroll, String.format("%.1f%%", winrate), Color.CYAN.rgb)
-        drawStatCard("GAMES", x + 120, y - scroll, total.toString(), Color.YELLOW.rgb)
-
-        if (Session.startTime > 0) {
-            val minutes = max(0L, (System.currentTimeMillis() - Session.startTime) / 1000 / 60)
-            drawStatCard("TIME", x + 240, y - scroll, "${minutes}m", Color.MAGENTA.rgb)
-        }
-        y += 60
-
-        return y
-    }
-
     private fun drawGeneralTab(x: Int, yStart: Int): Int {
         var y = yStart
         drawString(fontRendererObj, "§lGENERAL SETTINGS", x, y - scroll, primaryColor); y += 25
@@ -245,9 +203,8 @@ class CustomConfigGUI : GuiScreen() {
         val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo", "ClassicV2", "Bow", "Blitz")
         selector("Current Bot", x, y, { cfg.currentBot }, { v ->
             cfg.currentBot = v
-            DuckDueller.config?.bots?.get(v)?.let { anyBot ->
-                (anyBot as? BotBase)?.let { DuckDueller.swapBot(it) }
-            }
+            // Utilise l’accès typé -> pas d’Any
+            DuckDueller.config?.getBot(v)?.let { DuckDueller.swapBot(it) }
         }, botNames); y += 24
 
         toggle("Lobby Movement", x, y, { cfg.lobbyMovement }, { cfg.lobbyMovement = it }); y += 20
@@ -271,6 +228,52 @@ class CustomConfigGUI : GuiScreen() {
             ggMsgBuf = s
         }
         number("AutoGG Delay (ms)", x, y, { cfg.ggDelay }, { cfg.ggDelay = it }, 50, 1000, 50); y += 20
+
+        return y
+    }
+
+    private fun drawCombatTab(x: Int, yStart: Int): Int {
+        var y = yStart
+        drawString(fontRendererObj, "§lCOMBAT SETTINGS", x, y - scroll, primaryColor); y += 25
+
+        val cfg = DuckDueller.config ?: return y
+
+        number("Min CPS", x, y, { cfg.minCPS }, { cfg.minCPS = it }, 6, 15, 1); y += 20
+        number("Max CPS", x, y, { cfg.maxCPS }, { cfg.maxCPS = it }, 9, 18, 1); y += 24
+        number("Horizontal Look Speed", x, y, { cfg.lookSpeedHorizontal }, { cfg.lookSpeedHorizontal = it }, 1, 50, 1); y += 20
+        number("Vertical Look Speed", x, y, { cfg.lookSpeedVertical }, { cfg.lookSpeedVertical = it }, 1, 50, 1); y += 20
+        decimal("Look Randomization", x, y, { cfg.lookRand }, { cfg.lookRand = it }, 0f, 2f, 0.05f); y += 24
+        number("Max Look Distance", x, y, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); y += 20
+        number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 24
+
+        // Option Boxing Fish ici (combat page)
+        toggle("Boxing: Use Fish", x, y, { cfg.boxingFish }, { cfg.boxingFish = it }); y += 20
+
+        return y
+    }
+
+    private fun drawStatsTab(x: Int, yStart: Int): Int {
+        var y = yStart
+        drawString(fontRendererObj, "§lSESSION STATISTICS", x, y - scroll, primaryColor); y += 25
+
+        val wins = Session.wins
+        val losses = Session.losses
+        val total = wins + losses
+        val wlr = if (losses == 0) wins.toFloat() else wins.toFloat() / losses
+        val winrate = if (total == 0) 0f else (wins.toFloat() / total) * 100f
+
+        drawStatCard("WINS", x, y - scroll, wins.toString(), Color.GREEN.rgb)
+        drawStatCard("LOSSES", x + 120, y - scroll, losses.toString(), Color.RED.rgb)
+        drawStatCard("W/L RATIO", x + 240, y - scroll, String.format("%.2f", wlr), primaryColor); y += 60
+
+        drawStatCard("WIN RATE", x, y - scroll, String.format("%.1f%%", winrate), Color.CYAN.rgb)
+        drawStatCard("GAMES", x + 120, y - scroll, total.toString(), Color.YELLOW.rgb)
+
+        if (Session.startTime > 0) {
+            val minutes = max(0L, (System.currentTimeMillis() - Session.startTime) / 1000 / 60)
+            drawStatCard("TIME", x + 240, y - scroll, "${minutes}m", Color.MAGENTA.rgb)
+        }
+        y += 60
 
         return y
     }
