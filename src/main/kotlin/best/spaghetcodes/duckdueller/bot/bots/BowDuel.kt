@@ -26,10 +26,10 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
         )
     }
 
-    // ---------- Tir ----------
+    // ---------- Tir / cadence ----------
     private var shotsFired = 0
     private var lastShot = 0L
-    private val shotCooldown = 800L                    // rythme de tir (évite le spam)
+    private val shotCooldown = 800L
 
     // Rafale -> phase d’esquive
     private var burstCount = 0
@@ -37,17 +37,22 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
     private var strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
     private var strafeFlipAt = 0L
 
-    // ---------- Pearl (1 usage) ----------
+    // Hop-shot (saut latéral avant tir)
+    private var forceStrafeDir = 1
+    private var forceStrafeUntil = 0L
+    private var shotPlannedUntil = 0L
+
+    // ---------- Pearl (1 usage, défensif) ----------
     private var pearls = 1
     private var lastPearl = 0L
-    private val pearlCooldown = 6000L                  // pas de double-usage proche
-    // -------------------------------------
+    private val pearlCooldown = 6000L
+    private val pearlEscapeDist = 5.5f
+    // ------------------------------------------------
 
     override fun onGameStart() {
         Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
-        Movement.startJumping()
         Mouse.stopLeftAC()
 
         shotsFired = 0
@@ -59,6 +64,10 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
 
         pearls = 1
         lastPearl = 0L
+
+        forceStrafeDir = 1
+        forceStrafeUntil = 0L
+        shotPlannedUntil = 0L
 
         // Équiper l'arc immédiatement
         Inventory.setInvItem("bow")
@@ -77,6 +86,8 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
             evasionUntil = 0L
             pearls = 1
             lastPearl = 0L
+            forceStrafeUntil = 0L
+            shotPlannedUntil = 0L
         }, RandomUtils.randomIntInRange(200, 400))
     }
 
@@ -96,70 +107,84 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
             Inventory.setInvItem("bow")
         }
 
-        // Petits sauts anti-bloc
-        if (WorldUtils.blockInFront(p, 2f, 0.5f) != Blocks.air && p.onGround) {
+        // Anti-bloc : micro-saut si un bloc devant
+        if (WorldUtils.blockInFront(p, 2f, 0.5f) != Blocks.air && p.onGround && !Mouse.rClickDown) {
             Movement.singleJump(RandomUtils.randomIntInRange(140, 220))
         }
 
-        // --------- PEARL (1 usage agressif) ----------
-        // Use-case simple et efficace : close gap si l’ennemi est très loin et de dos
+        // Ne JAMAIS sauter pendant qu'on bande l'arc (précision)
+        if (Mouse.rClickDown) {
+            Movement.stopJumping()
+        }
+
+        // --------- PEARL (défensif : s'éloigner quand trop proche) ----------
         if (pearls > 0 &&
             (now - lastPearl) > pearlCooldown &&
-            distance > 20f &&
-            EntityUtils.entityFacingAway(opp, p) &&
+            distance < pearlEscapeDist &&
             !Mouse.isUsingProjectile() &&
             !Mouse.rClickDown) {
 
-            // on jette la perle, puis on revient à l'arc
             lastPearl = now
             Mouse.stopLeftAC()
             Inventory.setInvItem("pearl")
+
+            // Se retourner automatiquement le temps du lancer
+            Mouse.setRunningAway(true)
             Mouse.setUsingProjectile(true)
 
-            val clickDur = RandomUtils.randomIntInRange(100, 140)
+            val clickDur = RandomUtils.randomIntInRange(95, 125)
+            // Lancer la perle après avoir regardé à l'opposé  (un tick ~50ms)
             TimeUtils.setTimeout({
                 Mouse.rClick(clickDur)
                 TimeUtils.setTimeout({
                     Mouse.setUsingProjectile(false)
+                    Mouse.setRunningAway(false)
                     Inventory.setInvItem("bow")
                     pearls--
-                }, RandomUtils.randomIntInRange(240, 320))
-            }, RandomUtils.randomIntInRange(180, 300))
-            // On laisse la main au tick suivant
+                }, RandomUtils.randomIntInRange(220, 320))
+            }, RandomUtils.randomIntInRange(70, 110))
             return
         }
-        // --------------------------------------------
+        // -------------------------------------------------------------------
 
         // --------- ÉVASION ACTIVE après rafale ----------
         val evading = now < evasionUntil
-        if (evading) {
-            // sauts & strafe alterné rapide
+        if (evading && !Mouse.rClickDown) {
             Movement.startJumping()
             if (now >= strafeFlipAt) {
                 strafeDir = -strafeDir
                 strafeFlipAt = now + RandomUtils.randomIntInRange(220, 360)
             }
-        } else {
-            // Pas d’évasion : jump “rythmé” à distance
-            if (distance > 10f) {
-                Movement.startJumping()
-            } else if (distance > 5f) {
-                if (RandomUtils.randomIntInRange(0, 100) < 18) {
-                    Movement.singleJump(RandomUtils.randomIntInRange(160, 240))
-                } else {
-                    Movement.stopJumping()
-                }
-            } else {
-                Movement.stopJumping()
-            }
+        } else if (!evading && !Mouse.rClickDown) {
+            // Pas de saut inutile hors évitement/hop-shot
+            Movement.stopJumping()
         }
         // -----------------------------------------------
 
-        // --------- Tir à l’arc (full draw) ----------
-        // La compensation de pitch se fait dans Mouse.kt pendant le bandage (rClickDown).
-        if (!Mouse.isUsingProjectile() && (now - lastShot) > shotCooldown) {
+        // --------- Tir à l’arc orchestré : HOP puis SHOOT ----------
+        // 1) Si un tir est planifié, on le déclenche au bon moment (après le saut latéral)
+        if (shotPlannedUntil != 0L && now >= shotPlannedUntil && !Mouse.isUsingProjectile()) {
+            shotPlannedUntil = 0L
+            // Tir FULL (Mouse.kt gère la compensation de pitch pendant le bandage)
+            useBowImmediateFull {
+                shotsFired++
+                lastShot = System.currentTimeMillis()
+                burstCount++
 
-            // cadence de tir selon distance
+                // Après 3–4 flèches consécutives -> petite phase d'évasion latérale
+                if (burstCount >= RandomUtils.randomIntInRange(3, 4)) {
+                    evasionUntil = lastShot + RandomUtils.randomIntInRange(900, 1200)
+                    strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
+                    strafeFlipAt = lastShot + RandomUtils.randomIntInRange(220, 360)
+                    burstCount = 0
+                }
+            }
+            // on laisse la main
+            return
+        }
+
+        // 2) Sinon, décider de lancer un hop-shot (alternance gauche/droite), puis shooter
+        if (!Mouse.isUsingProjectile() && (now - lastShot) > shotCooldown && shotPlannedUntil == 0L) {
             val shootProb = when {
                 distance > 24f -> 100
                 distance > 16f -> 85
@@ -169,37 +194,37 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
             }
 
             if (RandomUtils.randomIntInRange(0, 99) < shootProb) {
-                // Tir immédiat avec charge complète (fourni par Bow.kt)
-                useBowImmediateFull {
-                    shotsFired++
-                    lastShot = System.currentTimeMillis()
-                    burstCount++
+                // On force un strafe latéral pendant la durée du hop
+                val hopDur = RandomUtils.randomIntInRange(150, 220)
+                forceStrafeDir = -forceStrafeDir
+                forceStrafeUntil = now + hopDur
 
-                    // Déclencher l’évasion après 3–4 flèches consécutives
-                    if (burstCount >= RandomUtils.randomIntInRange(3, 4)) {
-                        evasionUntil = lastShot + RandomUtils.randomIntInRange(900, 1200)
-                        strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
-                        strafeFlipAt = lastShot + RandomUtils.randomIntInRange(220, 360)
-                        burstCount = 0
-                    }
-                }
-                // On laisse la main au tick suivant
+                // Petit saut latéral (pendant lequel on ne bande pas l'arc)
+                Movement.singleJump(hopDur)
+
+                // Planifier le tir juste après le hop (temps pour retomber / stabiliser)
+                shotPlannedUntil = now + hopDur + RandomUtils.randomIntInRange(60, 90)
+                // Empêcher une re-entrée prématurée de la logique de tir
+                lastShot = shotPlannedUntil
                 return
             }
         } else if ((now - lastShot) > (shotCooldown + 700)) {
-            // si on ne tire pas depuis un moment, on “casse” la rafale
+            // Si on ne tire pas depuis un moment, on casse la rafale
             burstCount = 0
         }
-        // --------------------------------------------
+        // ------------------------------------------------------------
 
         // --------- Strafe / déplacement ----------
-        // Pendant evasion : on impose un strafe latéral fort,
-        // sinon on laisse le randomStrafe bosser.
         val movePriority = arrayListOf(0, 0)
         var clear = false
         var randomStrafe = false
 
-        if (evading) {
+        // Strafe forcé pendant hop-shot
+        if (now < forceStrafeUntil) {
+            val w = 10
+            if (forceStrafeDir < 0) movePriority[0] += w else movePriority[1] += w
+            randomStrafe = false
+        } else if (now < evasionUntil) {
             val w = if (distance > 14f) 9 else 7
             if (strafeDir < 0) movePriority[0] += w else movePriority[1] += w
             randomStrafe = false
@@ -215,8 +240,9 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
             }
         }
 
-        // Gestion avant/arrière simple : ne pas coller trop
-        if (distance < 6f) {
+        // Gestion avant/arrière simple : rester à distance d’arc
+        if (distance < 6f && pearls == 0) {
+            // si on n'a plus de perle, on évite de coller
             Movement.stopForward()
         } else {
             Movement.startForward()
