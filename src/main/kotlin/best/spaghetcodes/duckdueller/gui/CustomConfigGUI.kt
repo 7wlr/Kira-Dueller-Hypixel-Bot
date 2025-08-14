@@ -1,7 +1,6 @@
 package best.spaghetcodes.duckdueller.gui
 
 import best.spaghetcodes.duckdueller.DuckDueller
-import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.Session
 import best.spaghetcodes.duckdueller.utils.ChatUtils
 import net.minecraft.client.gui.GuiButton
@@ -222,8 +221,19 @@ class CustomConfigGUI : GuiScreen() {
         val textShown = if (isFocused && (System.currentTimeMillis() / 500) % 2L == 0L) "$buf|" else buf
         drawString(fontRendererObj, textShown, boxX + 4, boxY + 5, primaryColor)
         addHotspot(boxX, boxY, w, h) { onFocus() }
-        // Gestion de la saisie dans keyTyped()
         return y + 20
+    }
+
+    /** Petite carte “stat” pour l’onglet Stats. */
+    private fun drawStatCard(title: String, x: Int, y: Int, value: String, color: Int) {
+        drawRect(x + 2, y + 2, x + 102, y + 52, cardShadow)
+        drawRect(x, y, x + 100, y + 50, cardColor)
+        drawString(fontRendererObj, title, x + 5, y + 5, Color.GRAY.rgb)
+        GL11.glPushMatrix()
+        GL11.glTranslatef((x + 50).toFloat(), (y + 25).toFloat(), 0f)
+        GL11.glScalef(1.5f, 1.5f, 1f)
+        drawCenteredString(fontRendererObj, value, 0, 0, color)
+        GL11.glPopMatrix()
     }
 
     // ----------------- Tabs content -----------------
