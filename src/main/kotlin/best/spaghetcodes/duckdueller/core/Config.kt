@@ -137,7 +137,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
     @Property(type = PropertyType.SWITCH, name = "Boxing Fish", description = "Switch between the sword and the fish in boxing.", category = "Misc")
     var boxingFish = false
 
-    // ⬇️ Typage explicite pour éviter l'Any
+    // --- Typage explicite pour éviter Map<Int, Any> ---
     val bots: Map<Int, BotBase> = mapOf(
         0 to Sumo(),
         1 to Boxing(),
@@ -162,8 +162,9 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         addDependency("dodgeNoStats", "enableDodging")
 
         registerListener("currentBot") { bot: Int ->
-            if (bots.keys.contains(bot)) {
-                DuckDueller.swapBot(bots[bot]!!)
+            DuckDueller.config?.bots?.get(bot)?.let { chosen ->
+                // Cast sûr : même si la map était mal typée, on évite toute erreur.
+                (chosen as? BotBase)?.let { DuckDueller.swapBot(it) }
             }
         }
 
