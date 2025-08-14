@@ -3,8 +3,6 @@ package best.spaghetcodes.duckdueller.core
 import best.spaghetcodes.duckdueller.DuckDueller
 import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.bots.*
-import best.spaghetcodes.duckdueller.bot.bots.BowDuel
-import best.spaghetcodes.duckdueller.bot.bots.ClassicV2
 import best.spaghetcodes.duckdueller.gui.CustomConfigGUI
 import gg.essential.vigilance.Vigilant
 import gg.essential.vigilance.data.Property
@@ -137,7 +135,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
     @Property(type = PropertyType.SWITCH, name = "Boxing Fish", description = "Switch between the sword and the fish in boxing.", category = "Misc")
     var boxingFish = false
 
-    // ---- Correction: typage explicite pour éviter Map<Int, Any> ----
+    // IMPORTANT : typer explicitement pour éviter Map<Int, Any>
     val bots: Map<Int, BotBase> = mapOf(
         0 to Sumo(),
         1 to Boxing(),
@@ -161,9 +159,9 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         addDependency("dodgeLostTo", "enableDodging")
         addDependency("dodgeNoStats", "enableDodging")
 
-        registerListener("currentBot") { botIdx: Int ->
-            DuckDueller.config?.bots?.get(botIdx)?.let { chosen ->
-                (chosen as? BotBase)?.let { DuckDueller.swapBot(it) }
+        registerListener("currentBot") { idx: Int ->
+            DuckDueller.config?.bots?.get(idx)?.let { anyBot ->
+                (anyBot as? BotBase)?.let { DuckDueller.swapBot(it) }
             }
         }
 
