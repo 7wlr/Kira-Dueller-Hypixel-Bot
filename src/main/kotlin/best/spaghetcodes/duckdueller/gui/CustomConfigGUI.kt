@@ -1,6 +1,7 @@
 package best.spaghetcodes.duckdueller.gui
 
 import best.spaghetcodes.duckdueller.DuckDueller
+import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.Session
 import best.spaghetcodes.duckdueller.utils.ChatUtils
 import net.minecraft.client.gui.GuiButton
@@ -69,12 +70,14 @@ class CustomConfigGUI : GuiScreen() {
         hotspots.clear()
         if (fadeIn < 1f) fadeIn = min(1f, fadeIn + 0.05f)
 
+        // Fond
         drawGradientRect(
             0, 0, width, height,
             Color(10, 10, 20, (250 * fadeIn).toInt()).rgb,
             Color(30, 10, 50, (250 * fadeIn).toInt()).rgb
         )
 
+        // Container
         val containerX = 40
         val containerY = 40
         val containerW = width - 80
@@ -86,8 +89,10 @@ class CustomConfigGUI : GuiScreen() {
 
         drawCenteredString(fontRendererObj, "§lKIRA CONFIG", width / 2, 15, primaryColor)
 
+        // Tabs
         drawTabs(containerX, containerY - 25)
 
+        // Zone scrollable
         val contentX = containerX + 20
         val contentY = containerY + 20
         val innerW = containerW - 40
@@ -113,6 +118,8 @@ class CustomConfigGUI : GuiScreen() {
         super.drawScreen(mouseX, mouseY, partialTicks)
     }
 
+    // ----------------- UI helpers -----------------
+
     private fun drawBorder(x: Int, y: Int, w: Int, h: Int, color: Int) {
         drawHorizontalLine(x, x + w, y, color)
         drawHorizontalLine(x, x + w, y + h, color)
@@ -126,7 +133,7 @@ class CustomConfigGUI : GuiScreen() {
 
     private fun drawTabs(x: Int, y: Int) {
         var tabX = x
-        listOf("General", "Combat", "Stats").forEachIndexed { index, name ->
+        tabNames.forEachIndexed { index, name ->
             val selected = index == currentTab
             val bg = if (selected) Color(0, 240, 255, 100).rgb else Color(40, 40, 60, 100).rgb
             drawRect(tabX, y, tabX + 100, y + 25, bg)
@@ -194,6 +201,33 @@ class CustomConfigGUI : GuiScreen() {
         addHotspot(x + 286, y - 4 - scroll, 18, 18) { set(min(maxV, (v + step))) }
     }
 
+    /** Champ texte simple. Retourne le nouveau Y (avec marge). */
+    private fun textField(
+        label: String,
+        x: Int,
+        y: Int,
+        buf: String,
+        isFocused: Boolean,
+        onFocus: () -> Unit,
+        setBuf: (String) -> Unit
+    ): Int {
+        val fieldY = y - scroll
+        drawString(fontRendererObj, label, x, fieldY, -1)
+        val boxX = x + 140
+        val boxY = fieldY - 4
+        val w = 260
+        val h = 18
+        drawRect(boxX - 1, boxY - 1, boxX + w + 1, boxY + h + 1, cardShadow)
+        drawRect(boxX, boxY, boxX + w, boxY + h, cardColor)
+        val textShown = if (isFocused && (System.currentTimeMillis() / 500) % 2L == 0L) "$buf|" else buf
+        drawString(fontRendererObj, textShown, boxX + 4, boxY + 5, primaryColor)
+        addHotspot(boxX, boxY, w, h) { onFocus() }
+        // Gestion de la saisie dans keyTyped()
+        return y + 20
+    }
+
+    // ----------------- Tabs content -----------------
+
     private fun drawGeneralTab(x: Int, yStart: Int): Int {
         var y = yStart
         drawString(fontRendererObj, "§lGENERAL SETTINGS", x, y - scroll, primaryColor); y += 25
@@ -203,7 +237,6 @@ class CustomConfigGUI : GuiScreen() {
         val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo", "ClassicV2", "Bow", "Blitz")
         selector("Current Bot", x, y, { cfg.currentBot }, { v ->
             cfg.currentBot = v
-            // Utilise l’accès typé -> pas d’Any
             DuckDueller.config?.getBot(v)?.let { DuckDueller.swapBot(it) }
         }, botNames); y += 24
 
@@ -218,15 +251,27 @@ class CustomConfigGUI : GuiScreen() {
         number("Requeue After No Game (s)", x, y, { cfg.rqNoGame }, { cfg.rqNoGame = it }, 15, 60, 1); y += 24
 
         toggle("Game Start Message", x, y, { cfg.sendStartMessage }, { cfg.sendStartMessage = it }); y += 20
-        y = textField("Start Message", x, y, startMsgBuf, focus == Tf.START_MSG, { focus = Tf.START_MSG }) { s ->
-            startMsgBuf = s
-        }
+        y = textField(
+            label = "Start Message",
+            x = x,
+            y = y,
+            buf = startMsgBuf,
+            isFocused = (focus == Tf.START_MSG),
+            onFocus = { focus = Tf.START_MSG },
+            setBuf = { s: String -> startMsgBuf = s }
+        )
         number("Start Message Delay (ms)", x, y, { cfg.startMessageDelay }, { cfg.startMessageDelay = it }, 50, 1000, 50); y += 24
 
         toggle("Enable AutoGG", x, y, { cfg.sendAutoGG }, { cfg.sendAutoGG = it }); y += 20
-        y = textField("AutoGG Message", x, y, ggMsgBuf, focus == Tf.GG_MSG, { focus = Tf.GG_MSG }) { s ->
-            ggMsgBuf = s
-        }
+        y = textField(
+            label = "AutoGG Message",
+            x = x,
+            y = y,
+            buf = ggMsgBuf,
+            isFocused = (focus == Tf.GG_MSG),
+            onFocus = { focus = Tf.GG_MSG },
+            setBuf = { s: String -> ggMsgBuf = s }
+        )
         number("AutoGG Delay (ms)", x, y, { cfg.ggDelay }, { cfg.ggDelay = it }, 50, 1000, 50); y += 20
 
         return y
@@ -246,7 +291,7 @@ class CustomConfigGUI : GuiScreen() {
         number("Max Look Distance", x, y, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); y += 20
         number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 24
 
-        // Option Boxing Fish ici (combat page)
+        // Option Boxing Fish dans l’onglet Combat
         toggle("Boxing: Use Fish", x, y, { cfg.boxingFish }, { cfg.boxingFish = it }); y += 20
 
         return y
@@ -278,16 +323,7 @@ class CustomConfigGUI : GuiScreen() {
         return y
     }
 
-    private fun drawStatCard(title: String, x: Int, y: Int, value: String, color: Int) {
-        drawRect(x + 2, y + 2, x + 102, y + 52, cardShadow)
-        drawRect(x, y, x + 100, y + 50, cardColor)
-        drawString(fontRendererObj, title, x + 5, y + 5, Color.GRAY.rgb)
-        GL11.glPushMatrix()
-        GL11.glTranslatef((x + 50).toFloat(), (y + 25).toFloat(), 0f)
-        GL11.glScalef(1.5f, 1.5f, 1f)
-        drawCenteredString(fontRendererObj, value, 0, 0, color)
-        GL11.glPopMatrix()
-    }
+    // ----------------- utilities -----------------
 
     override fun mouseClicked(mouseX: Int, mouseY: Int, mouseButton: Int) {
         super.mouseClicked(mouseX, mouseY, mouseButton)
