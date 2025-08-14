@@ -55,6 +55,9 @@ class DuckDueller {
         MinecraftForge.EVENT_BUS.register(LobbyMovement)
         MinecraftForge.EVENT_BUS.register(KeyBindings)
 
-        swapBot(config?.bots?.get(config?.currentBot ?: 0) ?: Sumo())
+        // Cast sûr : même si quelqu’un casse le typage de la map bots, on retombe sur Sumo proprement
+        val idx = config?.currentBot ?: 0
+        val chosen = (config?.bots?.get(idx) as? BotBase) ?: Sumo()
+        swapBot(chosen)
     }
 }
