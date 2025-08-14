@@ -1,6 +1,7 @@
 package best.spaghetcodes.duckdueller.core
 
 import best.spaghetcodes.duckdueller.DuckDueller
+import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.bots.*
 import best.spaghetcodes.duckdueller.bot.bots.BowDuel
 import best.spaghetcodes.duckdueller.bot.bots.ClassicV2
@@ -136,11 +137,12 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
     @Property(type = PropertyType.SWITCH, name = "Boxing Fish", description = "Switch between the sword and the fish in boxing.", category = "Misc")
     var boxingFish = false
 
-    val bots = mapOf(
-        0 to Sumo(), 
-        1 to Boxing(), 
-        2 to Classic(), 
-        3 to OP(), 
+    // ⬇️ Typage explicite pour éviter l'Any
+    val bots: Map<Int, BotBase> = mapOf(
+        0 to Sumo(),
+        1 to Boxing(),
+        2 to Classic(),
+        3 to OP(),
         4 to Combo(),
         5 to ClassicV2(),
         6 to BowDuel(),
