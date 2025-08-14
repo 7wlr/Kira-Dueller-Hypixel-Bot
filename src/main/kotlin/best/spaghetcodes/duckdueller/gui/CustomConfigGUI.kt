@@ -1,6 +1,7 @@
 package best.spaghetcodes.duckdueller.gui
 
 import best.spaghetcodes.duckdueller.DuckDueller
+import best.spaghetcodes.duckdueller.bot.BotBase
 import best.spaghetcodes.duckdueller.bot.Session
 import best.spaghetcodes.duckdueller.utils.ChatUtils
 import net.minecraft.client.gui.GuiButton
@@ -132,7 +133,7 @@ class CustomConfigGUI : GuiScreen() {
 
     private fun drawTabs(x: Int, y: Int) {
         var tabX = x
-        listOf("General", "Combat", "Stats").forEachIndexed { index, name ->
+        tabNames.forEachIndexed { index, name ->
             val selected = index == currentTab
             val bg = if (selected) Color(0, 240, 255, 100).rgb else Color(40, 40, 60, 100).rgb
             drawRect(tabX, y, tabX + 100, y + 25, bg)
@@ -218,7 +219,9 @@ class CustomConfigGUI : GuiScreen() {
         val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo", "ClassicV2", "Bow", "Blitz")
         selector("Current Bot", x, y, { cfg.currentBot }, { v ->
             cfg.currentBot = v
-            (DuckDueller.config?.bots?.get(v) as? best.spaghetcodes.duckdueller.bot.BotBase)?.let { DuckDueller.swapBot(it) }
+            DuckDueller.config?.bots?.get(v)?.let { anyBot ->
+                (anyBot as? BotBase)?.let { DuckDueller.swapBot(it) }
+            }
         }, botNames); y += 24
 
         toggle("Lobby Movement", x, y, { cfg.lobbyMovement }, { cfg.lobbyMovement = it }); y += 20
@@ -260,7 +263,6 @@ class CustomConfigGUI : GuiScreen() {
         number("Max Look Distance", x, y, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); y += 20
         number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 24
 
-        // Boxing fish ici
         toggle("Boxing: Use Fish", x, y, { cfg.boxingFish }, { cfg.boxingFish = it }); y += 20
 
         return y
