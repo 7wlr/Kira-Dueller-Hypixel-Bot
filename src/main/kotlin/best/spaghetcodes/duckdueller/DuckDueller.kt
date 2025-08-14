@@ -55,10 +55,9 @@ class DuckDueller {
         MinecraftForge.EVENT_BUS.register(LobbyMovement)
         MinecraftForge.EVENT_BUS.register(KeyBindings)
 
-        // Cast sûr + fallback pour éradiquer l'erreur 'Any but BotBase' ici.
+        // Utilise l’accès typé -> aucun Any ici.
         val idx = config?.currentBot ?: 0
-        val anyBot = config?.bots?.get(idx)
-        val chosen = (anyBot as? BotBase) ?: Sumo()
+        val chosen = config?.getBot(idx) ?: Sumo()
         swapBot(chosen)
     }
 }
