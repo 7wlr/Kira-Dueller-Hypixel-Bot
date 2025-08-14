@@ -125,12 +125,6 @@ class CustomConfigGUI : GuiScreen() {
         hotspots += Rect(x, y, x + w, y + h, onClick)
     }
 
-    private fun drawButton(x: Int, y: Int, w: Int, h: Int, label: String, active: Boolean = true) {
-        val bg = if (active) Color(40, 40, 60, 160).rgb else Color(60, 60, 60, 120).rgb
-        drawRect(x, y, x + w, y + h, bg)
-        drawCenteredString(fontRendererObj, label, x + w / 2, y + 6, if (active) -1 else Color(160,160,160).rgb)
-    }
-
     private fun drawTabs(x: Int, y: Int) {
         var tabX = x
         tabNames.forEachIndexed { index, name ->
@@ -145,6 +139,12 @@ class CustomConfigGUI : GuiScreen() {
             }
             tabX += 102
         }
+    }
+
+    private fun drawButton(x: Int, y: Int, w: Int, h: Int, label: String, active: Boolean = true) {
+        val bg = if (active) Color(40, 40, 60, 160).rgb else Color(60, 60, 60, 120).rgb
+        drawRect(x, y, x + w, y + h, bg)
+        drawCenteredString(fontRendererObj, label, x + w / 2, y + 6, if (active) -1 else Color(160,160,160).rgb)
     }
 
     private fun selector(label: String, x: Int, y: Int, get: () -> Int, set: (Int) -> Unit, options: List<String>) {
@@ -210,6 +210,32 @@ class CustomConfigGUI : GuiScreen() {
         return y + 20
     }
 
+    private fun drawStatsTab(x: Int, yStart: Int): Int {
+        var y = yStart
+        drawString(fontRendererObj, "§lSESSION STATISTICS", x, y - scroll, primaryColor); y += 25
+
+        val wins = Session.wins
+        val losses = Session.losses
+        val wlr = if (losses == 0) wins.toFloat() else wins.toFloat() / losses
+        val total = wins + losses
+        val winrate = if (total == 0) 0f else (wins.toFloat() / total) * 100f
+
+        drawStatCard("WINS", x, y - scroll, wins.toString(), Color.GREEN.rgb)
+        drawStatCard("LOSSES", x + 120, y - scroll, losses.toString(), Color.RED.rgb)
+        drawStatCard("W/L RATIO", x + 240, y - scroll, String.format("%.2f", wlr), primaryColor); y += 60
+
+        drawStatCard("WIN RATE", x, y - scroll, String.format("%.1f%%", winrate), Color.CYAN.rgb)
+        drawStatCard("GAMES", x + 120, y - scroll, total.toString(), Color.YELLOW.rgb)
+
+        if (Session.startTime > 0) {
+            val minutes = max(0L, (System.currentTimeMillis() - Session.startTime) / 1000 / 60)
+            drawStatCard("TIME", x + 240, y - scroll, "${minutes}m", Color.MAGENTA.rgb)
+        }
+        y += 60
+
+        return y
+    }
+
     private fun drawGeneralTab(x: Int, yStart: Int): Int {
         var y = yStart
         drawString(fontRendererObj, "§lGENERAL SETTINGS", x, y - scroll, primaryColor); y += 25
@@ -245,51 +271,6 @@ class CustomConfigGUI : GuiScreen() {
             ggMsgBuf = s
         }
         number("AutoGG Delay (ms)", x, y, { cfg.ggDelay }, { cfg.ggDelay = it }, 50, 1000, 50); y += 20
-
-        return y
-    }
-
-    private fun drawCombatTab(x: Int, yStart: Int): Int {
-        var y = yStart
-        drawString(fontRendererObj, "§lCOMBAT SETTINGS", x, y - scroll, primaryColor); y += 25
-
-        val cfg = DuckDueller.config ?: return y
-
-        number("Min CPS", x, y, { cfg.minCPS }, { cfg.minCPS = it }, 6, 15, 1); y += 20
-        number("Max CPS", x, y, { cfg.maxCPS }, { cfg.maxCPS = it }, 9, 18, 1); y += 24
-        number("Horizontal Look Speed", x, y, { cfg.lookSpeedHorizontal }, { cfg.lookSpeedHorizontal = it }, 1, 50, 1); y += 20
-        number("Vertical Look Speed", x, y, { cfg.lookSpeedVertical }, { cfg.lookSpeedVertical = it }, 1, 50, 1); y += 20
-        decimal("Look Randomization", x, y, { cfg.lookRand }, { cfg.lookRand = it }, 0f, 2f, 0.05f); y += 24
-        number("Max Look Distance", x, y, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); y += 20
-        number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 24
-
-        toggle("Boxing: Use Fish", x, y, { cfg.boxingFish }, { cfg.boxingFish = it }); y += 20
-
-        return y
-    }
-
-    private fun drawStatsTab(x: Int, yStart: Int): Int {
-        var y = yStart
-        drawString(fontRendererObj, "§lSESSION STATISTICS", x, y - scroll, primaryColor); y += 25
-
-        val wins = Session.wins
-        val losses = Session.losses
-        val wlr = if (losses == 0) wins.toFloat() else wins.toFloat() / losses
-        val total = wins + losses
-        val winrate = if (total == 0) 0f else (wins.toFloat() / total) * 100f
-
-        drawStatCard("WINS", x, y - scroll, wins.toString(), Color.GREEN.rgb)
-        drawStatCard("LOSSES", x + 120, y - scroll, losses.toString(), Color.RED.rgb)
-        drawStatCard("W/L RATIO", x + 240, y - scroll, String.format("%.2f", wlr), primaryColor); y += 60
-
-        drawStatCard("WIN RATE", x, y - scroll, String.format("%.1f%%", winrate), Color.CYAN.rgb)
-        drawStatCard("GAMES", x + 120, y - scroll, total.toString(), Color.YELLOW.rgb)
-
-        if (Session.startTime > 0) {
-            val minutes = max(0L, (System.currentTimeMillis() - Session.startTime) / 1000 / 60)
-            drawStatCard("TIME", x + 240, y - scroll, "${minutes}m", Color.MAGENTA.rgb)
-        }
-        y += 60
 
         return y
     }
