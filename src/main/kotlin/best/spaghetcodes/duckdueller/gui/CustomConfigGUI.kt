@@ -16,25 +16,20 @@ import kotlin.math.min
 class CustomConfigGUI : GuiScreen() {
 
     private var currentTab = 0
-    // Onglets : Misc supprimé, boxingFish passe dans Combat
     private val tabNames = listOf("General", "Combat", "Stats")
     private var fadeIn = 0f
 
-    // scroll
     private var scroll = 0
     private var maxScroll = 0
 
-    // couleurs
-    private val primaryColor = Color(0, 240, 255, 255).rgb  // cyan KIRA
+    private val primaryColor = Color(0, 240, 255, 255).rgb
     private val backgroundColor = Color(15, 15, 25, 240).rgb
     private val cardColor = Color(25, 25, 40, 200).rgb
     private val cardShadow = Color(10, 10, 20, 140).rgb
 
-    // zones cliquables
     private data class Rect(val x1: Int, val y1: Int, val x2: Int, val y2: Int, val onClick: () -> Unit)
     private val hotspots = mutableListOf<Rect>()
 
-    // champs texte (buffers locaux) + focus
     private enum class Tf { NONE, START_MSG, GG_MSG }
     private var focus = Tf.NONE
     private var startMsgBuf = ""
@@ -47,7 +42,6 @@ class CustomConfigGUI : GuiScreen() {
         maxScroll = 0
         Keyboard.enableRepeatEvents(true)
 
-        // init buffers depuis la config
         val cfg = DuckDueller.config
         startMsgBuf = cfg?.startMessage ?: ""
         ggMsgBuf = cfg?.ggMessage ?: ""
@@ -75,20 +69,17 @@ class CustomConfigGUI : GuiScreen() {
         hotspots.clear()
         if (fadeIn < 1f) fadeIn = min(1f, fadeIn + 0.05f)
 
-        // fond
         drawGradientRect(
             0, 0, width, height,
             Color(10, 10, 20, (250 * fadeIn).toInt()).rgb,
             Color(30, 10, 50, (250 * fadeIn).toInt()).rgb
         )
 
-        // conteneur
         val containerX = 40
         val containerY = 40
         val containerW = width - 80
         val containerH = height - 80
 
-        // ombre douce + fond
         drawRect(containerX + 2, containerY + 2, containerX + containerW + 2, containerY + containerH + 2, cardShadow)
         drawRect(containerX, containerY, containerX + containerW, containerY + containerH, backgroundColor)
         drawBorder(containerX, containerY, containerW, containerH, primaryColor)
@@ -102,7 +93,6 @@ class CustomConfigGUI : GuiScreen() {
         val innerW = containerW - 40
         val innerH = containerH - 40
 
-        // CLIPPING : empêche le débordement pendant le scroll
         scissor(contentX, contentY, innerW, innerH) {
             val endY = when (currentTab) {
                 0 -> drawGeneralTab(contentX, contentY)
@@ -114,7 +104,6 @@ class CustomConfigGUI : GuiScreen() {
             if (scroll > maxScroll) scroll = maxScroll
         }
 
-        // barre de scroll
         drawScrollbar(contentX + innerW - 4, contentY, innerH)
 
         val status = if (DuckDueller.bot?.toggled() == true) "§aONLINE" else "§cOFFLINE"
@@ -143,7 +132,7 @@ class CustomConfigGUI : GuiScreen() {
 
     private fun drawTabs(x: Int, y: Int) {
         var tabX = x
-        tabNames.forEachIndexed { index, name ->
+        listOf("General", "Combat", "Stats").forEachIndexed { index, name ->
             val selected = index == currentTab
             val bg = if (selected) Color(0, 240, 255, 100).rgb else Color(40, 40, 60, 100).rgb
             drawRect(tabX, y, tabX + 100, y + 25, bg)
@@ -205,7 +194,6 @@ class CustomConfigGUI : GuiScreen() {
         addHotspot(x + 286, y - 4 - scroll, 18, 18) { set(min(maxV, (v + step))) }
     }
 
-    // Champ texte simple (click pour focus, saisie clavier)
     private fun textField(label: String, x: Int, y: Int, buf: String, isFocused: Boolean, onFocus: () -> Unit, setBuf: (String) -> Unit): Int {
         val fieldY = y - scroll
         drawString(fontRendererObj, label, x, fieldY, -1)
@@ -221,7 +209,6 @@ class CustomConfigGUI : GuiScreen() {
         return y + 20
     }
 
-    // ---------- TABS ----------
     private fun drawGeneralTab(x: Int, yStart: Int): Int {
         var y = yStart
         drawString(fontRendererObj, "§lGENERAL SETTINGS", x, y - scroll, primaryColor); y += 25
@@ -231,10 +218,8 @@ class CustomConfigGUI : GuiScreen() {
         val botNames = listOf("Sumo", "Boxing", "Classic", "OP", "Combo", "ClassicV2", "Bow", "Blitz")
         selector("Current Bot", x, y, { cfg.currentBot }, { v ->
             cfg.currentBot = v
-            DuckDueller.config?.bots?.get(v)?.let { DuckDueller.swapBot(it) }
+            (DuckDueller.config?.bots?.get(v) as? best.spaghetcodes.duckdueller.bot.BotBase)?.let { DuckDueller.swapBot(it) }
         }, botNames); y += 24
-
-        // Champ API SUPPRIMÉ de la GUI (conservé dans la config si besoin backend)
 
         toggle("Lobby Movement", x, y, { cfg.lobbyMovement }, { cfg.lobbyMovement = it }); y += 20
         toggle("Fast Requeue", x, y, { cfg.fastRequeue }, { cfg.fastRequeue = it }); y += 20
@@ -246,7 +231,6 @@ class CustomConfigGUI : GuiScreen() {
         number("Auto Requeue Delay (ms)", x, y, { cfg.autoRqDelay }, { cfg.autoRqDelay = it }, 500, 5000, 50); y += 20
         number("Requeue After No Game (s)", x, y, { cfg.rqNoGame }, { cfg.rqNoGame = it }, 15, 60, 1); y += 24
 
-        // Messages début/fin de partie (éditables)
         toggle("Game Start Message", x, y, { cfg.sendStartMessage }, { cfg.sendStartMessage = it }); y += 20
         y = textField("Start Message", x, y, startMsgBuf, focus == Tf.START_MSG, { focus = Tf.START_MSG }) { s ->
             startMsgBuf = s
@@ -270,15 +254,13 @@ class CustomConfigGUI : GuiScreen() {
 
         number("Min CPS", x, y, { cfg.minCPS }, { cfg.minCPS = it }, 6, 15, 1); y += 20
         number("Max CPS", x, y, { cfg.maxCPS }, { cfg.maxCPS = it }, 9, 18, 1); y += 24
-
         number("Horizontal Look Speed", x, y, { cfg.lookSpeedHorizontal }, { cfg.lookSpeedHorizontal = it }, 1, 50, 1); y += 20
         number("Vertical Look Speed", x, y, { cfg.lookSpeedVertical }, { cfg.lookSpeedVertical = it }, 1, 50, 1); y += 20
         decimal("Look Randomization", x, y, { cfg.lookRand }, { cfg.lookRand = it }, 0f, 2f, 0.05f); y += 24
-
         number("Max Look Distance", x, y, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); y += 20
         number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 24
 
-        // Boxing Fish toggle déplacé ici (depuis Misc)
+        // Boxing fish ici
         toggle("Boxing: Use Fish", x, y, { cfg.boxingFish }, { cfg.boxingFish = it }); y += 20
 
         return y
@@ -321,17 +303,14 @@ class CustomConfigGUI : GuiScreen() {
         GL11.glPopMatrix()
     }
 
-    // ---------- INPUT ----------
     override fun mouseClicked(mouseX: Int, mouseY: Int, mouseButton: Int) {
         super.mouseClicked(mouseX, mouseY, mouseButton)
         var clickedTextField = false
         hotspots.firstOrNull { mouseX in it.x1..it.x2 && mouseY in it.y1..it.y2 }?.let {
             it.onClick.invoke()
-            // si le hotspot a changé le focus vers un champ texte :
             clickedTextField = (focus != Tf.NONE)
         }
         if (!clickedTextField) {
-            // click hors des champs -> on défocus
             focus = Tf.NONE
         }
     }
@@ -377,7 +356,6 @@ class CustomConfigGUI : GuiScreen() {
 
     override fun doesGuiPauseGame(): Boolean = false
 
-    // ---------- UTILS ----------
     private inline fun scissor(x: Int, y: Int, w: Int, h: Int, draw: () -> Unit) {
         val sf = ScaledResolution(mc).scaleFactor
         GL11.glEnable(GL11.GL_SCISSOR_TEST)
@@ -398,8 +376,5 @@ class CustomConfigGUI : GuiScreen() {
         drawRect(x - 1, thumbY, x + 3, thumbY + thumbH, primaryColor)
     }
 
-    private fun isPrintable(c: Char): Boolean {
-        // autoriser lettres, chiffres, ponctuation simple et espace
-        return c.code in 32..126
-    }
+    private fun isPrintable(c: Char): Boolean = c.code in 32..126
 }
