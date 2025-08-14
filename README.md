@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="(https://github.com/Dayti-0/Kira-Dueller-Hypixel-Bot/blob/main/kira.png" alt="Kira Logo" width="120" height="120">
+  <img src="https://github.com/Dayti-0/Kira-Dueller-Hypixel-Bot/blob/main/kira.png" alt="Kira Logo" width="120" height="120">
   <h1>🤖 Kira Dueller - Bot Hypixel Avancé</h1>
   <p><em>Bot intelligent pour les Duels Hypixel avec IA avancée et fonctionnalités premium</em></p>
   
