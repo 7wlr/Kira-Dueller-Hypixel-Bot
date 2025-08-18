@@ -294,7 +294,7 @@ Nous accueillons les contributions ! Voici comment participer :
   <table>
     <tr>
       <td align="center">
-        <img src="https://github.com/Nix.png" width="100px" alt="Nix" style="border-radius: 50%;">
+        <img src=""https://github.com/Dayti-0.png"" width="100px" alt="Nix" style="border-radius: 50%;">
         <br>
         <strong>Nix</strong>
         <br>
