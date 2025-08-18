@@ -294,28 +294,26 @@ Nous accueillons les contributions ! Voici comment participer :
   <table>
     <tr>
       <td align="center">
-        <img src="https://github.com/Dayti-0.png" width="100px" alt="Dayti-0" style="border-radius: 50%;">
+        <img src="https://github.com/Nix.png" width="100px" alt="Nix" style="border-radius: 50%;">
         <br>
-        <strong>Dayti-0</strong>
+        <strong>Nix</strong>
         <br>
-        <em>🚀 Lead Developer</em>
+        <em>🚀 Lead Developer (Kira Dueller)</em>
         <br>
-        <em>Architecture & Core Systems</em>
+        <em>Refonte complète & nouvelles fonctionnalités</em>
       </td>
       <td align="center">
-        <img src="https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png" width="100px" alt="Contributors" style="border-radius: 50%;">
+        <img src="https://github.com/HumanDuck23.png" width="100px" alt="HumanDuck23" style="border-radius: 50%;">
         <br>
-        <strong>Contributors</strong>
+        <strong>HumanDuck23</strong>
         <br>
-        <em>🤝 Community</em>
+        <em>🎯 Créateur du projet original (DuckDueller)</em>
         <br>
-        <em>Améliorations & Feedback</em>
+        <em>Base & inspiration</em>
       </td>
     </tr>
   </table>
 </div>
-
----
 
 ## 📊 Statistiques du Projet
 
@@ -343,7 +341,7 @@ Nous accueillons les contributions ! Voici comment participer :
   <h3>⭐ Vous aimez Kira ? Donnez-nous une étoile ! ⭐</h3>
   
   <p><strong>Made with ❤️ by the Kira Dueller Team</strong></p>
-  <p><em>Dernière mise à jour : Décembre 2024</em></p>
+  <p><em>Dernière mise à jour : Aout 2025</em></p>
 </div>
 
 ---
