@@ -7,7 +7,7 @@
     <img src="https://img.shields.io/badge/version-1.0-blue.svg?style=for-the-badge" alt="Version">
     <img src="https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge" alt="License">
     <img src="https://img.shields.io/badge/Minecraft-1.8.9-brightgreen.svg?style=for-the-badge" alt="Minecraft">
-    <img src="https://img.shields.io/badge/Platform-Hypixel-orange.svg?style=for-the-badge" alt="Platform">
+    <img src="https://img.shields.io/badge/Server-Hypixel-orange.svg?style=for-the-badge" alt="Server">
     <img src="https://img.shields.io/badge/Language-Kotlin-purple.svg?style=for-the-badge" alt="Language">
   </p>
 </div>
