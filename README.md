@@ -152,7 +152,6 @@ Kira-Dueller-Hypixel-Bot/
 │   ├── core/          # Configuration & keybinds
 │   ├── gui/           # Interface utilisateur
 │   ├── utils/         # Utilitaires
-│   └── mixins/        # Injections Minecraft
 ├── src/main/resources/
 ├── build.gradle.kts
 └── README.md
