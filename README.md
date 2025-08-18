@@ -109,7 +109,6 @@ Combat:
     Vertical: 5
   Randomization: 0.3
 
-Qualité de vie:
   Lobby Movement: true
   Fast Requeue: true
 ```
