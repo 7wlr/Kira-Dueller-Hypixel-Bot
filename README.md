@@ -85,39 +85,23 @@
 - **Rapports Détaillés** - Analyse complète des sessions
 
 ---
-
-## 📦 Installation Rapide
+## 📥 Installation
 
 ### 🔧 Prérequis
-```
-✅ Minecraft 1.8.9
-✅ Forge 
+- ✅ Minecraft 1.8.9  
+- ✅ Forge  
 
-### 📥 Installation
-1. **Téléchargement**
-   ```bash
-   # Téléchargez la dernière version depuis les Releases
-   wget https://github.com/Dayti-0/Kira-Dueller-Hypixel-Bot/releases/latest
-   ```
-
-2. **Installation**
-   ```bash
-   # Placez le fichier .jar dans votre dossier mods/
-   cp Kira-Dueller-*.jar ~/.minecraft/mods/
-   ```
-
-3. **Configuration**
-   - Lancez Minecraft avec Forge
-   - Appuyez sur `Right Shift` pour ouvrir la configuration
-   - Configurez selon vos préférences
-
-4. **Activation**
-   - Connectez-vous à Hypixel
-   - Appuyez sur `;` (point-virgule) pour activer/désactiver
+### 🚀 Télécharger
+👉 [Cliquez ici pour obtenir la dernière version de Kira Dueller](https://github.com/Dayti-0/Kira-Dueller-Hypixel-Bot/releases)
 
 ---
 
-## ⚙️ Configuration Avancée
+1. Téléchargez le fichier `.jar` depuis la dernière Release.  
+2. Placez-le dans votre dossier `mods/`.  
+3. Lancez Minecraft avec Forge en 1.8.9
+
+3. **Configuration**
+4. - Choisir les bind pour ouvrir le menu et activer/desactiver le bot dans les parametres minecraft
 
 ### 🎮 Interface de Configuration
 
@@ -125,14 +109,7 @@ Kira dispose d'une interface de configuration moderne et intuitive :
 
 - **Onglet Général** - Paramètres de base et sélection du bot
 - **Onglet Combat** - Réglages de combat et de visée
-- **Onglet Webhook** - Notifications Discord
 - **Onglet Statistiques** - Suivi des performances en temps réel
-
-### 🔑 Raccourcis Clavier
-| Touche | Action |
-|--------|--------|
-| `;` (Point-virgule) | Activer/Désactiver le bot |
-| `Right Shift` | Ouvrir la configuration |
 
 ### 📊 Paramètres Recommandés
 
