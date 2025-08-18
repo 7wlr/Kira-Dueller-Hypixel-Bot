@@ -8,7 +8,6 @@
       <img src="https://img.shields.io/badge/Download-Latest%20Release-2ea44f?style=for-the-badge" alt="Latest Release">
     </a>
     <img src="https://img.shields.io/badge/version-1.0-blue.svg?style=for-the-badge" alt="Version">
-    <img src="https://img.shields.io/badge/license-MIT-green.svg?style=for-the-badge" alt="License">
     <img src="https://img.shields.io/badge/Minecraft-1.8.9-brightgreen.svg?style=for-the-badge" alt="Minecraft">
     <img src="https://img.shields.io/badge/Server-Hypixel-orange.svg?style=for-the-badge" alt="Server">
     <img src="https://img.shields.io/badge/Language-Kotlin-purple.svg?style=for-the-badge" alt="Language">
@@ -254,20 +253,7 @@ Mesures intégrées : randomisation, comportements human-like, délais variables
 
 ---
 
-## 📊 Statistiques du Projet
-
-<div align="center">
-  <img src="https://img.shields.io/github/stars/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge&logo=github" alt="GitHub Stars">
-  <img src="https://img.shields.io/github/forks/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge&logo=github" alt="GitHub Forks">
-  <img src="https://img.shields.io/github/downloads/Dayti-0/Kira-Dueller-Hypixel-Bot/total?style=for-the-badge" alt="Downloads">
-  <img src="https://img.shields.io/github/last-commit/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge" alt="Last Commit">
-</div>
-
----
-
-## 📜 Licence & Crédits
-
-Projet sous licence **MIT** — voir le fichier **LICENSE**.
+## 🙏 Crédits
 
 **Remerciements :** merci aux contributeurs, testeurs et à la communauté Minecraft ❤️
 
