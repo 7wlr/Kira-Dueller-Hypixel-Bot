@@ -62,7 +62,7 @@
 
 ### 🎯 Combat Intelligent
 - **Smart Aim** - Visée prédictive avec compensation de latence
-- **Smart Strafe** - Mouvements tactiques adaptatifs
+- **Smart Strafe** - (en cours de dev)
 - **W-Tap Optimisé** - Techniques de combat perfectionnées
 - **Combo System** - Enchaînements automatiques intelligents
 
