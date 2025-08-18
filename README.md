@@ -115,14 +115,12 @@ Kira dispose d'une interface de configuration moderne et intuitive :
 
 ```yaml
 Combat:
-  CPS: 10-14
+  CPS: 12-16
   Look Speed: Horizontal 10, Vertical 5
   Randomization: 0.3
 
-Sécurité:
   Lobby Movement: Activé
   Fast Requeue: Activé
-  Anti-Detection: Maximum
 ```
 
 ---
