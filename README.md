@@ -294,7 +294,7 @@ Nous accueillons les contributions ! Voici comment participer :
   <table>
     <tr>
       <td align="center">
-        <img src=""https://github.com/Dayti-0.png"" width="100px" alt="Nix" style="border-radius: 50%;">
+        <img src="https://avatars.githubusercontent.com/Dayti-0?v=1" width="100" alt="Nix" style="border-radius:50%;">
         <br>
         <strong>Nix</strong>
         <br>
@@ -303,7 +303,7 @@ Nous accueillons les contributions ! Voici comment participer :
         <em>Refonte complète & nouvelles fonctionnalités</em>
       </td>
       <td align="center">
-        <img src="https://github.com/HumanDuck23.png" width="100px" alt="HumanDuck23" style="border-radius: 50%;">
+        <img src="https://avatars.githubusercontent.com/HumanDuck23?v=1" width="100" alt="HumanDuck23" style="border-radius:50%;">
         <br>
         <strong>HumanDuck23</strong>
         <br>
