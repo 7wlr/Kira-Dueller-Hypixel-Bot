@@ -209,19 +209,6 @@ Mesures intégrées : randomisation, comportements human-like, délais variables
 
 ---
 
-## 🗺️ Roadmap
-
-- [ ] **Mode UHC**  
-- [ ] **IA / Machine Learning**  
-- [ ] **Interface Web** (contrôle à distance)  
-- [ ] **Multi-comptes**  
-- [ ] **Statistiques cloud**  
-- [ ] **Mode tournoi**  
-- [ ] **Plugin Replay**  
-- [ ] **Multilingue**  
-
----
-
 ## 👥 Équipe de Développement
 
 <div align="center">
