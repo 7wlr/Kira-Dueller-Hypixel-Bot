@@ -20,11 +20,11 @@
 
 ### 🌟 Pourquoi Choisir Kira ?
 
-- **🧠 Intelligence Artificielle** - Algorithmes adaptatifs qui apprennent de chaque combat
-- **🛡️ Anti-Détection Avancée** - Système de camouflage multicouche
-- **⚡ Performance Optimale** - Réactions ultra-rapides et précision chirurgicale
-- **🎮 Interface Intuitive** - Configuration simple et contrôle total
-- **🔄 Mises à Jour Continues** - Support actif et nouvelles fonctionnalités
+- **🧠 Mécanique de combat optimisées**
+- **🛡️ Anti-Détection Avancée**
+- **⚡ Performance Optimale**
+- **🎮 Interface Intuitive**
+- **🔄 Mises à Jour Continues**
 
 ---
 
