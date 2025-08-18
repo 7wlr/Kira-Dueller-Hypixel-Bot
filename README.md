@@ -52,7 +52,6 @@
 </td>
 <td align="center" width="20%">
   <img src="https://img.shields.io/badge/Blitz-✅-success?style=for-the-badge" alt="Blitz">
-</table>
 
 ---
 
