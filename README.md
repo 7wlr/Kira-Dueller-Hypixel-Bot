@@ -132,22 +132,28 @@ Combat:
     <tr>
       <td align="center">
         <h3>🏆 Taux de Victoire</h3>
-        <h2>85%+</h2>
+        <h2>80%</h2>
         <p><em>Moyenne sur tous les modes</em></p>
       </td>
       <td align="center">
-        <h3>⚡ Temps de Réaction</h3>
-        <h2>< 50ms</h2>
-        <p><em>Réponse ultra-rapide</em></p>
-      </td>
-      <td align="center">
-        <h3>🛡️ Sécurité</h3>
-        <h2>99.9%</h2>
-        <p><em>Taux de non-détection</em></p>
+        <h3>🛡️ Anti-Détection</h3>
+        <h2>90%</h2>
+        <p><em>Taux de non-détection estimé</em></p>
       </td>
     </tr>
   </table>
 </div>
+
+---
+
+## ⚔️ Gestion des Objets & Combat
+
+Kira Dueller intègre une **gestion intelligente de l’inventaire et des objets** pour optimiser chaque duel :
+
+- **Épée 🗡️** : parade automatique pour se protéger des flèches adverses  
+- **Arc & Canne à pêche 🎯** : utilisation stratégique pour maintenir la pression  
+- **Enderpearl 🌀** : téléportation rapide pour surprendre l’adversaire ou fuir  
+- **Pomme dorée 🍏** : activation automatique pour régénérer la vie au bon moment
 
 ---
 
