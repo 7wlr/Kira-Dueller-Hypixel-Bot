@@ -300,7 +300,7 @@ Nous accueillons les contributions ! Voici comment participer :
         <br>
         <em>🚀 Lead Developer (Kira Dueller)</em>
         <br>
-        <em>Refonte complète & nouvelles fonctionnalités</em>
+        <em>Refonte & nouvelles fonctionnalités</em>
       </td>
       <td align="center">
         <img src="https://avatars.githubusercontent.com/HumanDuck23?v=1" width="100" alt="HumanDuck23" style="border-radius:50%;">
