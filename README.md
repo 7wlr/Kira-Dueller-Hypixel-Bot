@@ -34,7 +34,6 @@
 <tr>
 <td align="center" width="20%">
   <img src="https://img.shields.io/badge/SUMO-✅-success?style=for-the-badge" alt="Sumo">
-  <br><strong>Sumo</strong>
 </td>
 <td align="center" width="20%">
   <img src="https://img.shields.io/badge/CLASSIC-✅-success?style=for-the-badge" alt="Classic">
