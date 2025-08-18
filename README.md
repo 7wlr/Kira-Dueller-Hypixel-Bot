@@ -16,7 +16,7 @@
 
 ## 🎯 À Propos
 
-**Kira Dueller** est un bot de nouvelle génération conçu spécialement pour dominer les Duels Hypixel. Développé avec des algorithmes d'IA avancés et des mécaniques de combat optimisées, il offre une expérience de jeu automatisée exceptionnelle avec des fonctionnalités anti-détection sophistiquées.
+**Kira Dueller** est un bot de nouvelle génération conçu spécialement pour dominer les Duels Hypixel. Développé avec des algorithmes et des mécaniques de combat optimisées, il offre une expérience de jeu automatisée exceptionnelle avec des fonctionnalités anti-détection sophistiquées.
 
 ### 🌟 Pourquoi Choisir Kira ?
 
