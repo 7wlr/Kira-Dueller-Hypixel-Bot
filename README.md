@@ -101,7 +101,7 @@
 3. Lancez Minecraft avec Forge en 1.8.9
 
 3. **Configuration**
-4. - Choisir les bind pour ouvrir le menu et activer/desactiver le bot dans les parametres minecraft
+4. - Choisir les binds pour ouvrir le menu et activer/desactiver le bot dans les parametres minecraft
 
 ### 🎮 Interface de Configuration
 
