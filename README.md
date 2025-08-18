@@ -37,23 +37,21 @@
 </td>
 <td align="center" width="20%">
   <img src="https://img.shields.io/badge/CLASSIC-✅-success?style=for-the-badge" alt="Classic">
-  <br><strong>Classic</strong>
-  <br><em>Combat traditionnel optimisé</em>
 </td>
 <td align="center" width="20%">
   <img src="https://img.shields.io/badge/BOXING-✅-success?style=for-the-badge" alt="Boxing">
-  <br><strong>Boxing</strong>
-  <br><em>Combat au poing avancé</em>
 </td>
 <td align="center" width="20%">
   <img src="https://img.shields.io/badge/OP-✅-success?style=for-the-badge" alt="OP">
-  <br><strong>OP</strong>
-  <br><em>Mode overpowered</em>
 </td>
 <td align="center" width="20%">
   <img src="https://img.shields.io/badge/COMBO-✅-success?style=for-the-badge" alt="Combo">
-  <br><strong>Combo</strong>
-  <br><em>Combos optimisés</em>
+</td>
+<td align="center" width="20%">
+  <img src="https://img.shields.io/badge/Bow-✅-success?style=for-the-badge" alt="Bow">
+</td>
+<td align="center" width="20%">
+  <img src="https://img.shields.io/badge/Blitz-✅-success?style=for-the-badge" alt="Blitz">
 </td>
 </tr>
 </table>
