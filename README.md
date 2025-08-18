@@ -96,7 +96,7 @@ Optimisé pour la 1.8.9, il combine **mécaniques de combat** avancées, **autom
 
 ### ⚙️ Configuration rapide
 - Ouvrir le menu de Kira : assigne un bind dans les **paramètres Minecraft**.  
-- Activer/désactiver le bot : choisis une touche dédiée.
+- Activer/Désactiver le bot : choisis une touche dédiée.
 
 ---
 
@@ -113,3 +113,79 @@ Combat:
 Qualité de vie:
   Lobby Movement: true
   Fast Requeue: true
+📈 Statistiques & Performance
+<div align="center"> <table> <tr> <td align="center" width="50%"> <h3>🏆 Taux de Victoire</h3> <h2>80%</h2> <p><em>Moyenne indicative sur l’ensemble des modes</em></p> </td> <td align="center" width="50%"> <h3>🛡️ Anti-Détection</h3> <h2>90%</h2> <p><em>Taux de non-détection estimé avec réglages par défaut</em></p> </td> </tr> </table> </div>
+⚔️ Gestion intelligente des objets
+Épée 🗡️ — parade automatique pour bloquer les flèches adverses
+
+Arc & canne à pêche 🎯 — pression et contrôle de distance
+
+Enderpearl 🌀 — repositionnement/téléportation tactique
+
+Pomme dorée 🍏 — activation au bon timing pour la régénération
+
+🔧 Développement
+📁 Structure du projet
+bash
+Copier
+Modifier
+Kira-Dueller-Hypixel-Bot/
+├── src/main/kotlin/
+│   ├── bot/           # Logique des bots
+│   ├── core/          # Configuration & keybinds
+│   ├── gui/           # Interface utilisateur
+│   ├── utils/         # Utilitaires
+│   └── mixins/        # Injections Minecraft
+├── src/main/resources/
+├── build.gradle.kts
+└── README.md
+🛠️ Stack
+Kotlin • Minecraft Forge • Mixin • Gradle
+
+🤝 Contribution
+Fork
+
+Branche pour ta feature
+
+Commits propres
+
+PR détaillée
+
+⚠️ Avertissements
+Utilisation à vos risques.
+L’usage de bots peut enfreindre les conditions d’utilisation d’Hypixel.
+Malgré les systèmes anti-détection, aucune garantie de sécurité totale.
+Les développeurs ne sont pas responsables des sanctions éventuelles.
+
+Mesures intégrées : randomisation, comportements human-like, délais variables, masquage de signature, failsafe auto.
+
+📞 Support & Communauté
+<div align="center"> <table> <tr> <td align="center"> <a href="../../issues"> <img src="https://img.shields.io/github/issues/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge" alt="Issues"> <br><strong>Issues GitHub</strong> <br><em>Signaler un bug</em> </a> </td> <td align="center"> <a href="../../wiki"> <img src="https://img.shields.io/badge/Wiki-Documentation-blue?style=for-the-badge" alt="Wiki"> <br><strong>Documentation</strong> <br><em>Guides & FAQ</em> </a> </td> <td align="center"> <img src="https://img.shields.io/badge/Discord-Support-7289da?style=for-the-badge" alt="Discord"> <br><strong>Discord</strong> <br><em>Communauté</em> </td> </tr> </table> </div>
+🗺️ Roadmap
+ Mode UHC
+
+ IA / Machine Learning
+
+ Interface Web (contrôle à distance)
+
+ Multi-comptes
+
+ Statistiques cloud
+
+ Mode tournoi
+
+ Plugin Replay
+
+ Multilingue
+
+👥 Équipe de Développement
+<div align="center"> <table> <tr> <td align="center"> <img src="https://avatars.githubusercontent.com/Dayti-0?v=1" width="100" alt="Nix" style="border-radius:50%;"> <br> <strong>Nix</strong> <br> <em>🚀 Lead Developer (Kira Dueller)</em> <br> <em>Refonte & nouvelles fonctionnalités</em> </td> <td align="center"> <img src="https://avatars.githubusercontent.com/HumanDuck23?v=1" width="100" alt="HumanDuck23" style="border-radius:50%;"> <br> <strong>HumanDuck23</strong> <br> <em>🎯 Créateur du projet original (DuckDueller)</em> <br> <em>Base & inspiration</em> </td> </tr> </table> </div>
+📊 Statistiques du Projet
+<div align="center"> <img src="https://img.shields.io/github/stars/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge&logo=github" alt="GitHub Stars"> <img src="https://img.shields.io/github/forks/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge&logo=github" alt="GitHub Forks"> <img src="https://img.shields.io/github/downloads/Dayti-0/Kira-Dueller-Hypixel-Bot/total?style=for-the-badge" alt="Downloads"> <img src="https://img.shields.io/github/last-commit/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge" alt="Last Commit"> </div>
+📜 Licence & Crédits
+Projet sous licence MIT — voir le fichier LICENSE.
+
+Remerciements : merci aux contributeurs, testeurs et à la communauté Minecraft ❤️
+
+<p align="center"><em>Dernière mise à jour : Août 2025</em></p>
+<div align="center"> <h2>🚀 Prêt à dominer les Duels ?</h2> <p><strong><a href="https://github.com/Dayti-0/Kira-Dueller-Hypixel-Bot/releases">📥 Télécharger Kira Maintenant</a></strong></p> </div> ```
