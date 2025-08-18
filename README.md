@@ -32,25 +32,25 @@
 
 <table align="center">
 <tr>
-<td align="center" width="20%">
+<td align="center" width="14%">
   <img src="https://img.shields.io/badge/SUMO-✅-success?style=for-the-badge" alt="Sumo">
 </td>
-<td align="center" width="20%">
+<td align="center" width="14%">
   <img src="https://img.shields.io/badge/CLASSIC-✅-success?style=for-the-badge" alt="Classic">
 </td>
-<td align="center" width="20%">
+<td align="center" width="14%">
   <img src="https://img.shields.io/badge/BOXING-✅-success?style=for-the-badge" alt="Boxing">
 </td>
-<td align="center" width="20%">
+<td align="center" width="14%">
   <img src="https://img.shields.io/badge/OP-✅-success?style=for-the-badge" alt="OP">
 </td>
-<td align="center" width="20%">
+<td align="center" width="14%">
   <img src="https://img.shields.io/badge/COMBO-✅-success?style=for-the-badge" alt="Combo">
 </td>
-<td align="center" width="20%">
+<td align="center" width="14%">
   <img src="https://img.shields.io/badge/Bow-✅-success?style=for-the-badge" alt="Bow">
 </td>
-<td align="center" width="20%">
+<td align="center" width="14%">
   <img src="https://img.shields.io/badge/Blitz-✅-success?style=for-the-badge" alt="Blitz">
 </td>
 </tr>
