@@ -39,10 +39,13 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val stillFrameThreshold = 0.0125
     private val stillFramesNeeded = 10
     private val parryCooldownMs = 900L
-    private val parryHoldMinMs = 650
-    private val parryHoldMaxMs = 1050
+
+    // Allongement léger de la parade
+    private val parryHoldMinMs = 780
+    private val parryHoldMaxMs = 1220
     private val parryStickMinMs = 1000
     private val parryStickMaxMs = 1800
+
     private val bowCancelCloseDist = 4.8f
     private val singleJumpMinDist = 2.8f
     private val bowSlowThreshold = 0.06
@@ -153,7 +156,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     pendingProjectileUntil = now + 60L
                     actionLockUntil = now + (fullDrawMsMax + 200)
                     projectileKind = KIND_BOW
-                    useBow(d) { shotsFired++ }
+                    // ↓ abaissement léger de l'élévation à mi-distance
+                    val tunedD = if (d in 9.0f..18.5f) d * 0.92f else d
+                    useBow(tunedD) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                 }
             }
@@ -219,8 +224,8 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val rodAlreadyHeld = heldNow != null && heldNow.unlocalizedName.lowercase().contains("rod")
         val delay = if (!rodAlreadyHeld || beingComboedClose) 50 else 0 // 1 tick si nécessaire
 
-        // Empêche le reswitch épée pendant l’action
-        forceKeepRodUntil = now + delay + clickMs + 220L
+        // ↓ réduit : retour épée un peu plus tôt (moins de whiff derrière la rod)
+        forceKeepRodUntil = now + delay + clickMs + 120L
 
         // 1) clic principal
         if (delay == 0) {
@@ -269,7 +274,9 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         val ht = p.hurtTime
         if (ht > 0 && lastHurtTime == 0) {
-            noJumpUntil = now + RandomUtils.randomIntInRange(340, 520)
+            // ↓ moins punitif si on a de l'espace
+            val extra = if (distance > 4.2f) 0 else 160
+            noJumpUntil = now + RandomUtils.randomIntInRange(260, 420) + extra
         }
         lastHurtTime = ht
 
@@ -310,9 +317,13 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Parade épée (inchangée : V1 garde sa logique avancée)
+        // Parade épée (logique avancée V1) + anti-blocage rod au contact
         if (holdingSword) {
             if (Mouse.rClickDown) {
+                // ↓ si l'ennemi pousse au contact, on relève la garde pour ne pas bloquer une rod prioritaire
+                if (distance < 4.0f && !EntityUtils.entityFacingAway(p, opp)) {
+                    Mouse.rClickUp()
+                }
                 val movingHard = (!isStill && !(oppHasBow && bowSlowFrames >= bowSlowFramesNeeded)) || approaching
                 val mustKeep = (parryFromBow && now < parryExtendedUntil)
                 if (!mustKeep && (movingHard || now >= holdBlockUntil)) {
@@ -453,15 +464,16 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // (D) Bow “safe”, full charge (inchangé)
+            // (D) Bow “safe”, full charge (avec élévation mid-range réduite)
             if ((EntityUtils.entityFacingAway(p, opp) && distance in 3.5f..30f) ||
                 (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(p, opp))) {
                 if (distance > 10f && shotsFired < maxArrows) {
+                    val tunedD = if (distance in 9.0f..18.5f) distance * 0.92f else distance
                     bowHardLockUntil = now + RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
                     pendingProjectileUntil = now + 60L
                     actionLockUntil = now + (fullDrawMsMax + 100)
                     projectileKind = KIND_BOW
-                    useBow(distance) { shotsFired++ }
+                    useBow(tunedD) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                     return
                 }
