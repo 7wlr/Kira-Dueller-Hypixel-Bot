@@ -33,7 +33,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val bowCancelCloseDist = 4.8f
 
     // Ouverture : volley contrôlée (pas instant)
-    private var openVolleyMax = 2          // 2–3 au start
+    private var openVolleyMax = 1          // 1–2 au start (réduit)
     private var openVolleyFired = 0
     private var openWindowUntil = 0L
     private var openStartDelayUntil = 0L   // délai avant 1re flèche
@@ -72,6 +72,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var lastReactiveShotAt = 0L
     private val reactiveCdMs = 650L
 
+    // Réserves d’arrows (anti “vidage” au spawn)
+    private var gameStartAt = 0L
+    private val reserveTightMs = 10_000L   // 10s : réserve stricte
+    private val earlyReserve = 3           // garder 3 flèches au début
+    private val midReserve = 2             // puis 2 flèches ensuite
+
     private var tapping = false
     // -----------------------------------
 
@@ -93,10 +99,10 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         actionLockUntil = 0L
         projectileKind = KIND_NONE
 
-        // Volley d’ouverture contrôlée
-        openVolleyMax = RandomUtils.randomIntInRange(2, 3)
+        // Volley d’ouverture contrôlée (fenêtre un peu plus courte)
+        openVolleyMax = RandomUtils.randomIntInRange(1, 2)
         openVolleyFired = 0
-        openWindowUntil = System.currentTimeMillis() + 6000L
+        openWindowUntil = System.currentTimeMillis() + 4500L
         openStartDelayUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(700, 1100)
         lastShotAt = 0L
 
@@ -107,6 +113,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         bowSlowFrames = 0
 
         lastReactiveShotAt = 0L
+        gameStartAt = System.currentTimeMillis()
     }
 
     override fun onGameEnd() {
@@ -152,6 +159,10 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
     }
+
+    private fun arrowsLeft(): Int = maxArrows - shotsFired
+    private fun reserveNeeded(now: Long): Int =
+        if (now - gameStartAt < reserveTightMs) earlyReserve else midReserve
 
     override fun onTick() {
         val p = mc.thePlayer ?: return
@@ -205,12 +216,16 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         // ---------- LOGIQUE BOW ----------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
-            // 1) Tir d’ouverture : 2/3 max, pas direct au spawn, espacement entre tirs
+            val reserve = reserveNeeded(now)
+            val left = arrowsLeft()
+
+            // 1) Tir d’ouverture : 1–2 max, pas direct au spawn, espacement entre tirs
             if (shotsFired < maxArrows &&
                 openVolleyFired < openVolleyMax &&
                 now < openWindowUntil &&
                 now >= openStartDelayUntil &&
-                distance >= openShotMinDist) {
+                distance >= openShotMinDist &&
+                left > reserve) {
 
                 val tunedD = adjustedAimDistance(distance)
                 val lock = chargeMsFor(distance, opening = true)
@@ -228,7 +243,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // 2) Tirs réactifs à la place des parades (anti slow-bow / immobile)
+            // 2) Tirs réactifs (à la place des parades) — respectent la réserve
             // MAJ immob/slow
             if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
             val dx = abs(opp.posX - oppLastX)
@@ -244,7 +259,8 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             if (shotsFired < maxArrows &&
                 bowLikely &&
                 now - lastReactiveShotAt >= reactiveCdMs &&
-                WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air) {
+                WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
+                left > reserve) {
 
                 val tunedD = adjustedAimDistance(distance)
                 val lock = chargeMsFor(distance, opening = false)
@@ -262,8 +278,8 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // 3) Tirs “safe” plus tard dans le duel (garde des flèches restantes)
-            if (shotsFired < maxArrows) {
+            // 3) Tirs “safe” plus tard dans le duel — respectent la réserve
+            if (shotsFired < maxArrows && left > reserve) {
                 val away = EntityUtils.entityFacingAway(p, opp)
                 if ((away && distance in 3.5f..30f) ||
                     (!away && distance in 28.0f..33.0f)) {
