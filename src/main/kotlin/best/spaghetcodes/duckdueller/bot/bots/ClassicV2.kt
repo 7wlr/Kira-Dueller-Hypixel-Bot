@@ -174,9 +174,15 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     }
 
     override fun onAttack() {
+        // W-tap puis reprise agressive de l’élan
         Combat.wTap(100)
         tapping = true
         TimeUtils.setTimeout({ tapping = false }, 100)
+        // >>> Assure la ré-appui de W + sprint après le wTap, même en strafe
+        TimeUtils.setTimeout({
+            Movement.startForward()
+            Movement.startSprinting()
+        }, 80)
         if (combo >= 3) Movement.clearLeftRight()
     }
 
@@ -211,7 +217,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private fun castRodNow(distanceNow: Float) {
         val now = System.currentTimeMillis()
 
-        // Annule un éventuel tir arc trop proche
         if (Mouse.rClickDown && projectileKind == KIND_BOW) {
             Mouse.rClickUp()
             bowHardLockUntil = 0L
@@ -246,7 +251,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (!p.isSprinting) Movement.startSprinting()
         Mouse.startTracking()
         Mouse.stopLeftAC()
-        Movement.stopJumping() // par défaut
+        Movement.stopJumping()
 
         val now = System.currentTimeMillis()
         val distance = EntityUtils.getDistanceNoY(p, opp)
@@ -271,8 +276,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Avance / arrêt
-        if (distance < 1f || (distance < 2.7f && combo >= 1)) Movement.stopForward() else if (!tapping) Movement.startForward()
+        // >>> Avance / arrêt (on ne dépend plus de `tapping`)
+        if (distance < 1.0f || (distance < 2.7f && combo >= 1)) {
+            Movement.stopForward()
+        } else {
+            Movement.startForward()
+        }
 
         // Tenir l'épée si très proche
         if (distance < 1.5f && p.heldItem != null && !p.heldItem.unlocalizedName.lowercase().contains("sword")) {
@@ -302,7 +311,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         if (holdingSword) {
             if (Mouse.rClickDown) {
-                // si trop proche & face à nous -> on stoppe la parade (éviter ralentissement)
                 if (distance < 4.0f && !EntityUtils.entityFacingAway(p, opp)) {
                     Mouse.rClickUp()
                     parryFromBow = false
@@ -314,19 +322,20 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                         parryFromBow = false
                         parryExtendedUntil = 0L
                     } else {
-                        // Esquive aléatoire pendant parade : saut latéral alterné
                         if (p.onGround &&
                             now - lastParryJumpAt >= parryJumpCd &&
                             !projectileActive &&
                             now - lastGotHitAt > 260) {
 
-                            // 50% de chance de flip immédiat pour casser le rythme
                             if (RandomUtils.randomIntInRange(0, 1) == 1 || now >= parryStrafeFlipAt) {
                                 parryStrafeDir = -parryStrafeDir
                                 parryStrafeFlipAt = now + RandomUtils.randomIntInRange(260, 420)
                             }
                             Movement.singleJump(RandomUtils.randomIntInRange(140, 210))
                             lastParryJumpAt = now
+                            // >>> Pendant la parade, on garde l'élan vers l'avant
+                            Movement.startForward()
+                            Movement.startSprinting()
                         }
                     }
                 }
@@ -360,7 +369,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             parryFromBow = false
             parryExtendedUntil = 0L
         }
-        // -------------------------------------------------------
 
         // --------- JUMPS CONTEXTUELS hors parade/proj ----------
         if (!Mouse.rClickDown && !projectileActive && !Mouse.rClickDown && (now - lastGotHitAt) > 260) {
@@ -378,7 +386,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
         }
-        // -------------------------------------------------------
 
         // ----------------------- ROD ----------------------------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
@@ -410,7 +417,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
         }
-        // -------------------------------------------------------
 
         // ------------------------ ARC --------------------------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
@@ -481,7 +487,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
         }
-        // -------------------------------------------------------
 
         // ---------------------- STRAFE / HANDLE ----------------
         val movePriority = arrayListOf(0, 0)
@@ -490,7 +495,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         val parryActive = Mouse.rClickDown && (now < holdBlockUntil || (parryFromBow && now < parryExtendedUntil))
         if (parryActive) {
-            // renforce latéral pendant parade (cohérent avec les sauts)
             val w = if (distance > 6f) 7 else 9
             if (parryStrafeDir < 0) movePriority[0] += w else movePriority[1] += w
             randomStrafe = false
