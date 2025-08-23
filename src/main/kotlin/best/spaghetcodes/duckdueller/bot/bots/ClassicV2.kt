@@ -12,7 +12,6 @@ import best.spaghetcodes.duckdueller.utils.*
 import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
 import kotlin.math.abs
-import kotlin.math.max
 
 class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
@@ -272,15 +271,17 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 !facingAway &&
                 cdCloseOK) {
                 castRodNow(distance)
+                prevDistance = distance
                 return
             }
 
-            // B) Fenêtre standard 3.2–6.2 quand ça pousse/mi-distance
+            // B) Fenêtre standard 3.2–6.2
             if (!projectileActive &&
                 distance in rodMainMin..rodMainMax &&
                 !facingAway &&
                 cdFarOK) {
                 castRodNow(distance)
+                prevDistance = distance
                 return
             }
 
@@ -291,6 +292,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 !facingAway &&
                 cdFarOK) {
                 castRodNow(distance)
+                prevDistance = distance
                 return
             }
         }
@@ -324,6 +326,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     lastShotAt = System.currentTimeMillis()
                 }
                 projectileGraceUntil = bowHardLockUntil + 120
+                prevDistance = distance
                 return
             }
 
@@ -358,10 +361,11 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     lastReactiveShotAt = System.currentTimeMillis()
                 }
                 projectileGraceUntil = bowHardLockUntil + 100
+                prevDistance = distance
                 return
             }
 
-            // 3) Safe later : on garde quelques flèches pour les repositionnements
+            // 3) Safe later
             if (shotsFired < maxArrows && left > reserve) {
                 val away = EntityUtils.entityFacingAway(p, opp)
                 if ((away && distance in 3.5f..30f) ||
@@ -377,7 +381,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
                     useBow(tunedD) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
+                    prevDistance = distance
                     return
+                }
             }
         }
         // -----------------------------------------------------------
