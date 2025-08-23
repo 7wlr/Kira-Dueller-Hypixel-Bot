@@ -28,6 +28,10 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
     private val stopForwardDist = 1.3f        // arrêt d'avance si on est collé
     private val reForwardDist = 2.0f          // reprise d'avance au-delà de cette distance
 
+    // Nouveaux : engage attaque + latch anti-flottement
+    private val attackStartDist = 3.55f       // avant 3.2f : on engage un peu plus tôt pour “gagner” le premier hit
+    private val attackLatchMs = 220L          // on maintient l'AC brièvement pour éviter l'oscillation autour du seuil
+
     // ---------- États ----------
     private var prevDistance = -1f
     private var lastStrafeSwitch = 0L
@@ -39,6 +43,7 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
     private var centerZ = 0.0
 
     private var tapping = false
+    private var keepACUntil = 0L             // latch AC
 
     override fun onGameStart() {
         Mouse.startTracking()
@@ -61,6 +66,7 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
         stagnantSince = 0L
         lastBackstep = 0L
         tapping = false
+        keepACUntil = 0L
     }
 
     override fun onGameEnd() {
@@ -109,11 +115,12 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.12f)
 
-        // ---- Activer l'attaque auto quand on est en portée ----
-        if (distance <= 3.2f && !Mouse.isUsingPotion() && !Mouse.isUsingProjectile()) {
+        // ---- Activer l'attaque auto plus tôt, avec latch anti-flottement ----
+        if (distance <= attackStartDist && !Mouse.isUsingPotion() && !Mouse.isUsingProjectile()) {
+            keepACUntil = now + attackLatchMs
             Mouse.startLeftAC()
         } else {
-            Mouse.stopLeftAC()
+            if (now >= keepACUntil) Mouse.stopLeftAC()
         }
 
         // ---- Éviter le vide : ne JAMAIS avancer quand c'est "air" devant ----
