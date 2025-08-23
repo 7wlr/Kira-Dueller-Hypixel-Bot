@@ -42,7 +42,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val openSpacingMax = 900L
     private val openShotMinDist = 9.0f
 
-    // Detect “slow-bow / immobile” pour tirs réactifs
+    // Detect “slow-bow / immobile” pour tirs réactifs & logique de saut
     private val stillFrameThreshold = 0.0125
     private val stillFramesNeeded = 10
     private val bowSlowThreshold = 0.06
@@ -65,9 +65,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var lastReactiveShotAt = 0L
     private val reactiveCdMs = 650L
 
-    // Réserves d’arrows (garde des flèches pour plus tard)
+    // Réserves d’arrows
     private var gameStartAt = 0L
-    private val reserveTightMs = 10_000L   // 10s
+    private val reserveTightMs = 10_000L
     private val earlyReserve = 3
     private val midReserve = 2
 
@@ -83,10 +83,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val rodInterceptMin = 5.8f // interception “push”
     private val rodInterceptMax = 6.6f
 
-    // -------------------- MOUVEMENT -------------------
+    // -------------------- MOUVEMENT / SAUT -------------------
     private var strafeDir = 1
     private var lastStrafeSwitch = 0L
     private var prevDistance = -1f
+    private var lastTacticalJumpAt = 0L
+    private var lastGotHitAt = 0L
 
     private var tapping = false
 
@@ -95,7 +97,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
-        Movement.startJumping() // saute dès le départ (maps non plates)
+        Movement.stopJumping() // pas de saut maintenu
 
         prevDistance = -1f
         lastStrafeSwitch = 0L
@@ -126,6 +128,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         gameStartAt = System.currentTimeMillis()
 
         lastRodUse = 0L
+        lastTacticalJumpAt = 0L
+        lastGotHitAt = 0L
+
+        // Jump unique de démarrage (anti “coin” sur map non plate)
+        TimeUtils.setTimeout({
+            Movement.singleJump(RandomUtils.randomIntInRange(140, 220))
+        }, RandomUtils.randomIntInRange(180, 320))
     }
 
     override fun onGameEnd() {
@@ -215,15 +224,29 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (!p.isSprinting) Movement.startSprinting()
         Mouse.startTracking()
         Mouse.stopLeftAC()
+        Movement.stopJumping() // par défaut, on ne maintient JAMAIS la touche de saut
 
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val now = System.currentTimeMillis()
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
 
+        // Met à jour les compteurs “immobile/slow” dès le début du tick
+        if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
+        val dx = abs(opp.posX - oppLastX)
+        val dz = abs(opp.posZ - oppLastZ)
+        if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
+        val frameSpeed = dx + dz
+        if (frameSpeed < bowSlowThreshold) bowSlowFrames++ else bowSlowFrames = 0
+        oppLastX = opp.posX; oppLastZ = opp.posZ
+
+        // Mémorise le dernier "hit" subi pour inhiber les jumps juste après
+        if (p.hurtTime > 0) lastGotHitAt = now
+
         // Anti-bloc devant : micro-hop s'il y a un bloc en face
         if (distance > 2.2f) {
             if (WorldUtils.blockInFront(p, 2f, 0.5f) != Blocks.air && p.onGround) {
                 Movement.singleJump(RandomUtils.randomIntInRange(150, 240))
+                lastTacticalJumpAt = now
             }
         }
 
@@ -243,8 +266,27 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val projectileActive =
             Mouse.isUsingProjectile() || now < projectileGraceUntil || now < pendingProjectileUntil || now < actionLockUntil
 
-        // JAMAIS de saut pendant une charge / release de projectile
-        if (projectileActive || Mouse.rClickDown) Movement.stopJumping() else Movement.startJumping()
+        // --------- JUMPS CONTEXTUELS (jamais maintenus) ----------
+        // Pas de jump si projectile actif / en charge / juste après avoir pris un coup
+        if (!projectileActive && !Mouse.rClickDown && (now - lastGotHitAt) > 260) {
+            val facingAway = EntityUtils.entityFacingAway(p, opp)
+            val oppVeryStill = (stillFrames >= 6)
+
+            // Loin : jump de tempo pour garder l’élan
+            if (distance > 8.0f) {
+                if (p.onGround && now - lastTacticalJumpAt >= 520) {
+                    Movement.singleJump(RandomUtils.randomIntInRange(150, 230))
+                    lastTacticalJumpAt = now
+                }
+            } else if (distance in 4.5f..8.0f && (facingAway || oppVeryStill)) {
+                // Mi-distance + ennemi de dos/immobile (souvent en charge d’arc)
+                if (p.onGround && now - lastTacticalJumpAt >= 720) {
+                    Movement.singleJump(RandomUtils.randomIntInRange(150, 230))
+                    lastTacticalJumpAt = now
+                }
+            }
+        }
+        // ---------------------------------------------------------
 
         // Annuler l’arc si trop proche pendant une charge
         if (projectileActive && Mouse.rClickDown) {
@@ -331,14 +373,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
 
             // 2) Réactif (slow-bow/immobile) — charge partielle si proche, réserve respectée
-            if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
-            val dx = abs(opp.posX - oppLastX)
-            val dz = abs(opp.posZ - oppLastZ)
-            if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
-            val frameSpeed = dx + dz
-            if (frameSpeed < bowSlowThreshold) bowSlowFrames++ else bowSlowFrames = 0
-            oppLastX = opp.posX; oppLastZ = opp.posZ
-
             val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
             val bowLikely = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
 
