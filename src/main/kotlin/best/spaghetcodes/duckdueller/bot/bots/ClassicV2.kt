@@ -9,7 +9,6 @@ import best.spaghetcodes.duckdueller.bot.player.Inventory
 import best.spaghetcodes.duckdueller.bot.player.Mouse
 import best.spaghetcodes.duckdueller.bot.player.Movement
 import best.spaghetcodes.duckdueller.utils.*
-import best.spaghetcodes.duckdueller.utils.ChatUtils
 import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
 import kotlin.math.abs
@@ -28,10 +27,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         )
     }
 
-    // ---------- Tuning ----------
+    // ---------- Tuning général ----------
     private val fullDrawMsMin = 820
     private val fullDrawMsMax = 980
-    private val openShotMinDist = 9.0f
     private val bowCancelCloseDist = 4.8f
 
     // Ouverture : volley contrôlée (pas instant)
@@ -40,11 +38,11 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var openWindowUntil = 0L
     private var openStartDelayUntil = 0L   // délai avant 1re flèche
     private var lastShotAt = 0L            // cadence ouverture
-
-    private val openSpacingMin = 650L      // espacement entre tirs d’ouverture
+    private val openSpacingMin = 650L
     private val openSpacingMax = 900L
+    private val openShotMinDist = 9.0f
 
-    // Parry simple (différent de V1)
+    // Détection “slow-bow”/immobilité (sert aux tirs réactifs)
     private val stillFrameThreshold = 0.0125
     private val stillFramesNeeded = 10
     private val bowSlowThreshold = 0.06
@@ -54,14 +52,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var stillFrames = 0
     private var bowSlowFrames = 0
 
-    private val parryMinDist = 6.0f
-    private val parryHoldMinMs = 560
-    private val parryHoldMaxMs = 880
-    private val parryCooldownMs = 800L
-    private var holdBlockUntil = 0L
-    private var lastSwordBlock = 0L
-
-    // Strafe
+    // Strafe & déplacement
     private var strafeDir = 1
     private var lastStrafeSwitch = 0L
     private var prevDistance = -1f
@@ -77,14 +68,18 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val KIND_NONE = 0
     private val KIND_BOW = 2
 
+    // Tir réactif (anti-spam)
+    private var lastReactiveShotAt = 0L
+    private val reactiveCdMs = 650L
+
     private var tapping = false
-    // ---------------------------
+    // -----------------------------------
 
     override fun onGameStart() {
         Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
-        Movement.startJumping()
+        Movement.startJumping() // saute dès le départ
 
         prevDistance = -1f
         lastStrafeSwitch = 0L
@@ -105,13 +100,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         openStartDelayUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(700, 1100)
         lastShotAt = 0L
 
-        // reset parade
+        // reset slow-bow
         oppLastX = 0.0
         oppLastZ = 0.0
         stillFrames = 0
         bowSlowFrames = 0
-        holdBlockUntil = 0L
-        lastSwordBlock = 0L
+
+        lastReactiveShotAt = 0L
     }
 
     override fun onGameEnd() {
@@ -127,11 +122,35 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     override fun onAttack() {
         val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
-        ChatUtils.info("W-Tap 100")
         Combat.wTap(100)
         tapping = true
         TimeUtils.setTimeout({ tapping = false }, 100)
         if (combo >= 3) Movement.clearLeftRight()
+    }
+
+    // Ajuste l'“entrée distance” pour corriger l’élévation mid-range (baisse la visée 15–25)
+    private fun adjustedAimDistance(d: Float): Float {
+        return when {
+            d in 15.0f..20.0f -> d * 0.90f
+            d in 20.0f..25.0f -> d * 0.86f
+            d in 9.0f..15.0f  -> d * 0.92f
+            else              -> d
+        }
+    }
+
+    // Charge en fonction de la distance (réactif = pas forcément full)
+    private fun chargeMsFor(distance: Float, opening: Boolean): Long {
+        return if (opening) {
+            RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
+        } else {
+            when {
+                distance < 6.0f   -> RandomUtils.randomIntInRange(220, 320).toLong()
+                distance < 10.0f  -> RandomUtils.randomIntInRange(320, 450).toLong()
+                distance < 15.0f  -> RandomUtils.randomIntInRange(450, 650).toLong()
+                distance < 25.0f  -> RandomUtils.randomIntInRange(550, 800).toLong()
+                else              -> RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
+            }
+        }
     }
 
     override fun onTick() {
@@ -145,22 +164,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val now = System.currentTimeMillis()
 
-        // Anti-bloc devant
+        // Anti-bloc devant (micro-hop si obstacle proche)
         if (distance > 2.2f) {
             if (WorldUtils.blockInFront(p, 2f, 0.5f) != Blocks.air && p.onGround) {
                 Movement.singleJump(RandomUtils.randomIntInRange(150, 240))
             }
         }
-
-        // Sauts utiles uniquement (pas pendant charge, pas trop proche)
-        val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
-        val bowDrawLikely = run {
-            // MAJ immob/slow ci-dessous — on réutilise les compteurs hors-parry
-            bowSlowFrames >= bowSlowFramesNeeded || stillFrames >= stillFramesNeeded
-        }
-        val canJumpByDist =
-            (distance > 8.0f) || (distance <= 8.0f && (EntityUtils.entityFacingAway(p, opp) || bowDrawLikely))
-        if (!Mouse.rClickDown && canJumpByDist) Movement.startJumping() else Movement.stopJumping()
 
         // Avance / arrêt
         if (distance < 1f || (distance < 2.7f && combo >= 1)) {
@@ -169,14 +178,19 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             Movement.startForward()
         }
 
-        // Switch épée si proche
+        // Switch épée si trop proche
         if (distance < 1.5f && p.heldItem != null && !p.heldItem.unlocalizedName.lowercase().contains("sword")) {
             Inventory.setInvItem("sword")
         }
 
-        // Annuler l’ARC si trop proche pendant la charge
+        // État projectile actif
         val projectileActive =
             Mouse.isUsingProjectile() || now < projectileGraceUntil || now < pendingProjectileUntil || now < actionLockUntil
+
+        // NE JAMAIS SAUTER pendant un tir (on coupe le jump tant que la charge/le release est actif)
+        if (projectileActive || Mouse.rClickDown) Movement.stopJumping() else Movement.startJumping()
+
+        // Annuler l’ARC si trop proche pendant une charge
         if (projectileActive && Mouse.rClickDown) {
             if (projectileKind == KIND_BOW && distance < bowCancelCloseDist) {
                 Mouse.rClickUp()
@@ -188,7 +202,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // ---------- LOGIQUE BOW (contrôlée) ----------
+        // ---------- LOGIQUE BOW ----------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
 
             // 1) Tir d’ouverture : 2/3 max, pas direct au spawn, espacement entre tirs
@@ -198,46 +212,68 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 now >= openStartDelayUntil &&
                 distance >= openShotMinDist) {
 
-                // hop léger puis tir (jamais pendant la charge)
-                val hopDur = RandomUtils.randomIntInRange(140, 200)
-                Movement.singleJump(hopDur)
+                val tunedD = adjustedAimDistance(distance)
+                val lock = chargeMsFor(distance, opening = true)
+                bowHardLockUntil = now + lock
+                pendingProjectileUntil = now + 60L
+                actionLockUntil = now + (lock + 120)
+                projectileKind = KIND_BOW
 
-                val spacing = if (lastShotAt == 0L)
-                    RandomUtils.randomIntInRange(openSpacingMin.toInt(), openSpacingMax.toInt()).toLong()
-                else
-                    RandomUtils.randomIntInRange(openSpacingMin.toInt(), openSpacingMax.toInt()).toLong()
-
-                if (now - lastShotAt >= spacing) {
-                    val tunedD = if (distance in 9.0f..18.5f) distance * 0.92f else distance
-                    val lock = RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
-                    bowHardLockUntil = now + lock
-                    pendingProjectileUntil = now + 60L
-                    actionLockUntil = now + (fullDrawMsMax + 120)
-                    projectileKind = KIND_BOW
-
-                    // Tir juste après le hop (stabilisation)
-                    TimeUtils.setTimeout({
-                        useBow(tunedD) {
-                            shotsFired++
-                            openVolleyFired++
-                            lastShotAt = System.currentTimeMillis()
-                        }
-                    }, hopDur + RandomUtils.randomIntInRange(60, 90))
-
-                    projectileGraceUntil = bowHardLockUntil + 120
-                    return
+                useBow(tunedD) {
+                    shotsFired++
+                    openVolleyFired++
+                    lastShotAt = System.currentTimeMillis()
                 }
+                projectileGraceUntil = bowHardLockUntil + 120
+                return
             }
 
-            // 2) Tirs “safe” plus tard dans le duel (garde des flèches)
+            // 2) Tirs réactifs à la place des parades (anti slow-bow / immobile)
+            // MAJ immob/slow
+            if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
+            val dx = abs(opp.posX - oppLastX)
+            val dz = abs(opp.posZ - oppLastZ)
+            if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
+            val frameSpeed = dx + dz
+            if (frameSpeed < bowSlowThreshold) bowSlowFrames++ else bowSlowFrames = 0
+            oppLastX = opp.posX; oppLastZ = opp.posZ
+
+            val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
+            val bowLikely = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
+
+            if (shotsFired < maxArrows &&
+                bowLikely &&
+                now - lastReactiveShotAt >= reactiveCdMs &&
+                WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air) {
+
+                val tunedD = adjustedAimDistance(distance)
+                val lock = chargeMsFor(distance, opening = false)
+
+                bowHardLockUntil = now + lock
+                pendingProjectileUntil = now + 50L
+                actionLockUntil = now + (lock + 100)
+                projectileKind = KIND_BOW
+
+                useBow(tunedD) {
+                    shotsFired++
+                    lastReactiveShotAt = System.currentTimeMillis()
+                }
+                projectileGraceUntil = bowHardLockUntil + 100
+                return
+            }
+
+            // 3) Tirs “safe” plus tard dans le duel (garde des flèches restantes)
             if (shotsFired < maxArrows) {
                 val away = EntityUtils.entityFacingAway(p, opp)
                 if ((away && distance in 3.5f..30f) ||
                     (!away && distance in 28.0f..33.0f)) {
-                    val tunedD = if (distance in 9.0f..18.5f) distance * 0.92f else distance
-                    bowHardLockUntil = now + RandomUtils.randomIntInRange(fullDrawMsMin, fullDrawMsMax).toLong()
+
+                    val tunedD = adjustedAimDistance(distance)
+                    val lock = chargeMsFor(distance, opening = false)
+
+                    bowHardLockUntil = now + lock
                     pendingProjectileUntil = now + 60L
-                    actionLockUntil = now + (fullDrawMsMax + 120)
+                    actionLockUntil = now + (lock + 120)
                     projectileKind = KIND_BOW
 
                     useBow(tunedD) { shotsFired++ }
@@ -246,49 +282,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
         }
-        // ---------------------------------------------
+        // ---------------------------------
 
-        // --- Détection slow-bow + parade simple ---
-        // MAJ immob/slow
-        if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
-        val dx = abs(opp.posX - oppLastX)
-        val dz = abs(opp.posZ - oppLastZ)
-        if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
-        val frameSpeed = dx + dz
-        if (frameSpeed < bowSlowThreshold) bowSlowFrames++ else bowSlowFrames = 0
-        oppLastX = opp.posX; oppLastZ = opp.posZ
-
-        val bowLikely = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
-        val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
-
-        if (holdingSword) {
-            if (Mouse.rClickDown) {
-                val movingHard = !(stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
-                if (movingHard || now >= holdBlockUntil) {
-                    Mouse.rClickUp()
-                }
-            } else {
-                val canStartParry =
-                    distance >= parryMinDist &&
-                    distance <= 14.5f &&
-                    bowLikely &&
-                    !projectileActive &&
-                    WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
-                    (now - lastSwordBlock) > parryCooldownMs
-
-                if (canStartParry) {
-                    val dur = RandomUtils.randomIntInRange(parryHoldMinMs, parryHoldMaxMs)
-                    holdBlockUntil = now + dur
-                    lastSwordBlock = now
-                    Mouse.rClick(dur)
-                }
-            }
-        } else if (Mouse.rClickDown && !projectileActive) {
-            Mouse.rClickUp()
-        }
-        // ------------------------------------------
-
-        // Rod simple (fenêtre claire), on garde l’avantage V2
+        // Rod simple (fenêtre claire), on garde l’ADN V2
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
             if (distance in 3.2f..6.0f && !EntityUtils.entityFacingAway(p, opp)) {
                 useRod()
@@ -296,7 +292,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Mouvement strafe (léger)
+        // Mouvement / strafe léger (sans parries)
         val movePriority = arrayListOf(0, 0)
         var clear = false
         var randomStrafe = false
