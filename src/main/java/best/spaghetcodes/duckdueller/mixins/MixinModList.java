@@ -1,4 +1,4 @@
-package best.spaghetcodes.duckdueller.mixins;
+package best.spaghetcodes.kira.mixins;
 
 import net.minecraft.client.Minecraft;
 import net.minecraftforge.fml.common.ModContainer;
@@ -23,7 +23,7 @@ public class MixinModList {
     public void removeMod(List<ModContainer> modContainerList, CallbackInfo ci) {
         if (!Minecraft.getMinecraft().isSingleplayer()) {
             System.out.println("Removing mod from handshake...");
-            this.modTags.keySet().removeIf(key -> Objects.equals(key, "duckdueller"));
+            this.modTags.keySet().removeIf(key -> Objects.equals(key, "kira"));
         }
     }
 
