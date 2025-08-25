@@ -345,7 +345,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
         val frameSpeed = dx + dz
         if (frameSpeed < bowSlowThreshold) bowSlowFrames++ else bowSlowFrames = 0
-        val isStrafing = frameSpeed > 0.18
+        val isStrafing = frameSpeed > 0.18   // ← calculé UNE fois et réutilisé
         oppLastX = opp.posX; oppLastZ = opp.posZ
 
         if (p.hurtTime > 0) lastGotHitAt = now
@@ -493,8 +493,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         // ----------------------- ROD ----------------------------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
             // **Aucune rod si l’adversaire STRAFE**
-            val isStrafing = (abs(opp.posX - oppLastX) + abs(opp.posZ - oppLastZ)) > 0.18
-            if (!isStrafing) {
+            if (!isStrafing) { // ← réutilise le calcul du haut, plus de redéclaration
                 val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
                 val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
                 val cdCloseOK = (now - lastRodUse) >= cdClose
