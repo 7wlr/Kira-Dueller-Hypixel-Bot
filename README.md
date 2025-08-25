@@ -120,14 +120,14 @@ Combat:
   <table>
     <tr>
       <td align="center" width="50%">
-        <h3>🏆 Taux de Victoire</h3>
-        <h2>80%</h2>
+        <h3>🏆 Ratio de Victoire</h3>
+        <h2>2.80/3.30</h2>
         <p><em>Moyenne indicative sur l’ensemble des modes</em></p>
       </td>
       <td align="center" width="50%">
         <h3>🛡️ Anti-Détection</h3>
-        <h2>90%</h2>
-        <p><em>Taux de non-détection estimé avec réglages par défaut</em></p>
+        <h2>99%</h2>
+        <p><em>Taux de non-détection estimé avec réglages conseillés</em></p>
       </td>
     </tr>
   </table>
