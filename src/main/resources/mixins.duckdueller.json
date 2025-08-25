@@ -1,7 +1,7 @@
 {
   "compatibilityLevel": "JAVA_8",
-  "package": "best.spaghetcodes.duckdueller.mixins",
-  "refmap": "mixins.duckdueller.refmap.json",
+  "package": "best.spaghetcodes.kira.mixins",
+  "refmap": "mixins.kira.refmap.json",
   "mixins": [
     "MixinModList",
     "MixinEffectRenderer"

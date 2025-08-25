@@ -228,7 +228,7 @@ Mesures intégrées : randomisation, comportements human-like, délais variables
         <br>
         <strong>HumanDuck23</strong>
         <br>
-        <em>🎯 Créateur du projet original (DuckDueller)</em>
+        <em>🎯 Créateur du projet original (kira)</em>
         <br>
         <em>Base & inspiration</em>
       </td>
