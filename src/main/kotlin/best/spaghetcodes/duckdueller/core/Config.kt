@@ -17,7 +17,7 @@ class Config : Vigilant(File(DuckDueller.configLocation), sortingBehavior = Conf
         name = "Current Bot",
         description = "The bot you want to use",
         category = "General",
-        options = ["Sumo", "Boxing", "Classic", "OP", "Combo", "ClassicV2", "Bow", "Blitz"]
+        options = ["Classic", "ClassicV2", "OP", "Combo", "Sumo", "Boxing", "Bow", "Blitz"]
     )
     var currentBot = 0
 
