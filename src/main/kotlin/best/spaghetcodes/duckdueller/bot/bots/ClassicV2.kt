@@ -13,6 +13,7 @@ import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
 import kotlin.math.abs
 import kotlin.math.max
+import kotlin.math.min
 
 class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
@@ -74,8 +75,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     // ---------------------- ROD ----------------------
     private var lastRodUse = 0L
-    private val rodCdCloseMs = 340L
-    private val rodCdFarMs = 480L
+    private var rodCdCloseMsBase = 340L
+    private var rodCdFarMsBase = 480L
+    private var rodCdBias = 1.0f // >1 = plus long, <1 = plus court
 
     private val rodCloseMin = 2.0f
     private val rodCloseMax = 3.4f
@@ -84,9 +86,24 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val rodInterceptMin = 5.8f
     private val rodInterceptMax = 7.2f
 
+    // Évaluation “hit/miss” via hurtTime juste après le cast
+    private var lastRodAttemptAt = 0L
+    private var lastOppHurtTime = 0
+    private var pendingRodCheck = false
+    private var rodHits = 0
+    private var rodMisses = 0
+
+    // Fenêtre “melee focus” et stick avant
+    private var meleeFocusUntil = 0L
+    private var forwardStickUntil = 0L
+
+    // Opponent rod usage
+    private var lastOppRodSeenAt = 0L
+
     // -------------------- PARADE ÉPÉE -----------------
-    private val parryMinDist = 6.5f
-    private val parryCloseCancelDist = 6.0f   // <— stop parade en-dessous, quoi qu’il arrive
+    // >>> NO PARry if distance < 15 blocks <<<
+    private val parryMinDist = 15.0f
+    private val parryCloseCancelDist = 15.0f
     private val parryCooldownMs = 900L
     private val parryHoldMinMs = 650
     private val parryHoldMaxMs = 980
@@ -97,8 +114,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var holdBlockUntil = 0L
     private var parryFromBow = false
     private var parryExtendedUntil = 0L
+    private var parryCloseLockUntil = 0L // empêche une relance juste après un close cancel
 
-    // Strafe & saut pendant parade (imprévisible)
+    // Strafe & saut pendant parade
     private var parryStrafeDir = 1
     private var parryStrafeFlipAt = 0L
     private var lastParryJumpAt = 0L
@@ -112,9 +130,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var lastGotHitAt = 0L
     private var tapping = false
 
-    // “Stick” avant pour éviter le strafe pur après hit / lag
-    private var forwardStickUntil = 0L
-    // Biais de strafe court (quand on remplace la parade proche par rod)
+    // Biais strafe court (post “parade proche -> rod”)
     private var strafeBiasDir = 0
     private var strafeBiasStickUntil = 0L
 
@@ -124,11 +140,11 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Movement.startSprinting()
         Movement.startForward()
         Movement.stopJumping()
+        Mouse.rClickUp()
 
         prevDistance = -1f
         lastStrafeSwitch = 0L
         strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
-        Mouse.rClickUp()
 
         shotsFired = 0
         bowHardLockUntil = 0L
@@ -147,11 +163,19 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         oppLastZ = 0.0
         stillFrames = 0
         bowSlowFrames = 0
+        lastOppHurtTime = 0
 
         lastReactiveShotAt = 0L
         gameStartAt = System.currentTimeMillis()
 
         lastRodUse = 0L
+        rodCdBias = 1.0f
+        rodHits = 0
+        rodMisses = 0
+        pendingRodCheck = false
+        lastRodAttemptAt = 0L
+        lastOppRodSeenAt = 0L
+
         lastTacticalJumpAt = 0L
         lastGotHitAt = 0L
 
@@ -159,11 +183,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         holdBlockUntil = 0L
         parryFromBow = false
         parryExtendedUntil = 0L
+        parryCloseLockUntil = 0L
         parryStrafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
         parryStrafeFlipAt = 0L
         lastParryJumpAt = 0L
 
         forwardStickUntil = 0L
+        meleeFocusUntil = 0L
         strafeBiasDir = 0
         strafeBiasStickUntil = 0L
 
@@ -184,13 +210,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     }
 
     override fun onAttack() {
-        // W-tap puis reprise agressive + stick avant
         Combat.wTap(100)
         tapping = true
         TimeUtils.setTimeout({ tapping = false }, 100)
 
         val now = System.currentTimeMillis()
-        forwardStickUntil = now + RandomUtils.randomIntInRange(200, 260)
+        forwardStickUntil = now + RandomUtils.randomIntInRange(220, 280)
+        meleeFocusUntil = now + RandomUtils.randomIntInRange(300, 340)
         TimeUtils.setTimeout({
             Movement.startForward()
             Movement.startSprinting()
@@ -230,6 +256,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private fun castRodNow(@Suppress("UNUSED_PARAMETER") distanceNow: Float) {
         val now = System.currentTimeMillis()
 
+        // si arc en cours, on annule
         if (Mouse.rClickDown && projectileKind == KIND_BOW) {
             Mouse.rClickUp()
             bowHardLockUntil = 0L
@@ -248,12 +275,48 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         actionLockUntil = now + settle + 90
         projectileGraceUntil = actionLockUntil
 
+        // Marquer l’essai de rod pour évaluer hit/miss
+        lastRodAttemptAt = now
+        pendingRodCheck = true
+        lastOppHurtTime = opponent()?.hurtTime ?: 0
+
         TimeUtils.setTimeout({
             Inventory.setInvItem("sword")
             Mouse.setUsingProjectile(false)
         }, settle)
 
         lastRodUse = now
+    }
+
+    private fun updateRodAccuracyHeuristic(now: Long) {
+        if (!pendingRodCheck) return
+        val opp = opponent() ?: return
+
+        // Fenêtre d’observation: ~80..420 ms après le cast
+        val dt = now - lastRodAttemptAt
+        if (dt in 80..420) {
+            val ht = opp.hurtTime
+            if (ht > 0 && (ht != lastOppHurtTime)) {
+                rodHits++
+                pendingRodCheck = false
+                // rendre la rod un peu plus disponible
+                rodCdBias = max(0.85f, rodCdBias * 0.95f)
+            }
+        } else if (dt > 480) {
+            // absence de signal => on compte comme "miss"
+            rodMisses++
+            pendingRodCheck = false
+            // allonger un peu le CD si trop de misses récents
+            if (rodMisses - rodHits >= 2) {
+                rodCdBias = min(1.6f, rodCdBias * 1.12f)
+            }
+        }
+    }
+
+    private fun opponentLikelyUsingRod(opp: net.minecraft.entity.EntityLivingBase): Boolean {
+        val held = opp.heldItem
+        if (held != null && held.unlocalizedName.lowercase().contains("rod")) return true
+        return false
     }
 
     // ----------------------- TICK ---------------------
@@ -270,13 +333,19 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
 
-        // MAJ immobile/slow
+        // suivi rod adverse
+        if (opponentLikelyUsingRod(opp)) {
+            lastOppRodSeenAt = now
+        }
+
+        // MAJ immobile/slow + vitesse latérale (strafe)
         if (oppLastX == 0.0 && oppLastZ == 0.0) { oppLastX = opp.posX; oppLastZ = opp.posZ }
         val dx = abs(opp.posX - oppLastX)
         val dz = abs(opp.posZ - oppLastZ)
         if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
         val frameSpeed = dx + dz
         if (frameSpeed < bowSlowThreshold) bowSlowFrames++ else bowSlowFrames = 0
+        val isStrafing = frameSpeed > 0.18
         oppLastX = opp.posX; oppLastZ = opp.posZ
 
         if (p.hurtTime > 0) lastGotHitAt = now
@@ -289,12 +358,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
-        // Si la distance a soudainement augmenté (lag/KB), colle l’avancée un court instant
+        // Si la distance a soudainement augmenté (lag/KB), colle l’avancée
         if (prevDistance > 0f && distance - prevDistance > 0.6f) {
             forwardStickUntil = max(forwardStickUntil, now + 200)
         }
 
-        // >>> Avance / arrêt, avec “forward stick”
+        // Avance / arrêt, avec “forward stick”
         if (now < forwardStickUntil) {
             Movement.startForward()
         } else {
@@ -325,35 +394,29 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
+        // Evaluer la réussite rod récente
+        updateRodAccuracyHeuristic(now)
+
         // --------------------- PARADE ÉPÉE ---------------------
         val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
         val isStill = stillFrames >= stillFramesNeeded
         val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
         val bowLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
 
-        // **Coupe-parade courte portée** : on annule tout block < parryCloseCancelDist
+        // Close cancel strict (< 15) + verrou pour empêcher relance
         if (Mouse.rClickDown && distance < parryCloseCancelDist) {
             Mouse.rClickUp()
             parryFromBow = false
             parryExtendedUntil = 0L
-            // à cette portée : rod d’esquive si possible
-            if (!projectileActive && (now - lastRodUse) >= rodCdFarMs && !EntityUtils.entityFacingAway(p, opp)) {
-                castRodNow(distance)
-                // strafe biaisé pour esquiver la flèche potentielle
-                strafeBiasDir = if (RandomUtils.randomIntInRange(0, 1) == 1) +1 else -1
-                strafeBiasStickUntil = now + RandomUtils.randomIntInRange(380, 520)
-            }
+            parryCloseLockUntil = now + 700L
         }
 
         if (holdingSword) {
             if (!Mouse.rClickDown) {
                 val sinceStart = now - gameStartAt
-
-                // Si proche, on ne lance jamais une parade : on privilégie la rod via la logique ci-dessus
                 val closeRange = distance < parryCloseCancelDist
 
-                if (!closeRange) {
-                    // Parade classique (distance suffisante)
+                if (!closeRange && now >= parryCloseLockUntil) {
                     val canStartParry =
                         sinceStart > 1600 &&
                         distance >= parryMinDist &&
@@ -368,17 +431,14 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                         lastSwordBlock = now
                         parryFromBow = true
 
-                        // Stick prolongé à longue distance (temps de vol des flèches)
                         var extraStick =
-                            if (distance > 5f) RandomUtils.randomIntInRange(600, 900)
-                            else if (distance > 4f) RandomUtils.randomIntInRange(320, 520)
-                            else 0
-                        if (distance > 12f) extraStick += RandomUtils.randomIntInRange(500, 900)
-                        if (distance > 18f) extraStick += RandomUtils.randomIntInRange(250, 350)
+                            if (distance > 15f) RandomUtils.randomIntInRange(900, 1200)
+                            else RandomUtils.randomIntInRange(500, 800)
 
-                        parryExtendedUntil = now + RandomUtils.randomIntInRange(parryStickMinMs, parryStickMaxMs) + extraStick
+                        parryExtendedUntil =
+                            now + RandomUtils.randomIntInRange(parryStickMinMs, parryStickMaxMs) + extraStick
                         parryStrafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
-                        parryStrafeFlipAt = now + RandomUtils.randomIntInRange(240, 380)
+                        parryStrafeFlipAt = now + RandomUtils.randomIntInRange(260, 420)
                         Mouse.rClick(dur)
                     }
                 }
@@ -400,7 +460,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     Movement.startSprinting()
                 }
 
-                // Fin de parade si timer écoulé
                 val mustKeep = parryFromBow && now < parryExtendedUntil
                 if (!mustKeep && now >= holdBlockUntil) {
                     Mouse.rClickUp()
@@ -433,47 +492,62 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         // ----------------------- ROD ----------------------------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
-            val cdCloseOK = (now - lastRodUse) >= rodCdCloseMs
-            val cdFarOK = (now - lastRodUse) >= rodCdFarMs
-            val facingAway = EntityUtils.entityFacingAway(p, opp)
+            // **Aucune rod si l’adversaire STRAFE**
+            val isStrafing = (abs(opp.posX - oppLastX) + abs(opp.posZ - oppLastZ)) > 0.18
+            if (!isStrafing) {
+                val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
+                val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
+                val cdCloseOK = (now - lastRodUse) >= cdClose
+                val cdFarOK = (now - lastRodUse) >= cdFar
+                val facingAway = EntityUtils.entityFacingAway(p, opp)
 
-            // Interception spéciale si strafe latéral fort
-            val strongLateral = (dx + dz) > 0.18 && distance in 4.5f..7.0f
+                val oppRodRecently = (now - lastOppRodSeenAt) <= 2500L
+                val meleeRange = distance < 3.1f
+                val allowRodByMeleePolicy = !(meleeRange && !oppRodRecently && now < meleeFocusUntil)
 
-            // Ultra-proche : on tente de casser un combo si on vient de prendre un hit
-            if (distance < 2.2f && p.hurtTime > 0 && cdCloseOK && !facingAway) {
-                castRodNow(distance)
-                prevDistance = distance
-                return
-            }
-
-            if (distance in rodCloseMin..rodCloseMax &&
-                (p.hurtTime > 0 || approaching) &&
-                !facingAway &&
-                cdCloseOK) {
-                castRodNow(distance)
-                prevDistance = distance
-                return
-            }
-            if (!facingAway && cdFarOK) {
-                if (strongLateral) {
+                // Ultra-proche : casser un combo si on vient de prendre un hit
+                if (allowRodByMeleePolicy &&
+                    distance < 2.2f && p.hurtTime > 0 && cdCloseOK && !facingAway) {
                     castRodNow(distance)
                     prevDistance = distance
                     return
                 }
-                if (distance in rodMainMin..rodMainMax) {
+
+                // close window
+                if (allowRodByMeleePolicy &&
+                    distance in rodCloseMin..rodCloseMax &&
+                    (p.hurtTime > 0 || approaching) &&
+                    !facingAway &&
+                    cdCloseOK) {
                     castRodNow(distance)
                     prevDistance = distance
                     return
                 }
-            }
-            if (distance in rodInterceptMin..rodInterceptMax &&
-                approaching &&
-                !facingAway &&
-                cdFarOK) {
-                castRodNow(distance)
-                prevDistance = distance
-                return
+
+                // main / réponse à rod adverse
+                if (allowRodByMeleePolicy && !facingAway && cdFarOK) {
+                    if (oppRodRecently) {
+                        castRodNow(distance)
+                        prevDistance = distance
+                        return
+                    }
+                    if (distance in rodMainMin..rodMainMax) {
+                        castRodNow(distance)
+                        prevDistance = distance
+                        return
+                    }
+                }
+
+                // intercept
+                if (allowRodByMeleePolicy &&
+                    distance in rodInterceptMin..rodInterceptMax &&
+                    approaching &&
+                    !facingAway &&
+                    cdFarOK) {
+                    castRodNow(distance)
+                    prevDistance = distance
+                    return
+                }
             }
         }
 
@@ -559,7 +633,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             randomStrafe = false
         }
 
-        // Biais court post “parade proche -> rod”
+        // Biais court post “parade proche -> rod” (on garde l’esquive même si rod désactivée)
         if (!parryActive && now < strafeBiasStickUntil && strafeBiasDir != 0) {
             val w = if (distance > 6f) 6 else 7
             if (strafeBiasDir < 0) movePriority[0] += w else movePriority[1] += w
