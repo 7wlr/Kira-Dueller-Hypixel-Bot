@@ -21,13 +21,13 @@ loom {
     launchConfigs {
         getByName("client") {
             arg("--tweakClass", "gg.essential.loader.stage0.EssentialSetupTweaker")
-            arg("--mixin", "mixins.duckdueller.json")
+            arg("--mixin", "mixins.kira.json")
         }
     }
 
     forge {
         pack200Provider.set(Pack200Adapter())
-        mixinConfig("mixins.duckdueller.json")
+        mixinConfig("mixins.kira.json")
     }
 }
 
@@ -59,7 +59,7 @@ tasks {
             mapOf(
                 "ModSide" to "CLIENT",
                 "TweakClass" to "gg.essential.loader.stage0.EssentialSetupTweaker",
-                "MixinConfigs" to "mixins.duckdueller.json"
+                "MixinConfigs" to "mixins.kira.json"
             )
         )
     }
