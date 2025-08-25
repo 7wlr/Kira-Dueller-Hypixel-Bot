@@ -69,15 +69,14 @@ Optimisé pour la 1.8.9, il combine **mécaniques de combat** avancées, **autom
 - **Combo System** — enchaînements intelligents
 
 ### 🛡️ Sécurité & Furtivité
-- **Anti-détection multi-couches**  
-- **Randomisation** des actions (human-like)  
-- **Failsafes** (sorties d’urgence)  
+- **Anti-détection**  
+- **Randomisation** des actions (human-like)
 - **Masquage** dans la liste des mods
 
 ### 🔧 Automatisation
 - **Auto-requeue** intelligent  
 - **Gestion d’inventaire** et **projectiles**  
-- **Mouvements pré-match** automatisés  
+- **Mouvements pré-match** automatisés (en cours de dev)
 - **Intégration Discord** (webhook)
 
 ---
@@ -228,7 +227,7 @@ Mesures intégrées : randomisation, comportements human-like, délais variables
         <br>
         <strong>HumanDuck23</strong>
         <br>
-        <em>🎯 Créateur du projet original (kira)</em>
+        <em>🎯 Créateur du projet original (DuckDueller)</em>
         <br>
         <em>Base & inspiration</em>
       </td>
