@@ -1,4 +1,4 @@
-name: Build DuckDueller
+name: Build Kira
 
 on:
   # Manuel uniquement dans l’onglet Actions
