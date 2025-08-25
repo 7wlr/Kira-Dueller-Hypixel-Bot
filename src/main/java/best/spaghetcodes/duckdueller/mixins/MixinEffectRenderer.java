@@ -1,4 +1,4 @@
-package best.spaghetcodes.duckdueller.mixins;
+package best.spaghetcodes.kira.mixins;
 
 import com.google.common.collect.Lists;
 import net.minecraft.client.particle.EffectRenderer;
