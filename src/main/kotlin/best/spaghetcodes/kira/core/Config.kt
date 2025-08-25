@@ -45,10 +45,10 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     @Property(type = PropertyType.NUMBER, name = "Disconnect After X Minutes", description = "After X minutes the bot will toggle off and disconnect. 0 = disabled", category = "General", min = 0, max = 500, increment = 30)
     var disconnectAfterMinutes = 0
 
-    @Property(type = PropertyType.NUMBER, name = "Min CPS", description = "The minimum CPS that the bot will be clicking at.", category = "Combat", min = 6, max = 15, increment = 1)
+    @Property(type = PropertyType.NUMBER, name = "Min CPS", description = "The minimum CPS that the bot will be clicking at.", category = "Combat", min = 1, max = 22, increment = 1)
     var minCPS = 10
 
-    @Property(type = PropertyType.NUMBER, name = "Max CPS", description = "The maximum CPS that the bot will be clicking at.", category = "Combat", min = 9, max = 18, increment = 1)
+    @Property(type = PropertyType.NUMBER, name = "Max CPS", description = "The maximum CPS that the bot will be clicking at.", category = "Combat", min = 1, max = 22, increment = 1)
     var maxCPS = 14
 
     @Property(type = PropertyType.NUMBER, name = "Horizontal Look Speed", description = "Horizontal look speed.", category = "Combat", min = 1, max = 50, increment = 1)
@@ -79,7 +79,7 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     var sendStartMessage = false
 
     @Property(type = PropertyType.TEXT, name = "Start Message", description = "Message to send at the beginning of the game", category = "AutoGG")
-    var startMessage = "GL HF!"
+    var startMessage = "gl"
 
     @Property(type = PropertyType.NUMBER, name = "Start Message Delay", description = "How long to wait before sending the start message", category = "AutoGG", min = 50, max = 1000, increment = 50)
     var startMessageDelay = 100
@@ -137,12 +137,12 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
 
     // --- Typage explicite + ordre conservé (utile pour l'UI) ---
     val bots: Map<Int, BotBase> = linkedMapOf(
-        0 to Sumo(),
-        1 to Boxing(),
-        2 to Classic(),
-        3 to OP(),
-        4 to Combo(),
-        5 to ClassicV2(),
+        0 to Classic(),
+        1 to ClassicV2(),
+        2 to OP(),
+        3 to Combo(),
+        4 to Sumo(),
+        5 to Boxing(),
         6 to BowDuel(),
         7 to Blitz()
     )
