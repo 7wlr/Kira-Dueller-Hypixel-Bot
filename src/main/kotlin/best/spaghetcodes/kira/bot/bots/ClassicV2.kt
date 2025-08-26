@@ -82,7 +82,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     private val rodCloseMin = 2.0f
     private val rodCloseMax = 3.4f
-    private val rodMainMin = 3.1f     // resserré pour éviter les casts “loin du corps”
+    private val rodMainMin = 3.1f
     private val rodMainMax = 6.7f
     private val rodInterceptMin = 5.8f
     private val rodInterceptMax = 7.2f
@@ -262,7 +262,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Mouse.setUsingProjectile(false)
     }
 
-    // erreur d’alignement yaw (abs)
     private fun yawError(): Float {
         val p = mc.thePlayer ?: return 180f
         val o = opponent() ?: return 180f
@@ -521,14 +520,14 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 castRodNow(distance); prevDistance = distance; return
             }
 
-            // Fenêtre principale (pas de strafe adverse marqué)
+            // Fenêtre principale (éviter strafe adverse marqué)
             if (!isStrafing &&
                 distance in rodMainMin..rodMainMax &&
                 cdFarOK && aligned && los && !facingAway) {
                 castRodNow(distance); prevDistance = distance; return
             }
 
-            // Réponse à rod adverse : uniquement bornée ~3.1..7.2
+            // Réponse à rod adverse (bornée)
             if (!isStrafing &&
                 oppRodRecently &&
                 distance in rodMainMin..rodInterceptMax &&
@@ -550,6 +549,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             val reserve = reserveNeeded(now)
             val left = arrowsLeft()
 
+            // Ouverture
             if (distance >= minBowDist &&
                 shotsFired < maxArrows &&
                 openVolleyFired < openVolleyMax &&
@@ -565,7 +565,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 pendingProjectileUntil = now + 60L
                 actionLockUntil = now + (lock + 120)
                 projectileKind = KIND_BOW
-                useBow(tunedD) {
+                useBow(tunedD.toDouble()) {
                     shotsFired++
                     openVolleyFired++
                     lastShotAt = System.currentTimeMillis()
@@ -575,6 +575,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
+            // Tir réactif “slow bow”
             val oppHasBowNow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
             val bowLikelyNow = oppHasBowNow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
             if (distance >= minBowDist &&
@@ -590,7 +591,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 pendingProjectileUntil = now + 50L
                 actionLockUntil = now + (lock + 100)
                 projectileKind = KIND_BOW
-                useBow(tunedD) {
+                useBow(tunedD.toDouble()) {
                     shotsFired++
                     lastReactiveShotAt = System.currentTimeMillis()
                 }
@@ -599,6 +600,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
+            // Opportuniste (loin / dos)
             if (distance >= minBowDist && shotsFired < maxArrows && left > reserve) {
                 val away = EntityUtils.entityFacingAway(p, opp)
                 if ((away && distance in 3.5f..30f) ||
@@ -610,7 +612,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     pendingProjectileUntil = now + 60L
                     actionLockUntil = now + (lock + 120)
                     projectileKind = KIND_BOW
-                    useBow(tunedD) { shotsFired++ }
+                    useBow(tunedD.toDouble()) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                     prevDistance = distance
                     return
@@ -664,4 +666,3 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         prevDistance = distance
     }
 }
-f
