@@ -565,7 +565,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 pendingProjectileUntil = now + 60L
                 actionLockUntil = now + (lock + 120)
                 projectileKind = KIND_BOW
-                useBow(tunedD.toDouble()) {
+                useBow(tunedD) {
                     shotsFired++
                     openVolleyFired++
                     lastShotAt = System.currentTimeMillis()
@@ -591,7 +591,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 pendingProjectileUntil = now + 50L
                 actionLockUntil = now + (lock + 100)
                 projectileKind = KIND_BOW
-                useBow(tunedD.toDouble()) {
+                useBow(tunedD) {
                     shotsFired++
                     lastReactiveShotAt = System.currentTimeMillis()
                 }
@@ -612,7 +612,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     pendingProjectileUntil = now + 60L
                     actionLockUntil = now + (lock + 120)
                     projectileKind = KIND_BOW
-                    useBow(tunedD.toDouble()) { shotsFired++ }
+                    useBow(tunedD) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                     prevDistance = distance
                     return
