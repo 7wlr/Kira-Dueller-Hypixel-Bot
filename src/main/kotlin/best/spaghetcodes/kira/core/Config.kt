@@ -45,14 +45,14 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     @Property(type = PropertyType.NUMBER, name = "Disconnect After X Minutes", description = "After X minutes the bot will toggle off and disconnect. 0 = disabled", category = "General", min = 0, max = 500, increment = 30)
     var disconnectAfterMinutes = 0
 
-    @Property(type = PropertyType.NUMBER, name = "Min CPS", description = "The minimum CPS that the bot will be clicking at.", category = "Combat", min = 1, max = 22, increment = 1)
-    var minCPS = 10
+    @Property(type = PropertyType.NUMBER, name = "Min CPS", description = "The minimum CPS that the bot will be clicking at.", category = "Combat", min = 1, max = 25, increment = 1)
+    var minCPS = 15
 
-    @Property(type = PropertyType.NUMBER, name = "Max CPS", description = "The maximum CPS that the bot will be clicking at.", category = "Combat", min = 1, max = 22, increment = 1)
-    var maxCPS = 14
+    @Property(type = PropertyType.NUMBER, name = "Max CPS", description = "The maximum CPS that the bot will be clicking at.", category = "Combat", min = 1, max = 25, increment = 1)
+    var maxCPS = 19
 
     @Property(type = PropertyType.NUMBER, name = "Horizontal Look Speed", description = "Horizontal look speed.", category = "Combat", min = 1, max = 50, increment = 1)
-    var lookSpeedHorizontal = 10
+    var lookSpeedHorizontal = 14
 
     @Property(type = PropertyType.NUMBER, name = "Vertical Look Speed", description = "Vertical look speed.", category = "Combat", min = 1, max = 50, increment = 1)
     var lookSpeedVertical = 5
