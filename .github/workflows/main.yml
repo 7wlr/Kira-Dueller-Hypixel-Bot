@@ -1,8 +1,12 @@
 name: Build Kira
 
 on:
-  # Manuel uniquement dans l’onglet Actions
+  # Manuel uniquement
   workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build:
@@ -15,8 +19,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          submodules: recursive
 
-      # Sécurité : vérifie l’intégrité du Gradle Wrapper
+      # Vérifie l’intégrité du Gradle Wrapper (sécurité supply-chain)
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v1
 
@@ -27,16 +32,28 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      # Cache Gradle performant
+      # Cache Gradle + config auto (develocity désactivé par défaut)
       - name: Setup Gradle
         uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Make gradlew executable
         run: chmod +x gradlew
 
-      # Build complet
-      - name: Gradle Clean & Build
-        run: ./gradlew --no-daemon clean build
+      # Pré-chauffe les résolutions (remplit le cache, réduit la flakiness réseau)
+      - name: Warm Gradle deps
+        run: ./gradlew --no-daemon -q help
+
+      # Build avec retry x3 pour les échecs transitoires (réseau, timeouts CDN)
+      - name: Gradle Clean & Build (retry)
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 3
+          timeout_minutes: 25
+          retry_on: error
+          command: ./gradlew --no-daemon --stacktrace clean build
 
       # Artifacts
       - name: Upload artifacts
