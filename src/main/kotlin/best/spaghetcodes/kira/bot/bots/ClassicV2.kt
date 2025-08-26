@@ -556,7 +556,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 // trop loin: jamais de rod
             } else if (now < postBowNoRodUntil) {
                 // pas de rod juste après un tir d’arc
-            } else if (! (abs(dx) + abs(dz) > 0.18)) {
+            } else if (!isStrafing) {
                 val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
                 val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
                 val cdCloseOK = (now - lastRodUse) >= cdClose
