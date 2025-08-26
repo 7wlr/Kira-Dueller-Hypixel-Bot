@@ -34,7 +34,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val fullDrawMsMax = 980
     private val bowCancelCloseDist = 4.8f
 
-    // Ouverture contrôlée
+    // Ouverture contrôlée (1–2 flèches max)
     private var openVolleyMax = 1
     private var openVolleyFired = 0
     private var openWindowUntil = 0L
@@ -73,6 +73,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val earlyReserve = 3
     private val midReserve = 2
 
+    // Interdiction de rod juste après un tir d’arc
+    private var postBowNoRodUntil = 0L
+
     // ---------------------- ROD ----------------------
     private var lastRodUse = 0L
     private var rodCdCloseMsBase = 340L
@@ -85,6 +88,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val rodMainMax = 6.8f
     private val rodInterceptMin = 5.8f
     private val rodInterceptMax = 7.2f
+    private val rodMaxRangeHard = 7.2f // garde-fou dur (évite rod “dans le vide”)
 
     // Heuristique hit/miss via hurtTime
     private var lastRodAttemptAt = 0L
@@ -167,6 +171,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         lastReactiveShotAt = 0L
         gameStartAt = System.currentTimeMillis()
+        postBowNoRodUntil = 0L
 
         lastRodUse = 0L
         rodCdBias = 1.0f
@@ -483,8 +488,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         // ----------------------- ROD ----------------------------
         if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
-            // Aucune rod si l’adversaire STRAFE
-            if (!isStrafing) {
+
+            // 1) Garde-fous anti-rod “dans le vide”
+            if (distance > rodMaxRangeHard) {
+                // trop loin: jamais de rod
+            } else if (now < postBowNoRodUntil) {
+                // anti-chaining: pas de rod juste après un tir d’arc
+            } else if (!isStrafing) {
                 val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
                 val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
                 val cdCloseOK = (now - lastRodUse) >= cdClose
@@ -514,9 +524,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     return
                 }
 
-                // Main / réponse à rod adverse
+                // Main / réponse à rod adverse (toujours dans range réelle)
                 if (allowRodByMeleePolicy && !facingAway && cdFarOK) {
-                    if (oppRodRecently) {
+                    if (oppRodRecently && distance <= rodMaxRangeHard) {
                         castRodNow(distance)
                         prevDistance = distance
                         return
@@ -567,12 +577,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     lastShotAt = System.currentTimeMillis()
                 }
                 projectileGraceUntil = bowHardLockUntil + 120
+                // Verrou rod post-bow (évite rod “dans le vide” juste après)
+                postBowNoRodUntil = now + lock + 380L
                 prevDistance = distance
                 return
             }
 
             // Réactif si l’ennemi slow-bow/immobile
-            val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
             val bowLikelyNow = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
             if (shotsFired < maxArrows &&
                 bowLikelyNow &&
@@ -591,6 +602,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     lastReactiveShotAt = System.currentTimeMillis()
                 }
                 projectileGraceUntil = bowHardLockUntil + 100
+                postBowNoRodUntil = now + lock + 320L
                 prevDistance = distance
                 return
             }
@@ -609,6 +621,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     projectileKind = KIND_BOW
                     useBow(tunedD) { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
+                    postBowNoRodUntil = now + lock + 320L
                     prevDistance = distance
                     return
                 }
@@ -644,18 +657,35 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     lastStrafeSwitch = now
                 }
             }
-            if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(820, 1100)) {
-                strafeDir = -strafeDir
-                lastStrafeSwitch = now
+
+            // --- Micro-strafe agressif en proche (<2.6) ---
+            if (distance < 2.6f) {
+                if (now - lastStrafeSwitch > RandomUtils.randomIntInRange(110, 170)) {
+                    strafeDir = -strafeDir
+                    lastStrafeSwitch = now
+                }
+                // Poids plus faible pour ne pas “décrocher” la cible
+                val weightClose = 4
+                if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
+                // On force l’avance pour garder la pression
+                Movement.startForward()
+                Movement.startSprinting()
+                randomStrafe = false
+            } else {
+                // Medium/long range (inchangé)
+                if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(820, 1100)) {
+                    strafeDir = -strafeDir
+                    lastStrafeSwitch = now
+                }
+                val deltaDist = if (prevDistance > 0f) abs(distance - prevDistance) else 999f
+                if (distance in 1.8f..3.6f && deltaDist < 0.03f && now - lastStrafeSwitch > 260) {
+                    strafeDir = -strafeDir
+                    lastStrafeSwitch = now
+                }
+                val weight = if (distance < 4f) 7 else 5
+                if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
+                randomStrafe = (distance in 8.0f..15.0f)
             }
-            val deltaDist = if (prevDistance > 0f) abs(distance - prevDistance) else 999f
-            if (distance in 1.8f..3.6f && deltaDist < 0.03f && now - lastStrafeSwitch > 260) {
-                strafeDir = -strafeDir
-                lastStrafeSwitch = now
-            }
-            val weight = if (distance < 4f) 7 else 5
-            if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
-            randomStrafe = (distance in 8.0f..15.0f)
         }
 
         handle(clear, randomStrafe, movePriority)
