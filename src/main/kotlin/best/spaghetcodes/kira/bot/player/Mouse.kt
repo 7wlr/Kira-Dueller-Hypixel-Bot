@@ -73,20 +73,6 @@ object Mouse {
         }
     }
 
-    /**
-     * Force un clic droit même si rClickDown est encore true (parade, tir précédent, etc.).
-     * 1) on relâche si nécessaire ; 2) on ré-appuie juste après.
-     * Utile pour fiabiliser la canne (et certains cas d’arc) lors d’un switch rapide.
-     */
-    fun rClickForce(duration: Int, releaseDelayMs: Int = 3) {
-        if (kira.bot?.toggled() != true) return
-        if (rClickDown) {
-            rClickUp() // libère immédiatement
-        }
-        // ré-appuie quasi tout de suite (quelques ms suffisent ; évite 0ms sur certaines JVM)
-        TimeUtils.setTimeout({ rClick(duration) }, releaseDelayMs)
-    }
-
     fun startLeftAC() {
         if (kira.bot?.toggled() == true) {
             leftAC = true
