@@ -33,10 +33,10 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val fullDrawMsMin = 820
     private val fullDrawMsMax = 980
 
-    // Distance minimum “safe” pour sortir l’arc (évite swap arc/épée à bout portant)
+    // Distance minimum “safe” pour sortir l’arc (empêche le swap arc/épée à bout portant)
     private val bowMinSafeDist = 8.6f
 
-    // Si on bande et que l’ennemi s’approche sous ce seuil => on annule
+    // Si on est en train de bander et que l’ennemi s’approche sous ce seuil => on annule
     private val bowCancelCloseDist = 8.6f
 
     // Ouverture contrôlée
@@ -107,7 +107,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
     // -------------------- PARADE ÉPÉE -----------------
     private val parryMinDist = 6.5f
-    private val parryCloseCancelDist = 6.0f // <== no-parry < 6 blocs (demandé)
+    private val parryCloseCancelDist = 6.0f
     private val parryCooldownMs = 900L
     private val parryHoldMinMs = 650
     private val parryHoldMaxMs = 980
@@ -136,14 +136,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     // Biais strafe court (post “parade proche -> rod”)
     private var strafeBiasDir = 0
     private var strafeBiasStickUntil = 0L
-
-    // -------- Début de game : spam-jump jusqu’à 1ère bandaison d’arc
-    private var earlySpamJump = false
-    private var lastEarlyJumpAt = 0L
-
-    // -------- Faux swings d’épée : 1 seule fois quand l’ennemi est à 15–20 blocs
-    private var earlyFakeSwingsDone = false
-    private var earlyFakeSwingsScheduled = false
 
     // ---------------------- LIFECYCLE -----------------
     override fun onGameStart() {
@@ -202,14 +194,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         meleeFocusUntil = 0L
         strafeBiasDir = 0
         strafeBiasStickUntil = 0L
-
-        // Activer le spam-jump de début jusqu’à première bandaison d’arc
-        earlySpamJump = true
-        lastEarlyJumpAt = 0L
-
-        // Reset faux swings
-        earlyFakeSwingsDone = false
-        earlyFakeSwingsScheduled = false
     }
 
     override fun onGameEnd() {
@@ -282,6 +266,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
 
         if (distanceNow < 3.0f) {
+            // Très proche : zéro latence obligatoire
             useRodImmediate()
         } else {
             useRod()
@@ -335,36 +320,18 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
 
-        // ---- Spam-jump de début jusqu’à la première bandaison d’arc
-        if (earlySpamJump) {
-            if (p.onGround && now - lastEarlyJumpAt >= 260L) {
-                Movement.singleJump(RandomUtils.randomIntInRange(150, 230))
-                lastEarlyJumpAt = now
-            }
-        }
-
-        // ---- Faux coups d’épée “humain” : 1 seule fois quand l’ennemi est à 15..20 blocs
-        if (!earlyFakeSwingsDone &&
-            !earlyFakeSwingsScheduled &&
+        // ---- Faux coups d’épée “humain” au tout début (15..20 blocs)
+        if (now - gameStartAt <= 2000L &&
             distance in 15.0f..20.0f &&
             !Mouse.isUsingProjectile() &&
-            !Mouse.rClickDown
-        ) {
-            earlyFakeSwingsScheduled = true
-            // S’assurer d’avoir l’épée en main
+            !Mouse.rClickDown) {
             if (p.heldItem == null || !p.heldItem.unlocalizedName.lowercase().contains("sword")) {
                 Inventory.setInvItem("sword")
             }
-            // 3 à 5 swings espacés 250–380 ms (scheduled une seule fois)
-            val swings = RandomUtils.randomIntInRange(3, 5)
-            var delay = 0
-            repeat(swings) {
-                delay += RandomUtils.randomIntInRange(250, 380)
-                TimeUtils.setTimeout({
-                    Mouse.leftClick()
-                }, delay)
+            // 4–6 swings espacés aléatoirement ~300–450 ms
+            if ((now / 320L) % 2L == 0L) {
+                Mouse.leftClick()
             }
-            earlyFakeSwingsDone = true
         }
 
         // suivi rod adverse
@@ -436,7 +403,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
         val bowLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
 
-        // Coupe-parade courte portée (< 6 blocs)
+        // Coupe-parade courte portée
         if (Mouse.rClickDown && distance < parryCloseCancelDist) {
             Mouse.rClickUp()
             parryFromBow = false
@@ -591,7 +558,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             val reserve = reserveNeeded(now)
             val left = arrowsLeft()
 
-            // Ouverture (au-dessus du seuil “safe”)
+            // Ouverture (seulement si on est au-dessus du seuil “safe”)
             if (shotsFired < maxArrows &&
                 openVolleyFired < openVolleyMax &&
                 now < openWindowUntil &&
@@ -599,9 +566,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 distance >= max(openShotMinDist, bowMinSafeDist) &&
                 left > reserve &&
                 (now - lastShotAt) >= RandomUtils.randomIntInRange(openSpacingMin.toInt(), openSpacingMax.toInt())) {
-
-                // on stoppe le spam-jump dès qu’on commence la 1ère bandaison
-                earlySpamJump = false
 
                 val tunedD = adjustedAimDistance(distance)
                 val lock = chargeMsFor(distance, opening = true)
@@ -619,7 +583,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // Réactif “ennemi immobile/lent + bow en main” (distance >= safe)
+            // Réactif “ennemi immobile/lent + bow en main” (mais seulement si distance >= safe)
             val isStillNow = stillFrames >= stillFramesNeeded
             val oppHasBowNow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
             val bowLikelyNow = oppHasBowNow && (isStillNow || bowSlowFrames >= bowSlowFramesNeeded)
@@ -630,8 +594,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 now - lastReactiveShotAt >= reactiveCdMs &&
                 WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
                 left > reserve) {
-
-                earlySpamJump = false
 
                 val tunedD = adjustedAimDistance(distance)
                 val lock = chargeMsFor(distance, opening = false)
@@ -648,15 +610,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 return
             }
 
-            // Opportuniste (jamais < safe si l’ennemi n’est pas de dos)
+            // Opportuniste (jamais en dessous du seuil “safe” si l’ennemi n’est pas de dos)
             if (shotsFired < maxArrows && left > reserve) {
                 val away = EntityUtils.entityFacingAway(p, opp)
                 val okFarFront = (!away && distance in 28.0f..33.0f)
                 val okAway = (away && distance >= max(9.0f, bowMinSafeDist) && distance <= 30.0f)
 
                 if (okAway || okFarFront) {
-                    earlySpamJump = false
-
                     val tunedD = adjustedAimDistance(distance)
                     val lock = chargeMsFor(distance, opening = false)
                     bowHardLockUntil = now + lock
