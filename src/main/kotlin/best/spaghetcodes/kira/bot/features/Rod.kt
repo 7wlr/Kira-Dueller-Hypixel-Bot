@@ -7,41 +7,41 @@ import best.spaghetcodes.kira.utils.TimeUtils
 import net.minecraft.client.Minecraft
 
 /**
- * Canne à pêche – séquence simple et robuste (style OP) :
+ * Canne à pêche – séquence simple et robuste (1.8.9) :
  * 1) switch rod
- * 2) micro-settle (≈ 1 tick)
+ * 2) micro-settle (~1 tick)
  * 3) rClick court (cast)
  * 4) garder la canne un bref moment
  * 5) revenir à l’épée
  *
- * On NE gère PAS d'état global ici (pas de setUsingProjectile), pour éviter
- * les interactions indésirables avec d'autres modules.
+ * AUCUN état global ici (pas de setUsingProjectile) pour éviter les conflits.
+ * Utilise rClickForce pour garantir le press/release même si rClickDown était déjà true.
  */
 interface Rod {
 
     /**
-     * Mid range (~3–6.5 blocs) : rétention un peu plus longue pour fiabiliser le KB.
+     * Mid range (~3–6.5 blocs) : rétention un peu plus longue (fiabilise le KB).
      */
     fun useRod() {
-        // switch sur la canne
+        // 1) switch sur la canne
         Inventory.setInvItem("rod")
 
-        // ~1 tick de settle
+        // 2) petit settle (≈ 1 tick)
         val preDelay = RandomUtils.randomIntInRange(55, 75)
         val clickHold = RandomUtils.randomIntInRange(80, 110)    // durée du rClick
         val retainMs  = RandomUtils.randomIntInRange(180, 220)   // garder la canne en main
 
         TimeUtils.setTimeout({
-            // sécurité : si le switch n'a pas pris (pack/ping), on réapplique
+            // Sécurité : si le switch n’a pas pris (pack/ping), on réapplique
             val held = Minecraft.getMinecraft().thePlayer?.heldItem
             if (held == null || !held.unlocalizedName.lowercase().contains("rod")) {
                 Inventory.setInvItem("rod")
             }
 
-            // cast
-            Mouse.rClick(clickHold)
+            // 3) cast (force le press/release)
+            Mouse.rClickForce(clickHold)
 
-            // petite rétention puis retour épée
+            // 4) petite rétention puis 5) retour épée
             TimeUtils.setTimeout({
                 Inventory.setInvItem("sword")
             }, retainMs)
@@ -50,12 +50,14 @@ interface Rod {
 
     /**
      * Close range (<~3 blocs) : rétention plus courte (120–150 ms).
-     * NOTE : on garde quand même un micro-settle d’un tick — c’est la clé de fiabilité.
+     * On garde tout de même ~1 tick de settle (clé de fiabilité).
      */
     fun useRodImmediate() {
+        // 1) switch sur la canne
         Inventory.setInvItem("rod")
 
-        val preDelay = RandomUtils.randomIntInRange(50, 60)      // ~1 tick
+        // 2) micro-settle (~1 tick)
+        val preDelay = RandomUtils.randomIntInRange(50, 60)
         val clickHold = RandomUtils.randomIntInRange(70, 95)
         val retainMs  = RandomUtils.randomIntInRange(120, 150)
 
@@ -65,8 +67,10 @@ interface Rod {
                 Inventory.setInvItem("rod")
             }
 
-            Mouse.rClick(clickHold)
+            // 3) cast (force le press/release)
+            Mouse.rClickForce(clickHold)
 
+            // 4) courte rétention puis 5) retour épée
             TimeUtils.setTimeout({
                 Inventory.setInvItem("sword")
             }, retainMs)
