@@ -36,7 +36,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var shotsFired = 0
     private val maxArrows = 5
     private var gameStartAt = 0L
-    private var firstRodPending = true     // pour fiabiliser la toute première rod à l’entrée en zone
+    private var firstRodPending = true     // fiabiliser la toute première rod à l’entrée en zone
 
     private var prevDistance = -1f
     private var lastStrafeSwitch = 0L
@@ -172,7 +172,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         // Première rod fiable : à la 1ère entrée dans la zone 3–7 blocs on la privilégie
         if (firstRodPending && distance in 3.0f..7.0f && !facingAway) {
-            // petite fenêtre anti-double action
             useRod()
             lock(300)
             lastRodAt = t
@@ -220,7 +219,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         if (canBow) {
             val tunedD = adjustedAimDistance(distance)
-            // Tir normal (charge complète) – Bow.kt gère le hold
             useBow(tunedD) {
                 shotsFired++
             }
@@ -236,7 +234,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         prevDistance = distance
     }
 
-    private fun basicMove(p: net.minecraft.entity.player.EntityPlayer, opp: net.minecraft.entity.EntityLivingBase, distance: Float, t: Long) {
+    private fun basicMove(
+        p: net.minecraft.entity.player.EntityPlayer,
+        opp: net.minecraft.entity.EntityLivingBase,
+        distance: Float,
+        t: Long
+    ) {
         // avancer/stopper
         if (distance < 0.75f || (distance < 2.4f && combo >= 2 && (prevDistance > 0 && prevDistance - distance >= 0.14f))) {
             Movement.stopForward()
@@ -252,7 +255,8 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (EntityUtils.entityFacingAway(p, opp)) {
             if (WorldUtils.leftOrRightToPoint(p, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
         } else {
-            val rotations = EntityUtils.getRotations(opp, p, false)
+            // ⚠️ Correction: player d’abord, target ensuite
+            val rotations = EntityUtils.getRotations(p, opp, false)
             if (rotations != null && t - lastStrafeSwitch > 300) {
                 val preferSide = if (rotations[0] < 0) +1 else -1
                 if (preferSide != strafeDir) {
