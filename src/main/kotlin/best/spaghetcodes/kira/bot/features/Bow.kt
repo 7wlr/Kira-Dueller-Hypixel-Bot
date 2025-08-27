@@ -7,61 +7,70 @@ import best.spaghetcodes.kira.utils.TimeUtils
 import net.minecraft.client.Minecraft
 
 /**
- * Arc – séquence simple 1.8.9 :
- *  - Si un clic droit est en cours, on lève d’abord (anti-conflit)
- *  - Switch "bow"
- *  - Petit settle
- *  - Mouse.rClick(hold) (charge) -> relâche auto
- *  - Petit tail puis retour "sword"
+ * Arc (Hypixel Classic/OP)
+ * Deux voies :
+ *  - useBow(distance): chemin "safe" (petit pré-délai) — utilisé historiquement par OP
+ *  - useBowImmediateFull(): chemin immédiat (zéro délai) — idéal pour Classic agressif
  */
 interface Bow {
 
     val bowMinHoldMs: Int get() = 1150
     val bowMaxHoldMs: Int get() = 1300
 
-    /** Tir "safe" avec petit settle avant la charge */
+    /**
+     * Chemin "safe" conservé pour compat OP (pré-délai léger).
+     */
     fun useBow(distance: Float, afterShot: () -> Unit = {}) {
-        if (Mouse.rClickDown) {
-            Mouse.rClickUp()
-        }
+        if (Mouse.isUsingProjectile()) return
 
+        Mouse.stopLeftAC()
+        Mouse.setUsingProjectile(true)
+
+        // Switch sur l’arc + petit ‘settle’ (compat packs / ping OP)
         Inventory.setInvItem("bow")
-
         val preDelay = RandomUtils.randomIntInRange(60, 110)
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
 
         TimeUtils.setTimeout({
-            // S’assurer qu’on tient bien l’arc
+            // sécurité: s’assurer qu’on tient bien un arc (packs, latence)
             val held = Minecraft.getMinecraft().thePlayer?.heldItem
             if (held == null || !held.unlocalizedName.lowercase().contains("bow")) {
                 Inventory.setInvItem("bow")
             }
 
-            // Charge (relâche auto via Mouse.rClick)
+            // Maintien pour un tir full-charge
             Mouse.rClick(hold)
 
-            // Petit tail puis retour épée + callback
+            // Laisser la release, puis retour épée
             TimeUtils.setTimeout({
+                Mouse.setUsingProjectile(false)
                 Inventory.setInvItem("sword")
                 afterShot()
-            }, hold + RandomUtils.randomIntInRange(80, 140))
+            }, hold + RandomUtils.randomIntInRange(90, 150))
         }, preDelay)
     }
 
-    /** Variante immédiate (sans settle) pour certaines ouvertures agressives */
+    /**
+     * Chemin "immédiat" sans aucun pré-délai : switch ➜ rClick(hold) tout de suite.
+     * A utiliser quand on veut zéro latence (ex. Classic agressif).
+     */
     fun useBowImmediateFull(afterShot: () -> Unit = {}) {
-        if (Mouse.rClickDown) {
-            Mouse.rClickUp()
-        }
+        if (Mouse.isUsingProjectile()) return
+
+        Mouse.stopLeftAC()
+        Mouse.setUsingProjectile(true)
 
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
 
+        // Switch instant + clic droit immédiat
         Inventory.setInvItem("bow")
         Mouse.rClick(hold)
 
+        // Release + retour épée
         TimeUtils.setTimeout({
+            Mouse.setUsingProjectile(false)
             Inventory.setInvItem("sword")
             afterShot()
-        }, hold + RandomUtils.randomIntInRange(80, 140))
+        }, hold + RandomUtils.randomIntInRange(90, 150))
     }
 }
