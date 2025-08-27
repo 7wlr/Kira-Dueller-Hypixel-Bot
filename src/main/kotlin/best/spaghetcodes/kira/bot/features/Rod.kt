@@ -11,11 +11,14 @@ import net.minecraft.client.Minecraft
  * Deux voies :
  *  - useRod(): chemin "safe" (petit pré-délai) — historiquement bon pour OP
  *  - useRodImmediate(): chemin immédiat (zéro délai) — pour close/mid range agressif
+ *
+ * Objectif : supprimer les cas "prend la canne en main mais ne lance pas".
  */
 interface Rod {
 
     /**
      * Chemin "safe" conservé (petit pré-délai).
+     * Fiable en ping moyen/élevé, garde une petite latence pour laisser l'item s'équiper.
      */
     fun useRod() {
         if (Mouse.isUsingProjectile()) return
@@ -30,7 +33,7 @@ interface Rod {
         val settleAfter = RandomUtils.randomIntInRange(260, 420)
 
         TimeUtils.setTimeout({
-            // sécurité: vérifier qu’on tient bien la rod
+            // sécurité: vérifier qu’on tient bien la rod (packs/latence)
             val held = Minecraft.getMinecraft().thePlayer?.heldItem
             if (held == null || !held.unlocalizedName.lowercase().contains("rod")) {
                 Inventory.setInvItem("rod")
