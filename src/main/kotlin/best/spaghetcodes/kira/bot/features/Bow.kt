@@ -11,6 +11,8 @@ import net.minecraft.client.Minecraft
  * Deux voies :
  *  - useBow(distance): chemin "safe" (petit pré-délai) — utilisé historiquement par OP
  *  - useBowImmediateFull(): chemin immédiat (zéro délai) — idéal pour Classic agressif
+ *
+ * Objectif : éviter les cas "arc en main sans tirer" et revenir proprement à l'épée.
  */
 interface Bow {
 
@@ -19,6 +21,7 @@ interface Bow {
 
     /**
      * Chemin "safe" conservé pour compat OP (pré-délai léger).
+     * Maintien explicit rClick(hold) puis release + retour épée.
      */
     fun useBow(distance: Float, afterShot: () -> Unit = {}) {
         if (Mouse.isUsingProjectile()) return
