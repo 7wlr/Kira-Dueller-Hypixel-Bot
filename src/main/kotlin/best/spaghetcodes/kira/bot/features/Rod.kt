@@ -7,69 +7,57 @@ import best.spaghetcodes.kira.utils.TimeUtils
 import net.minecraft.client.Minecraft
 
 /**
- * Gestion canne (Hypixel 1.8.9)
+ * Canne à pêche – séquence simple et robuste (style OP) :
+ * 1) switch rod
+ * 2) micro-settle (≈ 1 tick)
+ * 3) rClick court (cast)
+ * 4) garder la canne un bref moment
+ * 5) revenir à l’épée
  *
- * Problème connu: le clic droit émis au même tick que le switch d'item
- * peut être ignoré. On attend ~1 tick avant de cliquer, puis on garde la canne
- * brièvement en main pour fiabiliser le paquet réseau, puis retour épée.
- *
- * Deux voies:
- *  - useRod(): voie "safe" (latence très légère) -> mid range
- *  - useRodImmediate(): voie "close" agressive, mais avec micro-tick garanti
+ * On NE gère PAS d'état global ici (pas de setUsingProjectile), pour éviter
+ * les interactions indésirables avec d'autres modules.
  */
 interface Rod {
 
     /**
-     * Mid range (~3–6.5 blocs): petit pré-délai + clic + rétention ~200 ms.
-     * C’est proche de ce que tu avais de plus stable auparavant.
+     * Mid range (~3–6.5 blocs) : rétention un peu plus longue pour fiabiliser le KB.
      */
     fun useRod() {
-        if (Mouse.isUsingProjectile()) return
-
-        Mouse.stopLeftAC()
-        Mouse.setUsingProjectile(true)
-
-        // Switch sur la canne
+        // switch sur la canne
         Inventory.setInvItem("rod")
 
-        // Attente d'un tick (fiabilise l'input côté 1.8.9)
+        // ~1 tick de settle
         val preDelay = RandomUtils.randomIntInRange(55, 75)
-        val clickHold = RandomUtils.randomIntInRange(80, 110)   // durée du rClick
-        val retainMs  = RandomUtils.randomIntInRange(180, 220)  // temps canne en main après le cast
+        val clickHold = RandomUtils.randomIntInRange(80, 110)    // durée du rClick
+        val retainMs  = RandomUtils.randomIntInRange(180, 220)   // garder la canne en main
 
         TimeUtils.setTimeout({
-            // Sécurité: si l'équipement n'a pas pris, réappliquer
+            // sécurité : si le switch n'a pas pris (pack/ping), on réapplique
             val held = Minecraft.getMinecraft().thePlayer?.heldItem
             if (held == null || !held.unlocalizedName.lowercase().contains("rod")) {
                 Inventory.setInvItem("rod")
             }
 
-            // Cast: clic droit bref
+            // cast
             Mouse.rClick(clickHold)
 
-            // Garder la canne un court instant, puis revenir à l'épée
+            // petite rétention puis retour épée
             TimeUtils.setTimeout({
                 Inventory.setInvItem("sword")
-                Mouse.setUsingProjectile(false)
             }, retainMs)
         }, preDelay)
     }
 
     /**
-     * Close range (<~3 blocs): micro-tick minimal + cast + rétention ~120–140 ms.
-     * Évite le cas "prend la canne en main mais ne lance pas" sans ajouter de lourde latence.
+     * Close range (<~3 blocs) : rétention plus courte (120–150 ms).
+     * NOTE : on garde quand même un micro-settle d’un tick — c’est la clé de fiabilité.
      */
     fun useRodImmediate() {
-        if (Mouse.isUsingProjectile()) return
-
-        Mouse.stopLeftAC()
-        Mouse.setUsingProjectile(true)
-
         Inventory.setInvItem("rod")
 
-        val preDelay = RandomUtils.randomIntInRange(50, 60)     // ~1 tick
+        val preDelay = RandomUtils.randomIntInRange(50, 60)      // ~1 tick
         val clickHold = RandomUtils.randomIntInRange(70, 95)
-        val retainMs  = RandomUtils.randomIntInRange(120, 150)  // close: 120–150 ms
+        val retainMs  = RandomUtils.randomIntInRange(120, 150)
 
         TimeUtils.setTimeout({
             val held = Minecraft.getMinecraft().thePlayer?.heldItem
@@ -81,7 +69,6 @@ interface Rod {
 
             TimeUtils.setTimeout({
                 Inventory.setInvItem("sword")
-                Mouse.setUsingProjectile(false)
             }, retainMs)
         }, preDelay)
     }
