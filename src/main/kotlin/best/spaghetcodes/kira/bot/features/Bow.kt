@@ -7,42 +7,40 @@ import best.spaghetcodes.kira.utils.TimeUtils
 import net.minecraft.client.Minecraft
 
 /**
- * Arc – séquence simple (1.8.9) :
- * 1) switch bow
- * 2) petit settle (compat ping/packs)
- * 3) hold rClick (charge) via rClickForce
- * 4) release auto + retour épée
- *
- * Aucune décision “quand tirer” ici : laissé aux profils (Classic/ClassicV2/…).
+ * Arc – séquence simple 1.8.9 :
+ *  - Si un clic droit est en cours, on lève d’abord (anti-conflit)
+ *  - Switch "bow"
+ *  - Petit settle
+ *  - Mouse.rClick(hold) (charge) -> relâche auto
+ *  - Petit tail puis retour "sword"
  */
 interface Bow {
 
     val bowMinHoldMs: Int get() = 1150
     val bowMaxHoldMs: Int get() = 1300
 
-    /**
-     * Tir "safe" avec petit settle avant la charge (le plus fiable en 1.8.9).
-     * Utilise rClickForce pour garantir le press/release même si rClickDown était déjà true.
-     */
+    /** Tir "safe" avec petit settle avant la charge */
     fun useBow(distance: Float, afterShot: () -> Unit = {}) {
-        // 1) switch
+        if (Mouse.rClickDown) {
+            Mouse.rClickUp()
+        }
+
         Inventory.setInvItem("bow")
 
-        // 2) settle court (compat latence/ressource pack)
         val preDelay = RandomUtils.randomIntInRange(60, 110)
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
 
         TimeUtils.setTimeout({
-            // Sécurité : s’assurer qu’on tient bien l’arc
+            // S’assurer qu’on tient bien l’arc
             val held = Minecraft.getMinecraft().thePlayer?.heldItem
             if (held == null || !held.unlocalizedName.lowercase().contains("bow")) {
                 Inventory.setInvItem("bow")
             }
 
-            // 3) charge (press/release garanti)
-            Mouse.rClickForce(hold)
+            // Charge (relâche auto via Mouse.rClick)
+            Mouse.rClick(hold)
 
-            // 4) après la charge, petit tail puis retour épée + callback
+            // Petit tail puis retour épée + callback
             TimeUtils.setTimeout({
                 Inventory.setInvItem("sword")
                 afterShot()
@@ -50,15 +48,16 @@ interface Bow {
         }, preDelay)
     }
 
-    /**
-     * Variante "immédiate" (sans settle) pour les ouvertures agressives.
-     * Si tu vois un drop client, préfère useBow().
-     */
+    /** Variante immédiate (sans settle) pour certaines ouvertures agressives */
     fun useBowImmediateFull(afterShot: () -> Unit = {}) {
+        if (Mouse.rClickDown) {
+            Mouse.rClickUp()
+        }
+
         val hold = RandomUtils.randomIntInRange(bowMinHoldMs, bowMaxHoldMs)
 
         Inventory.setInvItem("bow")
-        Mouse.rClickForce(hold)
+        Mouse.rClick(hold)
 
         TimeUtils.setTimeout({
             Inventory.setInvItem("sword")
