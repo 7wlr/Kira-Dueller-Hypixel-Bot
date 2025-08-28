@@ -310,6 +310,11 @@ class CustomConfigGUI : GuiScreen() {
     private fun drawStatsTab(x: Int, yStart: Int): Int {
         var y = yStart
         drawString(fontRendererObj, "§lSESSION STATISTICS", x, y - scroll, primaryColor); y += 25
+        val cfg = kira.config
+        cfg?.let { config ->
+            toggle("Show Stats Overlay", x, y, { config.showStatsOverlay }, { config.showStatsOverlay = it })
+            y += 24
+        }
 
         val wins = Session.wins
         val losses = Session.losses
