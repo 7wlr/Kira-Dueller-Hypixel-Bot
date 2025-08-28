@@ -84,6 +84,8 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var rodCdBias = 1.0f // >1 = plus long, <1 = plus court
     private val rodCdBiasMax = 1.25f // plafonne l’allongement pour garder la réactivité
 
+    private val rodBanMeleeDist = 4.0f // *** BAN ROD en zone de mêlée (3–4 blocs effectifs) ***
+
     private val rodCloseMin = 2.0f
     private val rodCloseMax = 3.4f
     private val rodMainMin = 3.0f
@@ -367,7 +369,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
             rodAntiSpamUntil = nowClick + antiSpam
 
-            // On privilégie l'épée juste après un rod
+            // On privilégie l'épée juste après un rod (sans forcer un switch ad hoc ailleurs)
             meleeFocusUntil = max(meleeFocusUntil, nowClick + RandomUtils.randomIntInRange(240, 360))
         }
 
@@ -605,7 +607,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
 
         // =======================  ROD  ===========================
-        // Priorité : adversaire immobile/slow avec arc à COURTE portée => rod immédiat
+        // Priorité : adversaire immobile/slow avec arc à COURTE portée => rod immédiat (hors zone ban)
         val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
         val bowLikelyNowClose = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded) && distance <= 10.0f
         val oppRodRecently = (now - lastOppRodSeenAt) <= 2500L
@@ -616,74 +618,73 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             !Mouse.isUsingPotion() &&
             (!Mouse.rClickDown || now < reentryRodGraceUntil)) {
 
-            if (bowLikelyNowClose && distance <= rodMaxRangeHard) {
-                castRodNow(distance)
-                prevDistance = distance
-                postBowNoRodUntil = now + 320
-                return
-            }
-
-            if (distance <= rodMaxRangeHard /* garde-fou */) {
-
-                // *** MID-RANGE INSTANTANÉ 5.5–7.0 *** — mais respect de l'anti-spam
-                if (distance in rodMidInstantMin..rodMidInstantMax && !projectileActive && allowByAntiSpam) {
+            // *** BAN ROD en zone de mêlée : ne pas sortir la rod ≤ 4.0 blocs ***
+            if (distance <= rodBanMeleeDist) {
+                // pas de cast, pas de switch ; on laisse le reste de la logique vivre (épée, etc.)
+            } else {
+                if (bowLikelyNowClose && distance <= rodMaxRangeHard) {
                     castRodNow(distance)
                     prevDistance = distance
+                    postBowNoRodUntil = now + 320
                     return
                 }
 
-                val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
-                val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
-                val cdCloseOK = (now - lastRodUse) >= cdClose || now < reentryRodGraceUntil
-                val cdFarOK = (now - lastRodUse) >= cdFar || now < reentryRodGraceUntil
-                val facingAway = EntityUtils.entityFacingAway(p, opp)
+                if (distance <= rodMaxRangeHard /* garde-fou */) {
 
-                val meleeRange = distance < 3.1f
-                val allowRodByMeleePolicy = !(meleeRange && !oppRodRecently && now < meleeFocusUntil)
-
-                // Ultra-proche (break combo) — ignore anti-spam
-                if (allowRodByMeleePolicy &&
-                    distance < 2.2f && p.hurtTime > 0 && cdCloseOK && !facingAway) {
-                    castRodNow(distance)
-                    prevDistance = distance
-                    return
-                }
-
-                // Close — respecte anti-spam
-                if (allowRodByMeleePolicy &&
-                    distance in rodCloseMin..rodCloseMax &&
-                    (p.hurtTime > 0 || approaching) &&
-                    !facingAway &&
-                    cdCloseOK &&
-                    allowByAntiSpam) {
-                    castRodNow(distance)
-                    prevDistance = distance
-                    return
-                }
-
-                // Main / réponse à rod adverse (3.0–6.8) — autorisé si opp vient de rod
-                if (allowRodByMeleePolicy && !facingAway && (cdFarOK || cdCloseOK) && allowByAntiSpam) {
-                    if (oppRodRecently) {
+                    // *** MID-RANGE INSTANTANÉ 5.5–7.0 *** — mais respect de l'anti-spam
+                    if (distance in rodMidInstantMin..rodMidInstantMax && !projectileActive && allowByAntiSpam) {
                         castRodNow(distance)
                         prevDistance = distance
                         return
                     }
-                    if (distance in rodMainMin..rodMainMax) {
+
+                    val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
+                    val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
+                    val cdCloseOK = (now - lastRodUse) >= cdClose || now < reentryRodGraceUntil
+                    val cdFarOK = (now - lastRodUse) >= cdFar || now < reentryRodGraceUntil
+                    val facingAway = EntityUtils.entityFacingAway(p, opp)
+
+                    val meleeRange = distance < 3.1f
+                    val allowRodByMeleePolicy = !(meleeRange && !oppRodRecently && now < meleeFocusUntil)
+
+                    // Ultra-proche (break combo) — ***désactivé par le ban global ≤ 4.0f***
+                    // Close — respecte anti-spam mais uniquement si > rodBanMeleeDist
+                    if (allowRodByMeleePolicy &&
+                        distance in rodCloseMin..rodCloseMax &&
+                        distance > rodBanMeleeDist &&
+                        (p.hurtTime > 0 || approaching) &&
+                        !facingAway &&
+                        cdCloseOK &&
+                        allowByAntiSpam) {
                         castRodNow(distance)
                         prevDistance = distance
                         return
                     }
-                }
 
-                // Interception (5.8–7.2) — permissif, mais anti-spam requis
-                if (allowRodByMeleePolicy &&
-                    distance in rodInterceptMin..rodInterceptMax &&
-                    !facingAway &&
-                    (cdFarOK || cdCloseOK) &&
-                    allowByAntiSpam) {
-                    castRodNow(distance)
-                    prevDistance = distance
-                    return
+                    // Main / réponse à rod adverse (3.0–6.8) — autorisé si opp vient de rod et > ban
+                    if (allowRodByMeleePolicy && !facingAway && (cdFarOK || cdCloseOK) && allowByAntiSpam) {
+                        if (oppRodRecently && distance > rodBanMeleeDist) {
+                            castRodNow(distance)
+                            prevDistance = distance
+                            return
+                        }
+                        if (distance in rodMainMin..rodMainMax && distance > rodBanMeleeDist) {
+                            castRodNow(distance)
+                            prevDistance = distance
+                            return
+                        }
+                    }
+
+                    // Interception (5.8–7.2) — permissif, mais anti-spam requis et > ban
+                    if (allowRodByMeleePolicy &&
+                        distance in rodInterceptMin..rodInterceptMax &&
+                        !facingAway &&
+                        (cdFarOK || cdCloseOK) &&
+                        allowByAntiSpam) {
+                        castRodNow(distance)
+                        prevDistance = distance
+                        return
+                    }
                 }
             }
         }
