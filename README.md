@@ -76,9 +76,7 @@ Optimisé pour la 1.8.9, il combine **mécaniques de combat** avancées, **autom
 ### 🔧 Automatisation
 - **Auto-requeue** intelligent  
 - **Gestion d’inventaire** et **projectiles**  
-- **Mouvements pré-match** automatisés (en cours de dev)
-- **Intégration Discord** (webhook)
-
+- **Mouvements pré-match** automatisés 
 ---
 
 ## 📥 Installation
