@@ -159,13 +159,6 @@ Kira-Dueller-Hypixel-Bot/
 ### 🛠️ Stack
 - **Kotlin** • **Minecraft Forge** • **Mixin** • **Gradle**
 
-### 🤝 Contribution
-1. **Fork**  
-2. **Branche** pour ta feature  
-3. **Commits** propres  
-4. **PR** détaillée
-
----
 
 ## ⚠️ Avertissements
 
