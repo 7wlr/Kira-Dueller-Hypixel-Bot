@@ -23,6 +23,41 @@ object LobbyMovement {
         sumo1()
     }
 
+    fun generic() {
+        if (kira.mc.thePlayer != null) {
+            Movement.startForward()
+            Movement.startSprinting()
+
+            intervals.add(TimeUtils.setInterval(
+                fun () {
+                    if (RandomUtils.randomBool()) {
+                        Movement.singleJump(RandomUtils.randomIntInRange(120, 200))
+                    } else {
+                        if (Movement.jumping()) {
+                            Movement.stopJumping()
+                        } else {
+                            Movement.startJumping()
+                        }
+                    }
+                },
+                RandomUtils.randomIntInRange(400, 800),
+                RandomUtils.randomIntInRange(900, 1800)
+            ))
+
+            intervals.add(TimeUtils.setInterval(
+                fun () {
+                    tickYawChange = if (WorldUtils.airInFront(kira.mc.thePlayer, 4f)) {
+                        RandomUtils.randomDoubleInRange(-13.0, 13.0).toFloat()
+                    } else {
+                        0f
+                    }
+                },
+                0,
+                RandomUtils.randomIntInRange(50, 100)
+            ))
+        }
+    }
+
     fun stop() {
         Movement.clearAll()
         tickYawChange = 0f
