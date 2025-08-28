@@ -88,7 +88,10 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     // -------- Résultat via résumé & kill (FR/EN) --------
 
     private fun parseWinnerFromSummary(lineRaw: String): Pair<String, String>? {
-        val plain = ChatUtils.removeFormatting(lineRaw).replace(Regex("\\s+"), " ").trim()
+        val plain = ChatUtils.removeFormatting(lineRaw)
+            .replace(Regex("\\[[^\\]]+\\]\\s*"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
         val leftWins = Regex("^([A-Za-z0-9_]{2,16})\\s+(?:GAGNANT!?|WINNER!?|GAGNANT|WINNER)\\s+([A-Za-z0-9_]{2,16})$", RegexOption.IGNORE_CASE)
         leftWins.matchEntire(plain)?.let { m ->
             return m.groupValues[1] to m.groupValues[2]
@@ -101,7 +104,10 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     private fun parseKillLine(lineRaw: String): Pair<String, String>? {
-        val plain = ChatUtils.removeFormatting(lineRaw).replace(Regex("\\s+"), " ").trim()
+        val plain = ChatUtils.removeFormatting(lineRaw)
+            .replace(Regex("\\[[^\\]]+\\]\\s*"), "")
+            .replace(Regex("\\s+"), " ")
+            .trim()
         val fr = Regex("^([A-Za-z0-9_]{2,16}) a été tué par ([A-Za-z0-9_]{2,16})\\.?$", RegexOption.IGNORE_CASE)
         fr.matchEntire(plain)?.let { m -> return m.groupValues[2] to m.groupValues[1] }
         val en = Regex("^([A-Za-z0-9_]{2,16}) was killed by ([A-Za-z0-9_]{2,16})\\.?$", RegexOption.IGNORE_CASE)
