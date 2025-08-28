@@ -36,6 +36,9 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     @Property(type = PropertyType.SWITCH, name = "Disable Chat Messages", description = "When this is enabled, the bot will not send any chat messages.", category = "General")
     var disableChatMessages = false
 
+    @Property(type = PropertyType.SWITCH, name = "Show Stats Overlay", description = "Display session stats on screen.", category = "General")
+    var showStatsOverlay = true
+
     @Property(type = PropertyType.NUMBER, name = "Throw After X Games", description = "After X games the bot will underperform and throw the game. 0 = disabled.", category = "General", min = 0, max = 1000, increment = 10)
     var throwAfterGames = 0
 
