@@ -35,7 +35,7 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
     private val djumpCdMin = 500
     private val djumpCdMax = 1000
 
-    // Hitselecting / bait (repris et adapté du fichier internet)
+    // Hitselecting / bait (repris et adapté)
     private val enableHitselecting = true
     private val hitselectChance = 0.28
     private val hitselectMinDist = 3.6f
@@ -141,7 +141,6 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
 
         val now = System.currentTimeMillis()
         val distance = EntityUtils.getDistanceNoY(p, opp)
-        val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.12f)
 
         // ---- Latch d’attaque (évite ON/OFF rapide autour du seuil)
         if (!isHitselecting && distance <= attackStartDist && !Mouse.isUsingPotion() && !Mouse.isUsingProjectile()) {
@@ -230,14 +229,15 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
         // =================== STRAFE & DIRECTION ===================
         val movePriority = arrayListOf(0, 0)
         var clear = false
-        var randomStrafe = false
+        // valeur de base : pas de random strafe près d’un bord, sinon selon la distance
+        var randomStrafe = (distance >= 3.2f && distance <= 7.5f && !isHitselecting && !(voidNear || voidFar))
 
         // Si on est proche d'un bord (air devant), forcer le strafe vers le centre
         if (voidNear || voidFar) {
             val toLeft = preferLeftTowardCenter()
             val w = 10
             if (toLeft) movePriority[0] += w else movePriority[1] += w
-            randomStrafe = false
+            // randomStrafe reste tel quel (déjà false si voidNear/voidFar)
         } else {
             // Strafe assisté par l’angle sur l’ennemi : recale doucement le côté
             val rotations = EntityUtils.getRotations(opp, p, false)
@@ -270,7 +270,7 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
 
             val weight = if (distance < 3.2f) 8 else 6
             if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
-            randomStrafe = distance >= 3.2f && distance <= 7.5f && !isHitselecting
+            // randomStrafe déjà positionné par défaut
         }
 
         // ---- Gestion avant/arrière simple pour coller sans s'emmêler ----
