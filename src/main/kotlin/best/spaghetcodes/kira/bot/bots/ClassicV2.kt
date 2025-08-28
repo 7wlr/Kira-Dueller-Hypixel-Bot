@@ -33,7 +33,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val fullDrawMsMin = 820
     private val fullDrawMsMax = 980
     private val bowCancelCloseDist = 4.8f
-    private val bowMinUseDist = 9.0f   // garde-fou : jamais initier un tir en dessous de ~9 blocs
+    private val bowMinUseDist = 9.0f   // jamais initier un tir en dessous de ~9 blocs
 
     // Ouverture contrôlée (1–2 flèches max)
     private var openVolleyMax = 1
@@ -666,8 +666,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
 
             // Réactif si l’ennemi slow-bow/immobile — et seulement assez loin
-            val isStill = stillFrames >= stillFramesNeeded
-            val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
+            // (on réutilise isStill & oppHasBow définis plus haut pour éviter les shadowings)
             val bowLikelyNow = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
             if (shotsFired < maxArrows &&
                 bowLikelyNow &&
