@@ -96,6 +96,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val rodMidInstantMin = 5.5f
     private val rodMidInstantMax = 7.0f
 
+    // Anti-spam rod : espace les essais, surtout contre adversaire "passif rod"
+    private var rodAntiSpamUntil = 0L
+
     // Détection "éloignement -> retour" pour rod instantanée
     private var farSince = 0L
     private val farThreshold = 11.0f
@@ -215,6 +218,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         lastRodAttemptAt = 0L
         lastOppRodSeenAt = 0L
         rodHoldUntil = 0L
+        rodAntiSpamUntil = 0L
 
         lastTacticalJumpAt = 0L
         lastGotHitAt = 0L
@@ -318,7 +322,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         humanSwingSeriesActiveUntil = System.currentTimeMillis() + delay + 60
     }
 
-    // Rod cast fiable — instantané
+    // Rod cast fiable — instantané + anti-spam + retour épée
     private fun castRodNow(distanceNow: Float) {
         fun doClick() {
             val nowClick = System.currentTimeMillis()
@@ -327,28 +331,44 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             Mouse.rClick(RandomUtils.randomIntInRange(70, 95))
             reentryRodGraceUntil = 0L
 
+            // HOLD DE ROD APRÈS CAST — calé sur tes presets:
+            // close ~130ms ; 5-6 blocs ~220ms (±12ms)
             val holdMs = when {
-                distanceNow < 3.0f -> 120
-                distanceNow < 5.2f -> RandomUtils.randomIntInRange(180, 220)
-                else               -> RandomUtils.randomIntInRange(200, 240)
+                distanceNow < 3.0f -> RandomUtils.randomIntInRange(118, 142)           // ~130 ms
+                distanceNow < 4.8f -> RandomUtils.randomIntInRange(160, 190)           // transition
+                distanceNow <= 6.2f -> RandomUtils.randomIntInRange(208, 232)          // ~220 ms
+                else               -> RandomUtils.randomIntInRange(210, 235)            // léger maintien
             }
             rodHoldUntil = nowClick + holdMs
 
-            val settle = RandomUtils.randomIntInRange(220, 300)
-            pendingProjectileUntil = nowClick + 90L
-            actionLockUntil = nowClick + settle + 90
+            val settle = RandomUtils.randomIntInRange(200, 260)
+            pendingProjectileUntil = nowClick + 80L
+            actionLockUntil = nowClick + settle + 80
             projectileGraceUntil = actionLockUntil
 
             lastRodAttemptAt = nowClick
             pendingRodCheck = true
             lastOppHurtTime = opponent()?.hurtTime ?: 0
 
+            // Retour à l'épée automatique après le hold
             TimeUtils.setTimeout({
                 Inventory.setInvItem("sword")
                 Mouse.setUsingProjectile(false)
-            }, max(holdMs + 30, settle))
+            }, max(holdMs + 20, settle))
 
             lastRodUse = nowClick
+
+            // Anti-SPAM dynamique : plus strict si l'adversaire n'utilise pas la rod
+            val oppPassive = (nowClick - lastOppRodSeenAt) > 5000L
+            val antiSpam = when {
+                distanceNow < 3.0f -> if (oppPassive) RandomUtils.randomIntInRange(340, 420) else RandomUtils.randomIntInRange(260, 320)
+                distanceNow <= 6.2f -> if (oppPassive) RandomUtils.randomIntInRange(520, 680) else RandomUtils.randomIntInRange(380, 520)
+                else -> if (oppPassive) RandomUtils.randomIntInRange(520, 700) else RandomUtils.randomIntInRange(400, 560)
+            }
+            rodAntiSpamUntil = nowClick + antiSpam
+
+            // On privilégie l'épée juste après un rod
+            meleeFocusUntil = max(meleeFocusUntil, nowClick + RandomUtils.randomIntInRange(240, 360))
         }
 
         // Si un tir d’arc est en cours, on annule proprement
@@ -588,6 +608,8 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         // Priorité : adversaire immobile/slow avec arc à COURTE portée => rod immédiat
         val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
         val bowLikelyNowClose = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded) && distance <= 10.0f
+        val oppRodRecently = (now - lastOppRodSeenAt) <= 2500L
+        val allowByAntiSpam = now >= rodAntiSpamUntil || now < reentryRodGraceUntil || oppRodRecently
 
         if ((!projectileActive || now < reentryRodGraceUntil) &&
             !Mouse.isRunningAway() &&
@@ -603,9 +625,8 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
             if (distance <= rodMaxRangeHard /* garde-fou */) {
 
-                // *** MID-RANGE INSTANTANÉ 5.5–7.0 ***
-                // On IGNORE le cooldown et le postBowNoRod ici pour éviter toute attente.
-                if (distance in rodMidInstantMin..rodMidInstantMax && !projectileActive) {
+                // *** MID-RANGE INSTANTANÉ 5.5–7.0 *** — mais respect de l'anti-spam
+                if (distance in rodMidInstantMin..rodMidInstantMax && !projectileActive && allowByAntiSpam) {
                     castRodNow(distance)
                     prevDistance = distance
                     return
@@ -617,11 +638,10 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 val cdFarOK = (now - lastRodUse) >= cdFar || now < reentryRodGraceUntil
                 val facingAway = EntityUtils.entityFacingAway(p, opp)
 
-                val oppRodRecently = (now - lastOppRodSeenAt) <= 2500L
                 val meleeRange = distance < 3.1f
                 val allowRodByMeleePolicy = !(meleeRange && !oppRodRecently && now < meleeFocusUntil)
 
-                // Ultra-proche
+                // Ultra-proche (break combo) — ignore anti-spam
                 if (allowRodByMeleePolicy &&
                     distance < 2.2f && p.hurtTime > 0 && cdCloseOK && !facingAway) {
                     castRodNow(distance)
@@ -629,19 +649,20 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     return
                 }
 
-                // Close
+                // Close — respecte anti-spam
                 if (allowRodByMeleePolicy &&
                     distance in rodCloseMin..rodCloseMax &&
                     (p.hurtTime > 0 || approaching) &&
                     !facingAway &&
-                    cdCloseOK) {
+                    cdCloseOK &&
+                    allowByAntiSpam) {
                     castRodNow(distance)
                     prevDistance = distance
                     return
                 }
 
-                // Main / réponse à rod adverse (3.0–6.8)
-                if (allowRodByMeleePolicy && !facingAway && (cdFarOK || cdCloseOK)) {
+                // Main / réponse à rod adverse (3.0–6.8) — autorisé si opp vient de rod
+                if (allowRodByMeleePolicy && !facingAway && (cdFarOK || cdCloseOK) && allowByAntiSpam) {
                     if (oppRodRecently) {
                         castRodNow(distance)
                         prevDistance = distance
@@ -654,11 +675,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     }
                 }
 
-                // Interception d’approche (5.8–7.2) — on garde la version permissive
+                // Interception (5.8–7.2) — permissif, mais anti-spam requis
                 if (allowRodByMeleePolicy &&
                     distance in rodInterceptMin..rodInterceptMax &&
                     !facingAway &&
-                    (cdFarOK || cdCloseOK)) {
+                    (cdFarOK || cdCloseOK) &&
+                    allowByAntiSpam) {
                     castRodNow(distance)
                     prevDistance = distance
                     return
