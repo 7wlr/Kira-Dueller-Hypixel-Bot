@@ -9,17 +9,14 @@ import best.spaghetcodes.kira.utils.*
 import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
 import kotlin.math.abs
-import kotlin.math.max
 
 class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
 
     override fun getName(): String = "Sumo"
 
     // ---------- Tuning ----------
-    private val engageJumpMin = 5.5f          // saut d'engagement utile
-    private val engageJumpMax = 7.0f
-    private val microBackstepCd = 700L        // cooldown des micro reculs anti-combo
-    private val microBackstepDur = 140..220   // durée du micro recul
+    private val engageJumpMin = 6.0f          // saut d'engagement utile (garanti à ~6–7)
+    private val engageJumpMax = 7.2f
     private val strafeFlipBase = 420..680     // délai de flip du strafe par défaut
     private val edgeProbeNear = 1.6f          // détection du vide proche
     private val edgeProbeFar = 2.6f           // détection du vide un peu plus loin
@@ -39,14 +36,12 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
     private val djumpCdMin = 500
     private val djumpCdMax = 1000
 
-    // Hitselecting / bait (repris et adapté)
+    // Hitselecting / bait (sans S-tap arrière désormais)
     private val enableHitselecting = true
     private val hitselectChance = 0.28
     private val hitselectMinDist = 3.6f
     private val hitselectMaxDist = 6.2f
     private val hitselectCooldown = 1200..1800
-    private val sTapDuringBait = true
-    private val sTapDuration = 110..170
     private val baitDurationMin = 240
     private val baitDurationMax = 420
     private val stopSprintDuringBait = true
@@ -56,7 +51,6 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
     private var lastStrafeSwitch = 0L
     private var strafeDir = 1
     private var stagnantSince = 0L
-    private var lastBackstep = 0L
 
     private var centerX = 0.0
     private var centerZ = 0.0
@@ -68,7 +62,6 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
     private var isHitselecting = false
     private var hitselectCooldownUntil = 0L
     private var stoppedSprintForBait = false
-    private var origForwardState = false
 
     override fun onGameStart() {
         Mouse.startTracking()
@@ -85,11 +78,13 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
             centerZ = p.posZ
         }
 
+        // Saut immédiat de départ pour prendre le milieu (le 1er saut est safe)
+        Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
+
         prevDistance = -1f
         lastStrafeSwitch = 0L
         strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
         stagnantSince = 0L
-        lastBackstep = 0L
         tapping = false
         keepACUntil = 0L
         tap50 = false
@@ -97,7 +92,6 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
         isHitselecting = false
         hitselectCooldownUntil = 0L
         stoppedSprintForBait = false
-        origForwardState = false
 
         canDistanceJump = true
     }
@@ -173,27 +167,20 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
             Movement.startForward()
         }
 
-        // ---- Distance-jump contrôlé (engage) ----
+        // ---- Distance-jump contrôlé (engage garanti à 6–7) ----
         if (!isHitselecting &&
             !voidNear && !voidFar &&
             p.onGround &&
             distance in engageJumpMin..engageJumpMax &&
-            !tapping &&
             canDistanceJump
         ) {
+            // saut même si on vient de w-tap (on ne bloque plus par 'tapping')
             Movement.singleJump(RandomUtils.randomIntInRange(120, 160))
             canDistanceJump = false
             TimeUtils.setTimeout({ canDistanceJump = true }, RandomUtils.randomIntInRange(djumpCdMin, djumpCdMax))
         }
 
-        // ---- Micro backstep anti-combo (rare et court) ----
-        if (!isHitselecting && p.hurtTime > 0 && (now - lastBackstep) > microBackstepCd && distance < 3.6f) {
-            Movement.stopForward()
-            TimeUtils.setTimeout(Movement::startForward, RandomUtils.randomIntInRange(microBackstepDur.first, microBackstepDur.last))
-            lastBackstep = now
-        }
-
-        // =================== HITSELECTING / BAIT ===================
+        // =================== HITSELECTING / BAIT (sans recul) ===================
         if (enableHitselecting && !isHitselecting && !tapping && p.onGround &&
             now >= hitselectCooldownUntil &&
             distance in hitselectMinDist..hitselectMaxDist &&
@@ -205,24 +192,12 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
             Combat.stopRandomStrafe()
             Movement.clearLeftRight()
 
-            // Optionnel : STap arrière court
-            origForwardState = Movement.forward()
-            if (sTapDuringBait) {
-                Movement.stopForward()
-                Movement.startBackward()
-                TimeUtils.setTimeout({
-                    Movement.stopBackward()
-                    if (isHitselecting && origForwardState && !edgeAhead(1.75f)) {
-                        Movement.startForward()
-                    }
-                }, RandomUtils.randomIntInRange(sTapDuration.first, sTapDuration.last))
-            }
-
-            // Optionnel : couper le sprint pendant l’appât
-            stoppedSprintForBait = false
+            // Pas de S-tap arrière : on se contente d’un “freeze” léger et d’un éventuel cut sprint
             if (stopSprintDuringBait && p.isSprinting) {
                 Movement.stopSprinting()
                 stoppedSprintForBait = true
+            } else {
+                stoppedSprintForBait = false
             }
 
             // Fin du bait après une fenêtre aléatoire + cooldown global
