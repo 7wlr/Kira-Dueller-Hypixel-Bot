@@ -32,7 +32,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     // =====================  ARC  =====================
     private val fullDrawMsMin = 820
     private val fullDrawMsMax = 980
-    private val bowCancelCloseDist = 4.8f
+    private val bowCancelCloseDist = 8.0f
     private val bowMinUseDist = 9.0f            // ne pas initier un tir < 9 blocs
 
     // Ouverture contrôlée (1–2 flèches max, espacées)
@@ -89,7 +89,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val rodMainMax = 6.8f
     private val rodInterceptMin = 5.8f
     private val rodInterceptMax = 7.2f
-    private val rodMaxRangeHard = 7.2f // garde-fou dur
+    private val rodMaxRangeHard = 7.2f // garde-fou 
+
+    // Détection "éloignement -> retour" pour rod instantanée
+    private var farSince = 0L
+    private val farThreshold = 11.0f
+    private var reentryRodGraceUntil = 0L
 
     // Heuristique hit/miss via hurtTime
     private var lastRodAttemptAt = 0L
@@ -306,6 +311,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
             Mouse.setUsingProjectile(true)
             Mouse.rClick(RandomUtils.randomIntInRange(70, 95))
+            reentryRodGraceUntil = 0L
 
             val holdMs = when {
                 distanceNow < 3.0f -> 120
@@ -414,6 +420,15 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val now = System.currentTimeMillis()
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
+        // Détecte une période "loin" puis une ré-entrée (approche) pour lever la latence de rod
+        if (distance > farThreshold) {
+            if (farSince == 0L) farSince = now
+        } else {
+            if (farSince != 0L && (now - farSince) >= 500L && approaching) {
+                reentryRodGraceUntil = now + 300L
+            }
+            farSince = 0L
+        }
 
         // “swings humains” (2–4) quand entrée 14–20 blocs — une seule série
         val inHumanZone = distance in humanSwingZoneMin..humanSwingZoneMax
@@ -576,14 +591,14 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
 
         // =======================  ROD  ===========================
-        if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
+        if ((!projectileActive || now < reentryRodGraceUntil) && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && (!Mouse.rClickDown || now < reentryRodGraceUntil)) {
 
             // 1) Garde-fous anti-rod “dans le vide”
-            if (distance <= rodMaxRangeHard && now >= postBowNoRodUntil) {
+            if (distance <= rodMaxRangeHard && (now >= postBowNoRodUntil || now < reentryRodGraceUntil)) {
                 val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
                 val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
-                val cdCloseOK = (now - lastRodUse) >= cdClose
-                val cdFarOK = (now - lastRodUse) >= cdFar
+                val cdCloseOK = (now - lastRodUse) >= cdClose || now < reentryRodGraceUntil
+                val cdFarOK = (now - lastRodUse) >= cdFar || now < reentryRodGraceUntil
                 val facingAway = EntityUtils.entityFacingAway(p, opp)
 
                 val oppRodRecently = (now - lastOppRodSeenAt) <= 2500L
