@@ -27,8 +27,12 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
     private val reForwardDist = 2.0f          // reprise d'avance au-delà
 
     // Latch AC : démarrer l’attaque légèrement plus tôt et la maintenir brièvement
-    private val attackStartDist = 3.55f
+    private val attackStartDist = 4.05f       // ↑ avant 4 blocs pour battre la latence adverse
     private val attackLatchMs = 220L
+
+    // Pré-fire si approche rapide (avant la vraie portée)
+    private val prefireFastApproachDist = 4.6f
+    private val prefireLatchMs = 160L
 
     // Distance Jump contrôlé (cooldown interne)
     private var canDistanceJump = true
@@ -141,10 +145,19 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
 
         val now = System.currentTimeMillis()
         val distance = EntityUtils.getDistanceNoY(p, opp)
+        val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.10f)
 
-        // ---- Latch d’attaque (évite ON/OFF rapide autour du seuil)
-        if (!isHitselecting && distance <= attackStartDist && !Mouse.isUsingPotion() && !Mouse.isUsingProjectile()) {
-            keepACUntil = now + attackLatchMs
+        // ---- Latch d’attaque & pré-fire (plus tôt) ----
+        val inAttackLatch = (!Mouse.isUsingPotion() && !Mouse.isUsingProjectile()
+                && !isHitselecting && distance <= attackStartDist)
+
+        val inPrefire = (!Mouse.isUsingPotion() && !Mouse.isUsingProjectile()
+                && !isHitselecting && approaching
+                && distance <= prefireFastApproachDist && distance > attackStartDist)
+
+        if (inAttackLatch || inPrefire) {
+            val latch = if (inPrefire) prefireLatchMs else attackLatchMs
+            keepACUntil = now + latch
             Mouse.startLeftAC()
         } else {
             if (now >= keepACUntil && !isHitselecting) Mouse.stopLeftAC()
