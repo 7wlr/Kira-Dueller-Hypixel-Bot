@@ -108,7 +108,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     // Maintien minimal de la rod APRÈS cast (évite le switch épée prématuré)
     private var rodHoldUntil = 0L
 
-    // Priming unique du premier cast rod (micro-retry, pas de délai arbitraire)
+    // Priming unique du premier cast rod (micro-retry, sans private fields)
     private var firstRodPrimePending = true
 
     // ==================  PARADE ÉPÉE  =================
@@ -349,15 +349,18 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             var tries = 0
             fun ready(): Boolean {
                 val held = mc.thePlayer?.heldItem?.unlocalizedName?.lowercase()
-                return held != null && held.contains("rod") && mc.rightClickDelayTimer == 0
+                return held != null && held.contains("rod")
             }
             fun tryClick() {
-                if (ready() || tries >= 3) {
+                if (ready()) {
                     doClick()
-                } else {
+                } else if (tries < 3) {
                     tries++
                     // recheck au tick suivant, sans bloquer
                     TimeUtils.setTimeout({ tryClick() }, 1)
+                } else {
+                    // si jamais le slot n’a pas été vu, on clique quand même
+                    doClick()
                 }
             }
             tryClick()
@@ -485,9 +488,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         // =================  PARADE ÉPÉE (long range)  ================
         val holdingSword = p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")
-        val isStill = stillFrames >= stillFramesNeeded
-        val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
-        val bowLikely = oppHasBow && (isStill || bowSlowFrames >= bowSlowFramesNeeded)
+        val isStillNow = stillFrames >= stillFramesNeeded
+        val oppHasBowNow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
+        val bowLikely = oppHasBowNow && (isStillNow || bowSlowFrames >= bowSlowFramesNeeded)
 
         // Close cancel strict (< 15) + verrou court
         if (Mouse.rClickDown && distance < parryCloseCancelDist) {
