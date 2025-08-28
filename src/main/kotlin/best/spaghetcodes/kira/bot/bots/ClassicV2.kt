@@ -89,7 +89,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private val rodMainMax = 6.8f
     private val rodInterceptMin = 5.8f
     private val rodInterceptMax = 7.2f
-    private val rodMaxRangeHard = 7.2f // garde-fou 
+    private val rodMaxRangeHard = 7.2f // garde-fou dur
 
     // Détection "éloignement -> retour" pour rod instantanée
     private var farSince = 0L
@@ -113,8 +113,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     // Maintien minimal de la rod APRÈS cast (évite le switch épée prématuré)
     private var rodHoldUntil = 0L
 
-    // Priming unique du premier cast rod (micro-retry, sans private fields)
+    // === Nouveau : pré-sélection du tout premier rod pour un cast instantané ===
     private var firstRodPrimePending = true
+    private var firstRodPreselected = false
+    private var firstRodReadyUntil = 0L
+    private val firstRodPrimeDist = 10.5f
+    private val firstRodPrimeWindowMs = 1200L
+    private var firstRodPrimeCooldownUntil = 0L
 
     // ==================  PARADE ÉPÉE  =================
     // Interdite si distance < 15 blocs
@@ -205,7 +210,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         lastRodAttemptAt = 0L
         lastOppRodSeenAt = 0L
         rodHoldUntil = 0L
+
+        // prime du 1er rod
         firstRodPrimePending = true
+        firstRodPreselected = false
+        firstRodReadyUntil = 0L
+        firstRodPrimeCooldownUntil = 0L
 
         lastTacticalJumpAt = 0L
         lastGotHitAt = 0L
@@ -304,7 +314,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         humanSwingSeriesActiveUntil = System.currentTimeMillis() + delay + 60
     }
 
-    // Rod cast fiable — micro-retry *uniquement* au tout premier cast
+    // Rod cast fiable — plus besoin de micro-retry si pré-sélection
     private fun castRodNow(distanceNow: Float) {
         fun doClick() {
             val nowClick = System.currentTimeMillis()
@@ -335,6 +345,11 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }, max(holdMs + 30, settle))
 
             lastRodUse = nowClick
+
+            // premier rod consommé
+            firstRodPrimePending = false
+            firstRodPreselected = false
+            firstRodReadyUntil = 0L
         }
 
         // Si un tir d’arc est en cours, on annule proprement
@@ -347,32 +362,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             projectileKind = KIND_NONE
         }
 
-        // Sélectionner la rod
-        Inventory.setInvItem("rod")
-
-        if (firstRodPrimePending) {
-            firstRodPrimePending = false
-            var tries = 0
-            fun ready(): Boolean {
-                val held = mc.thePlayer?.heldItem?.unlocalizedName?.lowercase()
-                return held != null && held.contains("rod")
-            }
-            fun tryClick() {
-                if (ready()) {
-                    doClick()
-                } else if (tries < 3) {
-                    tries++
-                    // recheck au tick suivant, sans bloquer
-                    TimeUtils.setTimeout({ tryClick() }, 1)
-                } else {
-                    // si jamais le slot n’a pas été vu, on clique quand même
-                    doClick()
-                }
-            }
-            tryClick()
-        } else {
-            doClick()
+        // S'assurer d'avoir la rod en main (au cas où le pré-prime a expiré)
+        val held = mc.thePlayer?.heldItem?.unlocalizedName?.lowercase()
+        if (held == null || !held.contains("rod")) {
+            Inventory.setInvItem("rod")
         }
+
+        doClick()
     }
 
     private fun updateRodAccuracyHeuristic(now: Long) {
@@ -420,6 +416,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val now = System.currentTimeMillis()
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
+
         // Détecte une période "loin" puis une ré-entrée (approche) pour lever la latence de rod
         if (distance > farThreshold) {
             if (farSince == 0L) farSince = now
@@ -590,8 +587,45 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
         }
 
+        // ========== Pré-sélection du PREMIER rod ==========
+        if (firstRodPrimePending &&
+            !projectileActive &&
+            !Mouse.isRunningAway() &&
+            distance <= firstRodPrimeDist &&
+            now >= firstRodPrimeCooldownUntil) {
+
+            val held = p.heldItem?.unlocalizedName?.lowercase()
+            if (held == null || !held.contains("rod")) {
+                Inventory.setInvItem("rod")
+            }
+            firstRodPreselected = true
+            firstRodReadyUntil = now + firstRodPrimeWindowMs
+            firstRodPrimeCooldownUntil = now + (firstRodPrimeWindowMs + 600)
+            // Si rien ne se passe, on revient à l'épée en douceur après la fenêtre
+            TimeUtils.setTimeout({
+                if (firstRodPrimePending && System.currentTimeMillis() >= firstRodReadyUntil && !Mouse.isUsingProjectile()) {
+                    Inventory.setInvItem("sword")
+                    firstRodPreselected = false
+                }
+            }, firstRodPrimeWindowMs.toInt())
+        }
+
         // =======================  ROD  ===========================
-        if ((!projectileActive || now < reentryRodGraceUntil) && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && (!Mouse.rClickDown || now < reentryRodGraceUntil)) {
+        // Priorité spéciale : adversaire immobile/slow avec arc à COURTE portée => rod immédiat
+        val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
+        val bowLikelyNowClose = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded) && distance <= 10.0f
+        if ((!projectileActive || now < reentryRodGraceUntil) &&
+            !Mouse.isRunningAway() &&
+            !Mouse.isUsingPotion() &&
+            (!Mouse.rClickDown || now < reentryRodGraceUntil)) {
+
+            if (bowLikelyNowClose && distance <= rodMaxRangeHard) {
+                castRodNow(distance)
+                prevDistance = distance
+                // Eviter un tir d’arc juste après
+                postBowNoRodUntil = now + 320
+                return
+            }
 
             // 1) Garde-fous anti-rod “dans le vide”
             if (distance <= rodMaxRangeHard && (now >= postBowNoRodUntil || now < reentryRodGraceUntil)) {
@@ -656,8 +690,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             val reserve = reserveNeeded(now)
             val left = arrowsLeft()
 
+            // Ne JAMAIS tirer à courte distance si l'ennemi est immobile/slow avec un arc
+            val denyBowCloseByImmobilen = bowLikelyNowClose
+
             // Ouverture (1–2 flèches max, espacées) — ET seulement si assez loin
-            if (shotsFired < maxArrows &&
+            if (!denyBowCloseByImmobilen &&
+                shotsFired < maxArrows &&
                 openVolleyFired < openVolleyMax &&
                 now < openWindowUntil &&
                 now >= openStartDelayUntil &&
@@ -684,11 +722,12 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
 
             // Réactif si l’ennemi slow-bow/immobile — et seulement assez loin
-            val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
-            val bowLikelyNow = oppHasBow && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
-            if (shotsFired < maxArrows &&
-                bowLikelyNow &&
-                distance >= bowMinUseDist &&
+            val oppHasBowReact = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
+            val bowLikelyReact = oppHasBowReact && (stillFrames >= stillFramesNeeded || bowSlowFrames >= bowSlowFramesNeeded)
+            if (!denyBowCloseByImmobilen &&
+                shotsFired < maxArrows &&
+                bowLikelyReact &&
+                distance >= max(bowMinUseDist, 12.0f) && // <== évite tir à courte distance
                 now - lastReactiveShotAt >= reactiveCdMs &&
                 WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
                 left > reserve) {
@@ -711,7 +750,8 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             }
 
             // Opportuniste (dos / très loin)
-            if (shotsFired < maxArrows && left > reserve && distance >= bowMinUseDist) {
+            if (!denyBowCloseByImmobilen &&
+                shotsFired < maxArrows && left > reserve && distance >= bowMinUseDist) {
                 val away = EntityUtils.entityFacingAway(p, opp)
                 if ((away && distance in 3.5f..30f) ||
                     (!away && distance in 28.0f..33.0f)) {
