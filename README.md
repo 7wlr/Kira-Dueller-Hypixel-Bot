@@ -169,35 +169,6 @@ Mesures intégrées : randomisation, comportements human-like, délais variables
 
 ---
 
-## 📞 Support & Communauté
-
-<div align="center">
-  <table>
-    <tr>
-      <td align="center">
-        <a href="../../issues">
-          <img src="https://img.shields.io/github/issues/Dayti-0/Kira-Dueller-Hypixel-Bot?style=for-the-badge" alt="Issues">
-          <br><strong>Issues GitHub</strong>
-          <br><em>Signaler un bug</em>
-        </a>
-      </td>
-      <td align="center">
-        <a href="../../wiki">
-          <img src="https://img.shields.io/badge/Wiki-Documentation-blue?style=for-the-badge" alt="Wiki">
-          <br><strong>Documentation</strong>
-          <br><em>Guides & FAQ</em>
-        </a>
-      </td>
-      <td align="center">
-        <img src="https://img.shields.io/badge/Discord-Support-7289da?style=for-the-badge" alt="Discord">
-        <br><strong>Discord</strong>
-        <br><em>Communauté</em>
-      </td>
-    </tr>
-  </table>
-</div>
-
----
 
 ## 👥 Équipe de Développement
 
