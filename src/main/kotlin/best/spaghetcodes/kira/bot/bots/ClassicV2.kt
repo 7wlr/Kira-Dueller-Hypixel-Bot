@@ -113,7 +113,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     // Maintien minimal de la rod APRÈS cast (évite le switch épée prématuré)
     private var rodHoldUntil = 0L
 
-    // === Nouveau : pré-sélection du tout premier rod pour un cast instantané ===
+    // === Pré-sélection du tout premier rod pour un cast instantané ===
     private var firstRodPrimePending = true
     private var firstRodPreselected = false
     private var firstRodReadyUntil = 0L
@@ -122,7 +122,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var firstRodPrimeCooldownUntil = 0L
 
     // ==================  PARADE ÉPÉE  =================
-    // Interdite si distance < 15 blocs
     private val parryMinDist = 15.0f
     private val parryCloseCancelDist = 15.0f
     private val parryCooldownMs = 900L
@@ -165,6 +164,15 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
     private var wasInHumanZone = false
     private val humanSwingZoneMin = 14.0f
     private val humanSwingZoneMax = 20.0f
+
+    // -------- Close-range strafe state machine --------
+    private var closeStrafeMode = 0
+    private val MODE_BURST = 0
+    private val MODE_HOLD_LEFT = 1
+    private val MODE_HOLD_RIGHT = 2
+    private var closeStrafeNextAt = 0L
+    private var closeStrafeToggleAt = 0L
+    // --------------------------------------------------
 
     // ====================  LIFECYCLE  ==================
     override fun onGameStart() {
@@ -237,6 +245,11 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         humanSwingSeriesDone = false
         humanSwingSeriesActiveUntil = 0L
         wasInHumanZone = false
+
+        // strafe close init
+        closeStrafeMode = MODE_BURST
+        closeStrafeNextAt = 0L
+        closeStrafeToggleAt = 0L
 
         // Anti-parade prématurée (~2.8 s)
         allowParryAfter = gameStartAt + 2800L
@@ -406,9 +419,9 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         Mouse.startTracking()
         Mouse.stopLeftAC()
 
-        // Sauts de début : actifs jusqu’au 1er draw d’arc
+        // Sauts de début : ACTIFS EN CONTINU jusqu'au PREMIER brandissage d'ARC
         if (startupJumping) {
-            if (!Mouse.rClickDown) Movement.startJumping() else Movement.stopJumping()
+            Movement.startJumping()
         } else {
             Movement.stopJumping()
         }
@@ -444,7 +457,6 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (dx < stillFrameThreshold && dz < stillFrameThreshold) stillFrames++ else stillFrames = 0
         val frameSpeed = dx + dz
         if (frameSpeed < bowSlowThreshold) bowSlowFrames++ else bowSlowFrames = 0
-        val isStrafing = frameSpeed > 0.18
         oppLastX = opp.posX; oppLastZ = opp.posZ
 
         if (p.hurtTime > 0) lastGotHitAt = now
@@ -530,7 +542,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     lastSwordBlock = now
                     parryFromBow = true
 
-                    var extraStick =
+                    val extraStick =
                         if (distance > 15f) RandomUtils.randomIntInRange(900, 1200)
                         else RandomUtils.randomIntInRange(500, 800)
 
@@ -622,12 +634,10 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             if (bowLikelyNowClose && distance <= rodMaxRangeHard) {
                 castRodNow(distance)
                 prevDistance = distance
-                // Eviter un tir d’arc juste après
                 postBowNoRodUntil = now + 320
                 return
             }
 
-            // 1) Garde-fous anti-rod “dans le vide”
             if (distance <= rodMaxRangeHard && (now >= postBowNoRodUntil || now < reentryRodGraceUntil)) {
                 val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
                 val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
@@ -639,7 +649,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 val meleeRange = distance < 3.1f
                 val allowRodByMeleePolicy = !(meleeRange && !oppRodRecently && now < meleeFocusUntil)
 
-                // Ultra-proche: casser un combo juste après un hit
+                // Ultra-proche
                 if (allowRodByMeleePolicy &&
                     distance < 2.2f && p.hurtTime > 0 && cdCloseOK && !facingAway) {
                     castRodNow(distance)
@@ -647,7 +657,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                     return
                 }
 
-                // Fenêtre close
+                // Close
                 if (allowRodByMeleePolicy &&
                     distance in rodCloseMin..rodCloseMax &&
                     (p.hurtTime > 0 || approaching) &&
@@ -727,7 +737,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             if (!denyBowCloseByImmobilen &&
                 shotsFired < maxArrows &&
                 bowLikelyReact &&
-                distance >= max(bowMinUseDist, 12.0f) && // <== évite tir à courte distance
+                distance >= max(bowMinUseDist, 12.0f) &&
                 now - lastReactiveShotAt >= reactiveCdMs &&
                 WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
                 left > reserve) {
@@ -793,28 +803,40 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if (EntityUtils.entityFacingAway(p, opp)) {
             if (WorldUtils.leftOrRightToPoint(p, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
         } else if (!parryActive) {
-            val rotations = EntityUtils.getRotations(opp, p, false)
-            if (rotations != null && now - lastStrafeSwitch > 320) {
-                val preferSide = if (rotations[0] < 0) +1 else -1
-                if (preferSide != strafeDir) {
-                    strafeDir = preferSide
-                    lastStrafeSwitch = now
-                }
-            }
 
-            // Micro-strafe agressif en très proche (<2.6)
+            // ======= Close-range strafe logic (< 2.6 blocs) =======
             if (distance < 2.6f) {
-                if (now - lastStrafeSwitch > RandomUtils.randomIntInRange(110, 170)) {
+                // Sélection/renouvèlement du mode
+                if (now >= closeStrafeNextAt) {
+                    val roll = RandomUtils.randomIntInRange(0, 99)
+                    closeStrafeMode = when {
+                        roll < 50 -> MODE_BURST              // 50% très rapide
+                        roll < 75 -> MODE_HOLD_LEFT          // 25% maintien gauche
+                        else     -> MODE_HOLD_RIGHT          // 25% maintien droit
+                    }
+                    closeStrafeNextAt = now + when (closeStrafeMode) {
+                        MODE_BURST -> RandomUtils.randomIntInRange(280, 420).toLong()   // rafale courte
+                        else       -> RandomUtils.randomIntInRange(220, 340).toLong()   // maintien court
+                    }
+                    // Dans BURST on alterne très vite ; sinon on fixe une direction
+                    if (closeStrafeMode == MODE_BURST) {
+                        closeStrafeToggleAt = now + RandomUtils.randomIntInRange(60, 110)
+                    } else {
+                        strafeDir = if (closeStrafeMode == MODE_HOLD_LEFT) -1 else 1
+                    }
+                } else if (closeStrafeMode == MODE_BURST && now >= closeStrafeToggleAt) {
                     strafeDir = -strafeDir
-                    lastStrafeSwitch = now
+                    closeStrafeToggleAt = now + RandomUtils.randomIntInRange(60, 110)
                 }
+
+                // Poids et mouvement
                 val weightClose = 4
                 if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
                 Movement.startForward()
                 Movement.startSprinting()
                 randomStrafe = false
             } else {
-                // Medium/long range
+                // ======= Medium/long range =======
                 if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(820, 1100)) {
                     strafeDir = -strafeDir
                     lastStrafeSwitch = now
