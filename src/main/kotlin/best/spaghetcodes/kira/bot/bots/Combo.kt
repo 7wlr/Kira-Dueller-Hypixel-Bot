@@ -46,7 +46,10 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     private var openingPhase = true
     private var openingScheduled = false
 
-    // Cycle gap (26s après la première gap confirmée)
+    // Verrou de consommation (rien d’autre pendant un hold)
+    private var consumingUntil = 0L
+
+    // Cycle gap (26s après chaque gap démarrée)
     private var gapCycleStarted = false
     private var nextGapAt = 0L
     private val gapCyclePeriodMs = 26_000L
@@ -67,6 +70,51 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     enum class ArmorEnum { BOOTS, LEGGINGS, CHESTPLATE, HELMET }
     private var armor = hashMapOf(0 to 1, 1 to 1, 2 to 1, 3 to 1)
 
+    // ------------------- Helpers conso “forcés” -------------------
+    private fun equipAny(vararg keys: String): Boolean {
+        for (k in keys) if (Inventory.setInvItem(k)) return true
+        return false
+    }
+
+    private fun forceDrinkNow(): Boolean {
+        if (strengthPots <= 0) return false
+        // Equip potion par mots-clés usuels (Hypixel Combo : souvent slot 8 nommé "potion"/"strength")
+        if (!equipAny("potion", "strength", "str")) return false
+
+        val hold = RandomUtils.randomIntInRange(1720, 1860) // ~32 ticks + marge
+        val now = System.currentTimeMillis()
+        consumingUntil = now + hold + 120
+        dontStartLeftAC = true
+        Mouse.stopLeftAC()
+        Mouse.rClick(hold)
+
+        // on ne décrémente pas “à l’effet” : on suit la version simple et fiable → on compte dès le démarrage
+        strengthPots--
+        lastPotion = now
+        return true
+    }
+
+    private fun forceEatGapNow(): Boolean {
+        if (gaps <= 0) return false
+        if (!equipAny("gap", "gapple", "apple", "golden_apple")) return false
+
+        val hold = RandomUtils.randomIntInRange(1720, 1860)
+        val now = System.currentTimeMillis()
+        consumingUntil = now + hold + 120
+        dontStartLeftAC = true
+        Mouse.stopLeftAC()
+        Mouse.rClick(hold)
+
+        gaps--
+        lastGap = now
+        // (re)calage du cycle 26 s dès qu’on démarre une gap
+        gapCycleStarted = true
+        nextGapAt = lastGap + gapCyclePeriodMs
+        return true
+    }
+
+    private fun isConsuming(): Boolean = System.currentTimeMillis() < consumingUntil
+
     override fun onGameStart() {
         Movement.startSprinting()
         Movement.startForward()
@@ -78,6 +126,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         gapCycleStarted = false
         nextGapAt = 0L
 
+        consumingUntil = 0L
         lastFarJumpAt = 0L
 
         lastStrafeSwitch = 0L
@@ -111,6 +160,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             openingScheduled = false
             gapCycleStarted = false
             nextGapAt = 0L
+            consumingUntil = 0L
 
             Mouse.stopTracking()
         }, RandomUtils.randomIntInRange(100, 300))
@@ -162,87 +212,75 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             Mouse.setRunningAway(false)
         }
 
-        // ------------------- OUVERTURE IMMÉDIATE -------------------
+        // ------------------- OUVERTURE IMMÉDIATE (SIMPLE & FIABLE) -------------------
         if (openingPhase && !openingScheduled) {
             openingScheduled = true
-            dontStartLeftAC = true
-
-            // 1) Potion tout de suite si pas active
-            if (!player.isPotionActive(net.minecraft.potion.Potion.damageBoost) && strengthPots > 0) {
-                lastPotion = now
-                strengthPots--
-                usePotion(8, distance < 3, EntityUtils.entityFacingAway(target, player))
-            }
-
-            // 2) Gap rapidement après (laisser un petit délai pour éviter chevauchement d’animations)
+            // 1) Boire tout de suite (si on a une potion)
+            val drank = forceDrinkNow()
+            // 2) Puis manger dès que la boisson est terminée (ou tout de suite si pas de potion)
+            val delayToGap = if (drank) RandomUtils.randomIntInRange(1820, 1960) else RandomUtils.randomIntInRange(40, 80)
             TimeUtils.setTimeout({
-                if (gaps > 0) {
-                    lastGap = System.currentTimeMillis()
-                    gaps--
-                    useGap(distance, distance < 2, EntityUtils.entityFacingAway(player, target))
-                    // Lancer le cycle 26s dès la première vraie gap
-                    gapCycleStarted = true
-                    nextGapAt = lastGap + gapCyclePeriodMs
-                }
-                // Relance AC après la conso d'ouverture
+                forceEatGapNow()
+                // Relancer l’auto-clic gauche une fois la conso terminée (petite marge)
                 TimeUtils.setTimeout({
                     dontStartLeftAC = false
-                }, RandomUtils.randomIntInRange(200, 300))
+                }, RandomUtils.randomIntInRange(180, 260))
                 openingPhase = false
-            }, RandomUtils.randomIntInRange(800, 1050))
+            }, delayToGap)
         }
 
-        // ------------------- Potion de secours (si jamais non active après ouverture) -------------------
+        // ------------------- Potion de secours (si jamais pas active plus tard) -------------------
         if (!openingPhase &&
-            !player.isPotionActive(net.minecraft.potion.Potion.damageBoost) &&
+            strengthPots > 0 &&
             now - lastPotion > 5000 &&
-            strengthPots > 0
+            !isConsuming()
         ) {
-            lastPotion = now
-            strengthPots--
-            usePotion(8, distance < 3, EntityUtils.entityFacingAway(target, player))
+            // Boit une autre potion de force si on en a encore (mode simple)
+            forceDrinkNow()
         }
 
         // ------------------- Armure simple (comme base) -------------------
-        for (i in 0..3) {
-            if (player.inventory.armorItemInSlot(i) == null) {
-                Mouse.stopLeftAC()
-                dontStartLeftAC = true
-                if ((armor[i] ?: 0) > 0) {
-                    TimeUtils.setTimeout({
-                        val a = Inventory.setInvItem(ArmorEnum.values()[i].name.lowercase())
-                        if (a) {
-                            armor[i] = (armor[i] ?: 1) - 1
-                            TimeUtils.setTimeout({
-                                val r = RandomUtils.randomIntInRange(100, 150)
-                                Mouse.rClick(r)
+        if (!isConsuming()) {
+            for (i in 0..3) {
+                if (player.inventory.armorItemInSlot(i) == null) {
+                    Mouse.stopLeftAC()
+                    dontStartLeftAC = true
+                    if ((armor[i] ?: 0) > 0) {
+                        TimeUtils.setTimeout({
+                            val a = Inventory.setInvItem(ArmorEnum.values()[i].name.lowercase())
+                            if (a) {
+                                armor[i] = (armor[i] ?: 1) - 1
                                 TimeUtils.setTimeout({
-                                    Inventory.setInvItem("sword")
+                                    val r = RandomUtils.randomIntInRange(100, 150)
+                                    Mouse.rClick(r)
                                     TimeUtils.setTimeout({
-                                        dontStartLeftAC = false
-                                    }, RandomUtils.randomIntInRange(200, 300))
-                                }, r + RandomUtils.randomIntInRange(100, 150))
-                            }, RandomUtils.randomIntInRange(200, 400))
-                        } else {
-                            dontStartLeftAC = false
-                        }
-                    }, RandomUtils.randomIntInRange(250, 500))
+                                        Inventory.setInvItem("sword")
+                                        TimeUtils.setTimeout({
+                                            dontStartLeftAC = false
+                                        }, RandomUtils.randomIntInRange(200, 300))
+                                    }, r + RandomUtils.randomIntInRange(100, 150))
+                                }, RandomUtils.randomIntInRange(200, 400))
+                            } else {
+                                dontStartLeftAC = false
+                            }
+                        }, RandomUtils.randomIntInRange(250, 500))
+                    }
                 }
             }
         }
 
         // ------------------- Cycle Gapple 26s (indépendant des PV) -------------------
-        if (!openingPhase && gapCycleStarted && gaps > 0) {
-            if (now >= nextGapAt && now - lastPotion > 600) { // petite marge pour éviter chevauchement pile avec une potion
-                lastGap = now
-                gaps--
-                useGap(distance, distance < 2, EntityUtils.entityFacingAway(player, target))
-                nextGapAt = lastGap + gapCyclePeriodMs
+        if (!openingPhase && gapCycleStarted && gaps > 0 && !isConsuming()) {
+            if (now >= nextGapAt) {
+                val ok = forceEatGapNow()
+                // Si OK, nextGapAt a déjà été recalé dans forceEatGapNow()
+                if (!ok) nextGapAt = now + 600 // petit décalage pour re-tenter si l’équipement a raté
             }
         }
 
         // ------------------- Quick Pearl (repris de la base) -------------------
-        if (distance > 18 &&
+        if (!isConsuming() &&
+            distance > 18 &&
             EntityUtils.entityFacingAway(target, player) &&
             !Mouse.isRunningAway() &&
             now - lastPearl > 5000 &&
@@ -273,7 +311,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
         // ------------------- STRAFE “Classic-like” -------------------
         val movePriority = arrayListOf(0, 0)
-        var randomStrafe: Boolean
+        val randomStrafe: Boolean
 
         if (distance < 8) {
             // En visibilité réduite, se décaler vers le centre (approche “safe”)
@@ -331,6 +369,11 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }
 
         handle(false, randomStrafe, movePriority)
+
+        // Réactivation AC si plus en conso et pas bloqué
+        if (!isConsuming() && dontStartLeftAC) {
+            dontStartLeftAC = false
+        }
     }
 
     override fun onAttack() {
