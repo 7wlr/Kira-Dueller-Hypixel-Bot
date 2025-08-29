@@ -34,7 +34,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
     // --------- ouverture ----------
     private var openingPhase = true
-    private var openingScheduled = false
+    private var openingHardStarted = false
 
     // --------- items & timestamps ----------
     private var strengthPots = 2
@@ -108,7 +108,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }
 
         openingPhase = true
-        openingScheduled = false
+        openingHardStarted = false
 
         prevDistance = -1f
         lastStrafeSwitch = 0L
@@ -157,7 +157,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
             armor = hashMapOf(0 to 1, 1 to 1, 2 to 1, 3 to 1)
             openingPhase = false
-            openingScheduled = false
+            openingHardStarted = false
             Mouse.stopTracking()
             consumingUntil = 0L
             consumingType = 0
@@ -198,7 +198,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         return true
     }
 
-    // --- Démarrer une boisson de force robuste (retourne true si pipeline lancé) ---
+    // --- Démarrer une boisson de force robuste (true si pipeline lancé) ---
     private fun startDrinkStrengthPotion(distance: Float, oppFacingAway: Boolean, attempt: Int = 1): Boolean {
         val p = mc.thePlayer ?: return false
         if (p.isPotionActive(net.minecraft.potion.Potion.damageBoost) || strengthPots <= 0) return false
@@ -216,7 +216,6 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
         TimeUtils.setTimeout({
             if (!isHoldingPotion()) {
-                // une dernière tentative de s’assurer que la potion est bien en main
                 selectPotionReliably(distance, oppFacingAway)
             }
             Mouse.rClick(hold)
@@ -242,7 +241,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         return true
     }
 
-    // --- Démarrer un manger de gapple robuste (retourne true si pipeline lancé) ---
+    // --- Démarrer un manger de gapple robuste (true si pipeline lancé) ---
     private fun startEatGapple(attempt: Int = 1): Boolean {
         if (gaps <= 0) return false
         val selected =
@@ -290,6 +289,28 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }, pre)
 
         return true
+    }
+
+    // --- Enchaîner la gap immédiatement après la fin de la conso en cours (polling léger) ---
+    private fun queueGapRightAfterCurrentConsume() {
+        TimeUtils.setTimeout({
+            if (System.currentTimeMillis() < consumingUntil) {
+                // Encore en conso (potion) -> re-vérifier très bientôt
+                queueGapRightAfterCurrentConsume()
+            } else {
+                val p = mc.thePlayer ?: return@setTimeout
+                val opp = opponent() ?: return@setTimeout
+                val dist = EntityUtils.getDistanceNoY(p, opp)
+                if (gaps > 0) {
+                    val ok = startEatGapple()
+                    if (ok && dist in quickPearlMinDist..quickPearlMaxDist && pearls > 0) {
+                        quickPearlQueued = true
+                        quickPearlAt = System.currentTimeMillis() + RandomUtils.randomIntInRange(220, 320)
+                    }
+                }
+                openingPhase = false
+            }
+        }, 60)
     }
 
     // --- QuickPearl (après gap confirmée) -> perle puis potion ---
@@ -367,24 +388,24 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             Mouse.setRunningAway(false)
         }
 
-        // ---------- OUVERTURE ----------
-        if (openingPhase && !openingScheduled) {
-            openingScheduled = true
-            TimeUtils.setTimeout({
-                val facingAway = EntityUtils.entityFacingAway(opp, p)
-                startDrinkStrengthPotion(distance, facingAway)
-                val waitMin = preDelayMs() + holdMsLong() + postDelayMs()
-                TimeUtils.setTimeout({
-                    if (!consumingNow && gaps > 0) {
-                        val ok = startEatGapple()
-                        if (ok && distance in quickPearlMinDist..quickPearlMaxDist && pearls > 0) {
-                            quickPearlQueued = true
-                            quickPearlAt = System.currentTimeMillis() + RandomUtils.randomIntInRange(220, 320)
-                        }
+        // ---------- OUVERTURE : DÉCLENCHEMENT IMMÉDIAT ----------
+        if (openingPhase && !openingHardStarted) {
+            openingHardStarted = true
+            val facingAway = EntityUtils.entityFacingAway(opp, p)
+            val started = startDrinkStrengthPotion(distance, facingAway)
+            // Si la boisson démarre, on enchaîne la gap dès que c'est fini. Sinon, on tente la gap tout de suite.
+            if (System.currentTimeMillis() < consumingUntil) {
+                queueGapRightAfterCurrentConsume()
+            } else {
+                if (gaps > 0) {
+                    val ok = startEatGapple()
+                    if (ok && distance in quickPearlMinDist..quickPearlMaxDist && pearls > 0) {
+                        quickPearlQueued = true
+                        quickPearlAt = System.currentTimeMillis() + RandomUtils.randomIntInRange(220, 320)
                     }
-                    TimeUtils.setTimeout({ openingPhase = false }, RandomUtils.randomIntInRange(120, 220))
-                }, waitMin)
-            }, RandomUtils.randomIntInRange(40, 80))
+                }
+                openingPhase = false
+            }
         }
 
         // ---------- POTION (hors ouverture) ----------
