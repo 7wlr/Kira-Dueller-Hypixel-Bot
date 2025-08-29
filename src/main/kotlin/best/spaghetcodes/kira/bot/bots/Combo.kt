@@ -24,27 +24,29 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             mapOf(
                 "wins" to "player.stats.Duels.combo_duel_wins",
                 "losses" to "player.stats.Duels.combo_duel_losses",
-                "ws" to "player.stats.Duels.current_combo_winstreak",
+                "ws" to "player.stats.Duels.current_combo_winstreak"
             )
         )
     }
 
     // ------------------- Etat & ressources -------------------
     private var tapping = false
-    private var dontStartLeftAC = false
+    private var lockLeftAC = false
 
-    private var strengthPots = 2
+    // Potions de force : 2 doses à timings fixes (aucun check d’effet)
+    private var strengthDosesUsed = 0
     override var lastPotion = 0L
     private var strengthCycleStarted = false
     private var nextStrengthAt = 0L
-    private val strengthPeriodMs = 296_000L // 296s exactement, pas de check d’effet
+    private val strengthPeriodMs = 296_000L // 296s après le début de la 1ère dose
 
-    private var gaps = 32
+    // Gapples : cycle fixe 26s (on ne s’arrête jamais après 3)
     override var lastGap = 0L
     private var gapCycleStarted = false
     private var nextGapAt = 0L
     private val gapCyclePeriodMs = 26_000L
 
+    // Perles (inchangé)
     private var pearls = 5
     private var lastPearl = 0L
 
@@ -52,8 +54,22 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     private var openingPhase = true
     private var openingScheduled = false
 
-    // Verrou de consommation (rien d’autre pendant un hold)
+    // Verrou de consommation (rien d’autre pendant ~2s)
     private var consumingUntil = 0L
+    private fun isConsuming(): Boolean = System.currentTimeMillis() < consumingUntil
+    private fun setConsumeLock(ms: Int) {
+        val now = System.currentTimeMillis()
+        consumingUntil = now + ms + 150
+        lockLeftAC = true
+        Mouse.stopLeftAC()
+        // Retour épée + réactivation AC juste après la fin nominale
+        TimeUtils.setTimeout({
+            Inventory.setInvItem("sword")
+            TimeUtils.setTimeout({
+                lockLeftAC = false
+            }, RandomUtils.randomIntInRange(140, 220))
+        }, ms + 140)
+    }
 
     // Sauts long range / micro-hop
     private var lastFarJumpAt = 0L
@@ -71,73 +87,6 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     enum class ArmorEnum { BOOTS, LEGGINGS, CHESTPLATE, HELMET }
     private var armor = hashMapOf(0 to 1, 1 to 1, 2 to 1, 3 to 1)
 
-    // ------------------- Helpers conso “forcés” -------------------
-    private fun equipAny(vararg keys: String): Boolean {
-        for (k in keys) if (Inventory.setInvItem(k)) return true
-        return false
-    }
-
-    private fun isConsuming(): Boolean = System.currentTimeMillis() < consumingUntil
-
-    /** Boit une potion **sans** vérifier l’effet. Programme la suivante à +296s s’il en reste. */
-    private fun forceDrinkNow(): Boolean {
-        if (strengthPots <= 0) return false
-        if (!equipAny("potion", "strength", "str")) return false
-
-        val hold = RandomUtils.randomIntInRange(1720, 1860) // ~32 ticks + petite marge
-        val now = System.currentTimeMillis()
-        consumingUntil = now + hold + 120
-        dontStartLeftAC = true
-        Mouse.stopLeftAC()
-        Mouse.rClick(hold)
-
-        // Décrément + timestamp
-        strengthPots--
-        lastPotion = now
-
-        // Démarre/calage du cycle potion à +296s **depuis le début** de cette conso
-        strengthCycleStarted = true
-        nextStrengthAt = if (strengthPots > 0) lastPotion + strengthPeriodMs else 0L
-
-        // Retour épée + réactivation AC
-        TimeUtils.setTimeout({
-            Inventory.setInvItem("sword")
-            TimeUtils.setTimeout({
-                dontStartLeftAC = false
-            }, RandomUtils.randomIntInRange(140, 220))
-        }, hold + 140)
-
-        return true
-    }
-
-    /** Mange une gapple et relance le cycle fixe à +26s. */
-    private fun forceEatGapNow(): Boolean {
-        if (gaps <= 0) return false
-        if (!equipAny("gap", "gapple", "apple", "golden_apple")) return false
-
-        val hold = RandomUtils.randomIntInRange(1720, 1860)
-        val now = System.currentTimeMillis()
-        consumingUntil = now + hold + 120
-        dontStartLeftAC = true
-        Mouse.stopLeftAC()
-        Mouse.rClick(hold)
-
-        gaps--
-        lastGap = now
-        gapCycleStarted = true
-        nextGapAt = lastGap + gapCyclePeriodMs
-
-        // Retour épée + réactivation AC
-        TimeUtils.setTimeout({
-            Inventory.setInvItem("sword")
-            TimeUtils.setTimeout({
-                dontStartLeftAC = false
-            }, RandomUtils.randomIntInRange(140, 220))
-        }, hold + 140)
-
-        return true
-    }
-
     // ------------------- Lifecycle -------------------
     override fun onGameStart() {
         Movement.startSprinting()
@@ -148,26 +97,31 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         openingPhase = true
         openingScheduled = false
 
+        // Potions (2 doses planifiées par temps, aucun check d’effet)
+        strengthDosesUsed = 0
+        lastPotion = 0L
         strengthCycleStarted = false
         nextStrengthAt = 0L
 
+        // Gapples (cycle temps fixe 26s)
+        lastGap = 0L
         gapCycleStarted = false
         nextGapAt = 0L
 
+        // Divers
         consumingUntil = 0L
         lastFarJumpAt = 0L
-
         lastStrafeSwitch = 0L
         strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
         closeStrafeMode = MODE_BURST
         closeStrafeNextAt = 0L
         closeStrafeToggleAt = 0L
 
-        dontStartLeftAC = false
+        lockLeftAC = false
         tapping = false
 
-        // Inventaire par défaut
-        // strengthPots, gaps, pearls sont remis au onGameEnd()
+        pearls = 5
+        lastPearl = 0L
     }
 
     override fun onGameEnd() {
@@ -176,14 +130,14 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             Mouse.stopLeftAC()
             Combat.stopRandomStrafe()
             tapping = false
-            dontStartLeftAC = false
+            lockLeftAC = false
 
-            strengthPots = 2
+            // Reset cycles
+            strengthDosesUsed = 0
             lastPotion = 0L
             strengthCycleStarted = false
             nextStrengthAt = 0L
 
-            gaps = 32
             lastGap = 0L
             gapCycleStarted = false
             nextGapAt = 0L
@@ -201,6 +155,30 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
+    // ------------------- Ouverture (déterministe) -------------------
+    private fun startOpening(distance: Float, player: net.minecraft.entity.player.EntityPlayer, target: net.minecraft.entity.Entity) {
+        // 1) Potion immédiatement (dose #1)
+        val holdMs = RandomUtils.randomIntInRange(1820, 1960)
+        lastPotion = System.currentTimeMillis()
+        strengthDosesUsed = 1
+        strengthCycleStarted = true
+        nextStrengthAt = lastPotion + strengthPeriodMs
+        setConsumeLock(holdMs)
+        // On délègue l’input réel au helper fiable
+        usePotion(8, distance < 3, EntityUtils.entityFacingAway(target, player))
+
+        // 2) Gap dès que la boisson est finie (légère marge)
+        TimeUtils.setTimeout({
+            val gapHold = RandomUtils.randomIntInRange(1820, 1960)
+            lastGap = System.currentTimeMillis()
+            gapCycleStarted = true
+            nextGapAt = lastGap + gapCyclePeriodMs
+            setConsumeLock(gapHold)
+            useGap(distance, distance < 2, EntityUtils.entityFacingAway(player, target))
+            openingPhase = false
+        }, holdMs + RandomUtils.randomIntInRange(60, 120))
+    }
+
     // ------------------- Tick principal -------------------
     override fun onTick() {
         val player = mc.thePlayer ?: return
@@ -212,72 +190,64 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         // Toujours sprinter
         if (!player.isSprinting) Movement.startSprinting()
 
-        // Tracking et AC
+        // Tracking et left AC
         if (distance < 150) Mouse.startTracking() else Mouse.stopTracking()
         if (distance < 10) {
             if (player.heldItem != null && player.heldItem.unlocalizedName.lowercase().contains("sword")) {
-                if (!dontStartLeftAC) Mouse.startLeftAC()
+                if (!lockLeftAC) Mouse.startLeftAC()
             }
         } else {
             Mouse.stopLeftAC()
         }
 
-        // Sauts > 8 blocs
+        // Sauts : > 8 blocs
         if (distance > 8 && player.onGround && now - lastFarJumpAt >= 540L) {
             Movement.singleJump(RandomUtils.randomIntInRange(130, 180))
             lastFarJumpAt = now
         }
-        // Anti-saut en mêlée
         if (distance < 8) Movement.stopJumping()
 
-        // Micro-hop anti-flat (comme Classic)
+        // Micro-hop anti-flat
         if (combo >= 3 && distance >= 3.2 && player.onGround) {
             Movement.singleJump(RandomUtils.randomIntInRange(100, 150))
         }
 
-        // Avance/arrêt simples (éviter de pousser quand collé)
+        // Avance/arrêt simples
         if (distance < 1.5 || (distance < 2.4 && combo >= 1)) {
             Movement.stopForward()
         } else if (!tapping) {
             Movement.startForward()
         }
 
-        // Mur devant : pas de runaway
+        // Pas de runaway si mur devant
         if (WorldUtils.blockInFront(player, 3f, 1.5f) != Blocks.air) {
             Mouse.setRunningAway(false)
         }
 
-        // ------------------- OUVERTURE IMMÉDIATE -------------------
+        // ---------- OUVERTURE IMMÉDIATE ----------
         if (openingPhase && !openingScheduled) {
             openingScheduled = true
-            // 1) Potion tout de suite (si dispo)
-            val drank = forceDrinkNow()
-            // 2) Puis gap dès que la boisson est finie (ou quasi immédiat si pas de potion)
-            val delayToGap = if (drank) RandomUtils.randomIntInRange(1820, 1960) else RandomUtils.randomIntInRange(40, 80)
-            TimeUtils.setTimeout({
-                forceEatGapNow()
-                openingPhase = false
-            }, delayToGap)
+            startOpening(distance, player, target)
         }
 
-        // ------------------- CYCLE POTION à 296s (sans check d’effet) -------------------
-        if (!openingPhase && strengthCycleStarted && strengthPots > 0 && !isConsuming()) {
+        // ---------- CYCLE POTION : dose #2 à +296s (aucun check d’effet) ----------
+        if (!openingPhase && strengthCycleStarted && strengthDosesUsed == 1 && !isConsuming()) {
             if (now >= nextStrengthAt) {
-                // reboit et recale (s’il en restait justement une)
-                val ok = forceDrinkNow()
-                if (!ok) {
-                    // si l’équipement rate, on retente un peu plus tard
-                    nextStrengthAt = now + 600
-                }
+                val hold = RandomUtils.randomIntInRange(1820, 1960)
+                lastPotion = now
+                strengthDosesUsed = 2 // dernière dose
+                nextStrengthAt = 0L
+                setConsumeLock(hold)
+                usePotion(8, distance < 3, EntityUtils.entityFacingAway(target, player))
             }
         }
 
-        // ------------------- ARMURE simple -------------------
+        // ---------- ARMURE simple ----------
         if (!isConsuming()) {
             for (i in 0..3) {
                 if (player.inventory.armorItemInSlot(i) == null) {
                     Mouse.stopLeftAC()
-                    dontStartLeftAC = true
+                    lockLeftAC = true
                     if ((armor[i] ?: 0) > 0) {
                         TimeUtils.setTimeout({
                             val a = Inventory.setInvItem(ArmorEnum.values()[i].name.lowercase())
@@ -289,12 +259,12 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                                     TimeUtils.setTimeout({
                                         Inventory.setInvItem("sword")
                                         TimeUtils.setTimeout({
-                                            dontStartLeftAC = false
+                                            lockLeftAC = false
                                         }, RandomUtils.randomIntInRange(200, 300))
                                     }, r + RandomUtils.randomIntInRange(100, 150))
                                 }, RandomUtils.randomIntInRange(200, 400))
                             } else {
-                                dontStartLeftAC = false
+                                lockLeftAC = false
                             }
                         }, RandomUtils.randomIntInRange(250, 500))
                     }
@@ -302,15 +272,18 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             }
         }
 
-        // ------------------- CYCLE GAPPLE 26s -------------------
-        if (!openingPhase && gapCycleStarted && gaps > 0 && !isConsuming()) {
+        // ---------- CYCLE GAPPLE 26s (infini tant qu’on joue) ----------
+        if (!openingPhase && gapCycleStarted && !isConsuming()) {
             if (now >= nextGapAt) {
-                val ok = forceEatGapNow()
-                if (!ok) nextGapAt = now + 600 // réessaie plus tard si l’équipement rate
+                val hold = RandomUtils.randomIntInRange(1820, 1960)
+                lastGap = now
+                nextGapAt = lastGap + gapCyclePeriodMs // recale immédiatement (même si la sélection rate, on retentera au prochain tick>=now)
+                setConsumeLock(hold)
+                useGap(distance, distance < 2, EntityUtils.entityFacingAway(player, target))
             }
         }
 
-        // ------------------- Quick Pearl (comme base) -------------------
+        // ---------- Quick Pearl (inchangé, safe hors conso) ----------
         if (!isConsuming() &&
             distance > 18 &&
             EntityUtils.entityFacingAway(target, player) &&
@@ -320,7 +293,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         ) {
             lastPearl = now
             Mouse.stopLeftAC()
-            dontStartLeftAC = true
+            lockLeftAC = true
             TimeUtils.setTimeout({
                 if (Inventory.setInvItem("pearl")) {
                     pearls--
@@ -331,31 +304,25 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                             Mouse.setUsingProjectile(false)
                             Inventory.setInvItem("sword")
                             TimeUtils.setTimeout({
-                                dontStartLeftAC = false
+                                lockLeftAC = false
                             }, RandomUtils.randomIntInRange(200, 300))
                         }, RandomUtils.randomIntInRange(250, 300))
                     }, RandomUtils.randomIntInRange(300, 600))
                 } else {
-                    dontStartLeftAC = false
+                    lockLeftAC = false
                 }
             }, RandomUtils.randomIntInRange(250, 500))
         }
 
-        // ------------------- STRAFE “Classic-like” -------------------
+        // ---------- STRAFE “Classic-like” ----------
         val movePriority = arrayListOf(0, 0)
         val randomStrafe: Boolean
 
         if (distance < 8) {
-            // En visibilité réduite, se décaler vers le centre (approche “safe”)
             if (target.isInvisibleToPlayer(player)) {
-                if (WorldUtils.leftOrRightToPoint(player, Vec3(0.0, 0.0, 0.0))) {
-                    movePriority[0] += 4
-                } else {
-                    movePriority[1] += 4
-                }
+                if (WorldUtils.leftOrRightToPoint(player, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4 else movePriority[1] += 4
                 randomStrafe = false
             } else {
-                // Close-range : pattern burst / holds (alternance rapide)
                 if (distance < 2.6f) {
                     val nowMs = System.currentTimeMillis()
                     if (nowMs >= closeStrafeNextAt) {
@@ -378,12 +345,10 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                         strafeDir = -strafeDir
                         closeStrafeToggleAt = System.currentTimeMillis() + RandomUtils.randomIntInRange(60, 110)
                     }
-
                     val weightClose = 6
                     if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
                     randomStrafe = false
                 } else {
-                    // 2.6–8 blocs : strafe guidé par la tête de l’ennemi
                     if (distance < 4 && combo > 2) {
                         val rotations = EntityUtils.getRotations(target, player, false)
                         if (rotations != null) {
@@ -396,20 +361,16 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                 }
             }
         } else {
-            // Loin : strafe random léger, l’important est la vitesse + sauts périodiques
             randomStrafe = true
         }
 
         handle(false, randomStrafe, movePriority)
 
-        // Si plus en conso et flag lock AC, libérer
-        if (!isConsuming() && dontStartLeftAC) {
-            dontStartLeftAC = false
-        }
+        // Si plus en conso et lock AC encore actif, libère
+        if (!isConsuming() && lockLeftAC) lockLeftAC = false
     }
 
     override fun onAttack() {
-        // W-tap léger pour garder un avantage de KB
         Combat.wTap(100)
         tapping = true
         TimeUtils.setTimeout({ tapping = false }, 120)
