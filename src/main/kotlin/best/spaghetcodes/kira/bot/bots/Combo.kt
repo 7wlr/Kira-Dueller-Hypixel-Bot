@@ -14,6 +14,8 @@ import best.spaghetcodes.kira.utils.TimeUtils
 import best.spaghetcodes.kira.utils.WorldUtils
 import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
+import kotlin.math.abs
+import kotlin.math.max
 
 class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
@@ -45,7 +47,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
     private var tapping = false
 
-    // --------- Armure ----------
+    // --------- Armure (simple : équiper si manquant) ----------
     enum class ArmorEnum { BOOTS, LEGGINGS, CHESTPLATE, HELMET }
     private var armor = hashMapOf(0 to 1, 1 to 1, 2 to 1, 3 to 1)
 
@@ -63,13 +65,31 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     private var closeStrafeNextAt = 0L
     private var closeStrafeToggleAt = 0L
 
-    // Centre “virtuel” pour recentrer quand on est près d’un bord/obstacle
+    // AD-tapping (offensif type 1)
+    private var adTapActive = false
+    private var adToggleAt = 0L
+
+    // Centre “virtuel” pour recentrer quand bord/obstacle
     private var centerX = 0.0
     private var centerZ = 0.0
 
-    // --------- Verrou consommation (empêche tout switch d’item) ----------
+    // --------- Verrou de consommation (anti-switch) ----------
     private var consumingUntil = 0L
+    private var consumingType = 0 // 0=none, 1=potion, 2=gap
+
+    // --------- Saut long-range ----------
     private var lastFarJumpAt = 0L
+
+    // --------- Run-back mid-combo (défensif) ----------
+    private var incomingStreak = 0
+    private var lastHurtStamp = 0L
+    private var prevHurtTime = 0
+
+    // --------- QuickPearl après gap (guide) ----------
+    private var quickPearlQueued = false
+    private var quickPearlAt = 0L
+    private val quickPearlMinDist = 6.0f
+    private val quickPearlMaxDist = 12.0f
 
     override fun onGameStart() {
         Movement.startSprinting()
@@ -77,13 +97,11 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         Mouse.startTracking()
         Mouse.stopLeftAC()
 
-        // point "centre" ≈ spawn du joueur (sert juste à donner une direction vers l’intérieur)
         mc.thePlayer?.let {
             centerX = it.posX
             centerZ = it.posZ
         }
 
-        // Séquence d’ouverture verrouillée
         openingPhase = true
         openingScheduled = false
 
@@ -95,10 +113,24 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         closeStrafeMode = MODE_BURST
         closeStrafeNextAt = 0L
         closeStrafeToggleAt = 0L
+        adTapActive = false
+        adToggleAt = 0L
         tapping = false
 
         consumingUntil = 0L
+        consumingType = 0
         lastFarJumpAt = 0L
+
+        incomingStreak = 0
+        lastHurtStamp = 0L
+        prevHurtTime = 0
+
+        quickPearlQueued = false
+        quickPearlAt = 0L
+
+        strengthPots = max(0, strengthPots)
+        gaps = max(0, gaps)
+        pearls = max(0, pearls)
     }
 
     override fun onGameEnd() {
@@ -122,11 +154,15 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             openingScheduled = false
             Mouse.stopTracking()
             consumingUntil = 0L
+            consumingType = 0
+
+            incomingStreak = 0
+            prevHurtTime = 0
+            quickPearlQueued = false
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
-    // Force un vrai "drink" de potion de force en retenant le clic droit,
-    // avec verrou global empêchant tout autre switch pendant la boisson.
+    // --- Forcer la boisson de force : sélection + maintien clic droit ---
     private fun forceDrinkStrengthPotion(): Int {
         val p = mc.thePlayer ?: return -1
         if (p.isPotionActive(net.minecraft.potion.Potion.damageBoost) || strengthPots <= 0) return -1
@@ -134,22 +170,90 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         val selected = Inventory.setInvItem("potion")
         if (!selected) return -1
 
-        val hold = RandomUtils.randomIntInRange(1500, 1700)
+        val hold = RandomUtils.randomIntInRange(1520, 1720) // ~32 ticks
         val now = System.currentTimeMillis()
-        consumingUntil = now + hold + 120 // verrou "consommation"
+        consumingType = 1
+        consumingUntil = now + hold + 140
         Mouse.rClick(hold)
 
         lastPotion = now
-        strengthPots--
+        strengthPots = max(0, strengthPots - 1)
 
-        // Relâche le verrou légèrement après la fin théorique
         TimeUtils.setTimeout({
-            if (System.currentTimeMillis() >= consumingUntil) {
+            if (System.currentTimeMillis() >= consumingUntil && consumingType == 1) {
                 consumingUntil = 0L
+                consumingType = 0
             }
-        }, hold + 140)
+        }, hold + 160)
 
         return hold
+    }
+
+    // --- Forcer le manger de gapple : sélection + maintien clic droit ---
+    private fun forceEatGapple(): Int {
+        val p = mc.thePlayer ?: return -1
+        if (gaps <= 0) return -1
+
+        val selected =
+            Inventory.setInvItem("gap") ||
+            Inventory.setInvItem("gapple") ||
+            Inventory.setInvItem("apple") ||
+            Inventory.setInvItem("golden_apple")
+
+        if (!selected) return -1
+
+        val hold = RandomUtils.randomIntInRange(1500, 1700) // ~32 ticks
+        val now = System.currentTimeMillis()
+        consumingType = 2
+        consumingUntil = now + hold + 140
+        Mouse.rClick(hold)
+
+        lastGap = now
+        gaps = max(0, gaps - 1)
+
+        TimeUtils.setTimeout({
+            if (System.currentTimeMillis() >= consumingUntil && consumingType == 2) {
+                consumingUntil = 0L
+                consumingType = 0
+            }
+        }, hold + 160)
+
+        return hold
+    }
+
+    // --- QuickPearl (après une gap) -> perle haute, puis potion (guide) ---
+    private fun tryQuickPearlSequence(distance: Float) {
+        if (!quickPearlQueued) return
+        val now = System.currentTimeMillis()
+        if (now < quickPearlAt || now < consumingUntil) return
+        if (pearls <= 0) { quickPearlQueued = false; return }
+        if (distance !in quickPearlMinDist..quickPearlMaxDist) { quickPearlQueued = false; return }
+        if (now - lastPearl <= 5000) { quickPearlQueued = false; return }
+
+        // Perle : on jette rapidement (Mouse.setUsingProjectile pour fiabiliser)
+        lastPearl = now
+        val ok = Inventory.setInvItem("pearl")
+        if (ok) {
+            pearls = max(0, pearls - 1)
+            Mouse.setUsingProjectile(true)
+            // petit délai pour laisser le client armer la perle
+            TimeUtils.setTimeout({
+                Mouse.rClick(RandomUtils.randomIntInRange(110, 160))
+                // on revient épée
+                TimeUtils.setTimeout({
+                    Mouse.setUsingProjectile(false)
+                    Inventory.setInvItem("sword")
+                    // enchaîner la potion de force juste après (guide)
+                    TimeUtils.setTimeout({
+                        if (!mc.thePlayer.isPotionActive(net.minecraft.potion.Potion.damageBoost)) {
+                            forceDrinkStrengthPotion()
+                        }
+                    }, RandomUtils.randomIntInRange(180, 260))
+                }, RandomUtils.randomIntInRange(220, 300))
+            }, RandomUtils.randomIntInRange(180, 260))
+        }
+
+        quickPearlQueued = false
     }
 
     override fun onTick() {
@@ -159,6 +263,15 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         val now = System.currentTimeMillis()
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val consumingNow = now < consumingUntil
+
+        // Détection hits entrants (run-back defensif)
+        if (p.hurtTime > 0 && p.hurtTime > prevHurtTime) {
+            incomingStreak++
+            lastHurtStamp = now
+        } else if (now - lastHurtStamp > 450) {
+            incomingStreak = 0
+        }
+        prevHurtTime = p.hurtTime
 
         if (!p.isSprinting) Movement.startSprinting()
         Mouse.startTracking()
@@ -192,36 +305,31 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         // ====================== OUVERTURE FORCÉE ======================
         if (openingPhase && !openingScheduled) {
             openingScheduled = true
-            // Potion : on BOIT réellement, puis on enchaîne la gapple après la fin de boisson
             TimeUtils.setTimeout({
                 val hold = forceDrinkStrengthPotion()
-                val waitForEnd = if (hold > 0) hold + RandomUtils.randomIntInRange(140, 200) else RandomUtils.randomIntInRange(60, 100)
+                val waitForEnd = if (hold > 0) hold + RandomUtils.randomIntInRange(140, 200) else RandomUtils.randomIntInRange(80, 120)
                 TimeUtils.setTimeout({
-                    // Gapple juste après la potion (aucun switch tant que la boisson n'est pas finie)
-                    if (gaps > 0) {
-                        // Si on est toujours dans la fenêtre de conso (rare), repousser légèrement
-                        if (System.currentTimeMillis() < consumingUntil) {
-                            TimeUtils.setTimeout({
-                                if (gaps > 0) {
-                                    lastGap = System.currentTimeMillis()
-                                    useGap(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
-                                    gaps--
+                    if (System.currentTimeMillis() < consumingUntil) {
+                        TimeUtils.setTimeout({
+                            if (gaps > 0) {
+                                val g = forceEatGapple()
+                                // option : quick pearl direct après l’ouverture si distance ok
+                                if (g > 0 && distance in quickPearlMinDist..quickPearlMaxDist && pearls > 0) {
+                                    quickPearlQueued = true
+                                    quickPearlAt = consumingUntil + RandomUtils.randomIntInRange(100, 180)
                                 }
-                                // Fin ouverture
-                                TimeUtils.setTimeout({
-                                    openingPhase = false
-                                }, RandomUtils.randomIntInRange(120, 220))
-                            }, (consumingUntil - System.currentTimeMillis() + 30).toInt().coerceAtLeast(40))
-                        } else {
-                            lastGap = System.currentTimeMillis()
-                            useGap(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
-                            gaps--
-                            TimeUtils.setTimeout({
-                                openingPhase = false
-                            }, RandomUtils.randomIntInRange(120, 220))
-                        }
+                            }
+                            TimeUtils.setTimeout({ openingPhase = false }, RandomUtils.randomIntInRange(120, 220))
+                        }, (consumingUntil - System.currentTimeMillis() + 30).toInt().coerceAtLeast(50))
                     } else {
-                        openingPhase = false
+                        if (gaps > 0) {
+                            val g = forceEatGapple()
+                            if (g > 0 && distance in quickPearlMinDist..quickPearlMaxDist && pearls > 0) {
+                                quickPearlQueued = true
+                                quickPearlAt = System.currentTimeMillis() + g + RandomUtils.randomIntInRange(100, 180)
+                            }
+                        }
+                        TimeUtils.setTimeout({ openingPhase = false }, RandomUtils.randomIntInRange(120, 220))
                     }
                 }, waitForEnd)
             }, RandomUtils.randomIntInRange(20, 60))
@@ -233,14 +341,21 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             now - lastPotion > 5000 &&
             !consumingNow
         ) {
-            if (strengthPots > 0) {
-                val hold = forceDrinkStrengthPotion()
-                if (hold <= 0) {
-                    // Fallback si sélection "potion" n'a pas matché
-                    lastPotion = now
-                    strengthPots--
-                    usePotion(8, distance < 3f, EntityUtils.entityFacingAway(opp, p))
-                }
+            val hold = forceDrinkStrengthPotion()
+            if (hold <= 0 && strengthPots > 0) {
+                lastPotion = now
+                strengthPots--
+                usePotion(8, distance < 3f, EntityUtils.entityFacingAway(opp, p))
+                val soft = RandomUtils.randomIntInRange(200, 280)
+                Mouse.rClick(soft)
+                consumingType = 1
+                consumingUntil = System.currentTimeMillis() + soft + 80
+                TimeUtils.setTimeout({
+                    if (System.currentTimeMillis() >= consumingUntil && consumingType == 1) {
+                        consumingUntil = 0L
+                        consumingType = 0
+                    }
+                }, soft + 100)
             }
         }
 
@@ -269,110 +384,144 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }
 
         // ====================== GAPPLE (hors ouverture) ======================
-        // Mange même en plein combo si besoin, mais JAMAIS pendant une boisson en cours (on attend la fin)
+        // Mange même en plein combo si besoin, mais jamais pendant une autre conso
         if (!openingPhase && gaps > 0 && !consumingNow) {
             val needGap = (p.health < 12f) || !p.isPotionActive(net.minecraft.potion.Potion.absorption)
-            val cdOk = (now - lastGap) > 1600 // ~temps d'une bouchée; évite le spam dur
+            val cdOk = (now - lastGap) > 1600
             if (needGap && cdOk) {
-                useGap(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
-                gaps--
-                lastGap = now
+                val g = forceEatGapple()
+                // QuickPearl (guide) après n'importe quelle gap si la fenêtre est bonne
+                if (g > 0 && distance in quickPearlMinDist..quickPearlMaxDist && pearls > 0) {
+                    quickPearlQueued = true
+                    quickPearlAt = System.currentTimeMillis() + g + RandomUtils.randomIntInRange(100, 180)
+                }
             }
         }
 
-        // ====================== PERLE (hors ouverture) ======================
+        // ====================== “Free gap” (guide) ======================
+        // Si on a >=10 hits de suite ET que la cible est repoussée (distance >= 4.5),
+        // on claque une gap immédiatement (sans chercher de fenêtre).
+        if (!openingPhase && gaps > 0 && !consumingNow) {
+            if (combo >= 10 && distance >= 4.5f && System.currentTimeMillis() - lastGap > 1600) {
+                val g = forceEatGapple()
+                if (g > 0 && distance in quickPearlMinDist..quickPearlMaxDist && pearls > 0) {
+                    quickPearlQueued = true
+                    quickPearlAt = System.currentTimeMillis() + g + RandomUtils.randomIntInRange(100, 180)
+                }
+            }
+        }
+
+        // ====================== Run-back mid-combo (défensif) ======================
+        if (!openingPhase && !consumingNow && incomingStreak >= 6 && distance < 3.5f) {
+            // micro retrait directionnel + strafe latéral (≈280–420ms)
+            val dur = RandomUtils.randomIntInRange(280, 420)
+            Movement.stopForward()
+            Movement.startBackward()
+            if (RandomUtils.randomIntInRange(0, 1) == 0) {
+                // léger biais latéral
+                // on passe par handle() via movePriority plus bas
+            }
+            TimeUtils.setTimeout({
+                Movement.stopBackward()
+                Movement.startForward()
+            }, dur)
+            // Perle défensive si ça s'éternise
+            if (incomingStreak >= 8 && pearls > 0 && now - lastPearl > 5000) {
+                TimeUtils.setTimeout({
+                    if (System.currentTimeMillis() < consumingUntil) return@setTimeout
+                    if (Inventory.setInvItem("pearl")) {
+                        pearls = max(0, pearls - 1)
+                        lastPearl = System.currentTimeMillis()
+                        Mouse.setUsingProjectile(true)
+                        TimeUtils.setTimeout({
+                            Mouse.rClick(RandomUtils.randomIntInRange(100, 150))
+                            TimeUtils.setTimeout({
+                                Mouse.setUsingProjectile(false)
+                                Inventory.setInvItem("sword")
+                            }, RandomUtils.randomIntInRange(220, 300))
+                        }, RandomUtils.randomIntInRange(220, 300))
+                    }
+                }, RandomUtils.randomIntInRange(60, 120))
+            }
+        }
+
+        // ====================== QuickPearl planifiée ======================
+        tryQuickPearlSequence(distance)
+
+        // ====================== STRAFE “CLASSIC” + AD-tapping ======================
         val movePriority = arrayListOf(0, 0)
         var clear = false
         var randomStrafe = false
 
-        if (!openingPhase &&
-            !consumingNow &&
-            distance > 18f &&
-            EntityUtils.entityFacingAway(opp, p) &&
-            !Mouse.isRunningAway() &&
-            now - lastPearl > 5000 &&
-            pearls > 0
-        ) {
-            lastPearl = now
-            TimeUtils.setTimeout({
-                if (System.currentTimeMillis() < consumingUntil) return@setTimeout
-                if (Inventory.setInvItem("pearl")) {
-                    pearls--
-                    Mouse.setUsingProjectile(true)
-                    TimeUtils.setTimeout({
-                        Mouse.rClick(RandomUtils.randomIntInRange(100, 150))
-                        TimeUtils.setTimeout({
-                            Mouse.setUsingProjectile(false)
-                            Inventory.setInvItem("sword")
-                        }, RandomUtils.randomIntInRange(250, 300))
-                    }, RandomUtils.randomIntInRange(300, 600))
-                }
-            }, RandomUtils.randomIntInRange(250, 500))
-        } else {
-            // ===================== STRAFE “CLASSIC” =====================
-            fun edgeAhead(distProbe: Float) =
-                WorldUtils.blockInFront(p, distProbe, 0.0f) == Blocks.air
+        fun edgeAhead(distProbe: Float) =
+            WorldUtils.blockInFront(p, distProbe, 0.0f) == Blocks.air
 
-            val voidNear = edgeAhead(1.4f) || edgeAhead(2.0f)
-            if (voidNear) {
-                val toLeft = WorldUtils.leftOrRightToPoint(p, Vec3(centerX, 0.0, centerZ))
-                val w = 10
-                if (toLeft) movePriority[0] += w else movePriority[1] += w
+        val voidNear = edgeAhead(1.4f) || edgeAhead(2.0f)
+        if (voidNear) {
+            val toLeft = WorldUtils.leftOrRightToPoint(p, Vec3(centerX, 0.0, centerZ))
+            val w = 10
+            if (toLeft) movePriority[0] += w else movePriority[1] += w
+            randomStrafe = false
+        } else {
+            // ---------- Close-range machine (< 2.6 blocs) ----------
+            if (distance < 2.6f) {
+                if (now >= closeStrafeNextAt) {
+                    val roll = RandomUtils.randomIntInRange(0, 99)
+                    closeStrafeMode = when {
+                        roll < 50 -> MODE_BURST
+                        roll < 75 -> MODE_HOLD_LEFT
+                        else     -> MODE_HOLD_RIGHT
+                    }
+                    closeStrafeNextAt = now + when (closeStrafeMode) {
+                        MODE_BURST -> RandomUtils.randomIntInRange(280, 420).toLong()
+                        else       -> RandomUtils.randomIntInRange(220, 340).toLong()
+                    }
+                    if (closeStrafeMode == MODE_BURST) {
+                        closeStrafeToggleAt = now + RandomUtils.randomIntInRange(60, 110)
+                    } else {
+                        strafeDir = if (closeStrafeMode == MODE_HOLD_LEFT) -1 else 1
+                    }
+                } else if (closeStrafeMode == MODE_BURST && now >= closeStrafeToggleAt) {
+                    strafeDir = -strafeDir
+                    closeStrafeToggleAt = now + RandomUtils.randomIntInRange(60, 110)
+                }
+
+                val weightClose = 6
+                if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
+                Movement.startForward()
+                Movement.startSprinting()
                 randomStrafe = false
             } else {
-                // Close-range machine (< 2.6 blocs)
-                if (distance < 2.6f) {
-                    if (now >= closeStrafeNextAt) {
-                        val roll = RandomUtils.randomIntInRange(0, 99)
-                        closeStrafeMode = when {
-                            roll < 50 -> MODE_BURST
-                            roll < 75 -> MODE_HOLD_LEFT
-                            else     -> MODE_HOLD_RIGHT
-                        }
-                        closeStrafeNextAt = now + when (closeStrafeMode) {
-                            MODE_BURST -> RandomUtils.randomIntInRange(280, 420).toLong()
-                            else       -> RandomUtils.randomIntInRange(220, 340).toLong()
-                        }
-                        if (closeStrafeMode == MODE_BURST) {
-                            closeStrafeToggleAt = now + RandomUtils.randomIntInRange(60, 110)
-                        } else {
-                            strafeDir = if (closeStrafeMode == MODE_HOLD_LEFT) -1 else 1
-                        }
-                    } else if (closeStrafeMode == MODE_BURST && now >= closeStrafeToggleAt) {
+                // ---------- AD-tapping (drawn-out combo offensif type 1) ----------
+                adTapActive = (combo in 3..12) && (distance in 2.4f..4.0f)
+                if (adTapActive) {
+                    if (now >= adToggleAt) {
                         strafeDir = -strafeDir
-                        closeStrafeToggleAt = now + RandomUtils.randomIntInRange(60, 110)
+                        adToggleAt = now + RandomUtils.randomIntInRange(80, 120)
                     }
-
-                    val weightClose = 6
-                    if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
-                    Movement.startForward()
-                    Movement.startSprinting()
-                    randomStrafe = false
-                } else {
-                    // Medium/long range
-                    if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(820, 1100)) {
-                        strafeDir = -strafeDir
-                        lastStrafeSwitch = now
-                    }
-                    val deltaDist = if (prevDistance > 0f) kotlin.math.abs(distance - prevDistance) else 999f
-                    if (distance in 1.8f..3.6f && deltaDist < 0.03f && now - lastStrafeSwitch > 260) {
-                        strafeDir = -strafeDir
-                        lastStrafeSwitch = now
-                    }
-                    val weight = if (distance < 4f) 7 else 5
-                    if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
-                    randomStrafe = (distance in 8.0f..15.0f)
+                } else if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(820, 1100)) {
+                    strafeDir = -strafeDir
+                    lastStrafeSwitch = now
                 }
-            }
 
-            handle(clear, randomStrafe, movePriority)
+                val deltaDist = if (prevDistance > 0f) abs(distance - prevDistance) else 999f
+                if (distance in 1.8f..3.6f && deltaDist < 0.03f && now - lastStrafeSwitch > 260) {
+                    strafeDir = -strafeDir
+                    lastStrafeSwitch = now
+                }
+                val weight = if (distance < 4f) 7 else 5
+                if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
+                randomStrafe = (!adTapActive && distance in 8.0f..15.0f)
+            }
         }
+
+        handle(clear, randomStrafe, movePriority)
 
         prevDistance = distance
     }
 
     override fun onAttack() {
-        // Petit W-tap pour conserver la pression, sans spam
+        // W-tap constant (avantage de strafe)
         Combat.wTap(100)
         tapping = true
         TimeUtils.setTimeout({ tapping = false }, 120)
