@@ -29,7 +29,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         )
     }
 
-    // --------- Ouverture (Potion -> Gapple immédiate) ----------
+    // --------- Ouverture (Potion -> Gapple enchaînés) ----------
     private var openingPhase = true
     private var openingScheduled = false
     private var dontStartLeftAC = false
@@ -120,13 +120,26 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
+    // Force un vrai "drink" de potion de force en retenant le clic droit
+    private fun forceDrinkStrengthPotion(): Boolean {
+        val p = mc.thePlayer ?: return false
+        if (p.isPotionActive(net.minecraft.potion.Potion.damageBoost) || strengthPots <= 0) return false
+        // Sélectionne un item de type potion sur la hotbar / inventaire
+        val selected = Inventory.setInvItem("potion")
+        // Maintien suffisant pour la boisson (~1.5–1.7s)
+        val hold = RandomUtils.randomIntInRange(1450, 1680)
+        Mouse.rClick(hold)
+        lastPotion = System.currentTimeMillis()
+        strengthPots--
+        return selected
+    }
+
     override fun onTick() {
         val p = mc.thePlayer ?: return
         val opp = opponent() ?: return
 
         val now = System.currentTimeMillis()
         val distance = EntityUtils.getDistanceNoY(p, opp)
-        val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.12f)
 
         if (!p.isSprinting) Movement.startSprinting()
         Mouse.startTracking()
@@ -155,34 +168,25 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         // ====================== OUVERTURE FORCÉE ======================
         if (openingPhase && !openingScheduled) {
             openingScheduled = true
-            // Potion tout de suite, puis gapple ~150–200ms après, puis on relâche.
+            // Potion : on BOIT réellement, puis on enchaîne la gapple dès que fini
             TimeUtils.setTimeout({
-                val faceAwayForPot = EntityUtils.entityFacingAway(opp, p)
-                val closeForPot = distance < 3f
-
-                // 1) Potion de force si dispo
-                val didPot = if (!p.isPotionActive(net.minecraft.potion.Potion.damageBoost) && strengthPots > 0) {
-                    lastPotion = System.currentTimeMillis()
-                    strengthPots--
-                    usePotion(8, closeForPot, faceAwayForPot)
-                    true
-                } else false
-
-                // 2) Gapple juste après (pas d’attente globale)
+                val drank = forceDrinkStrengthPotion()
+                val waitForEnd = if (drank) RandomUtils.randomIntInRange(1480, 1650) else RandomUtils.randomIntInRange(40, 80)
                 TimeUtils.setTimeout({
+                    // Gapple juste après la potion (sans "fenêtre safe")
                     if (gaps > 0) {
                         lastGap = System.currentTimeMillis()
-                        val faceAwayForGap = EntityUtils.entityFacingAway(p, opp)
-                        useGap(distance, distance < 2f, faceAwayForGap)
+                        useGap(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
                         gaps--
                     }
-                    // 3) Fin de l’ouverture, petit flush
+                    // Fin d'ouverture après la fin (ou quasi fin) de l'animation de mange
+                    val eatHold = RandomUtils.randomIntInRange(1380, 1650)
                     TimeUtils.setTimeout({
                         dontStartLeftAC = false
                         openingPhase = false
-                    }, RandomUtils.randomIntInRange(120, 220))
-                }, RandomUtils.randomIntInRange(140, 200))
-            }, RandomUtils.randomIntInRange(40, 80))
+                    }, eatHold / 2)
+                }, waitForEnd)
+            }, RandomUtils.randomIntInRange(20, 60))
         }
 
         // ====================== POTIONS (hors ouverture) ======================
@@ -190,10 +194,15 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             !p.isPotionActive(net.minecraft.potion.Potion.damageBoost) &&
             now - lastPotion > 5000
         ) {
-            lastPotion = now
             if (strengthPots > 0) {
+                lastPotion = now
                 strengthPots--
-                usePotion(8, distance < 3f, EntityUtils.entityFacingAway(opp, p))
+                // Force aussi la boisson si jamais la routine interne tergiverse
+                val drank = forceDrinkStrengthPotion()
+                if (!drank) {
+                    // Fallback sur le helper existant (slot 8) si la sélection "potion" n'a pas matché
+                    usePotion(8, distance < 3f, EntityUtils.entityFacingAway(opp, p))
+                }
             }
         }
 
@@ -228,12 +237,10 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }
 
         // ====================== GAPPLE (hors ouverture) ======================
-        // *** Changement demandé : PAS de "fenêtre safe".
-        // Si PV < 12 ou pas d'Absorption, on mange IMMÉDIATEMENT, même en se faisant frapper. ***
+        // Mange même en plein combo si besoin (aucune fenêtre safe)
         if (!openingPhase && gaps > 0) {
             val needGap = (p.health < 12f) || !p.isPotionActive(net.minecraft.potion.Potion.absorption)
-            val cdOk = (now - lastGap) > 1600 // ~temps de mange (évite le spam si tentative en cours)
-
+            val cdOk = (now - lastGap) > 1600 // ~temps d'une bouchée; évite le spam dur
             if (needGap && cdOk) {
                 useGap(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
                 gaps--
@@ -276,7 +283,6 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             }, RandomUtils.randomIntInRange(250, 500))
         } else {
             // ===================== STRAFE “CLASSIC” =====================
-            // Anti-bord : si "air" devant, pousser vers le centre virtuel
             fun edgeAhead(distProbe: Float) =
                 WorldUtils.blockInFront(p, distProbe, 0.0f) == Blocks.air
 
@@ -287,14 +293,14 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                 if (toLeft) movePriority[0] += w else movePriority[1] += w
                 randomStrafe = false
             } else {
-                // ---------- Close-range machine (< 2.6 blocs) ----------
+                // Close-range machine (< 2.6 blocs)
                 if (distance < 2.6f) {
                     if (now >= closeStrafeNextAt) {
                         val roll = RandomUtils.randomIntInRange(0, 99)
                         closeStrafeMode = when {
-                            roll < 50 -> MODE_BURST            // 50% très rapide
-                            roll < 75 -> MODE_HOLD_LEFT        // 25% maintien gauche
-                            else     -> MODE_HOLD_RIGHT        // 25% maintien droit
+                            roll < 50 -> MODE_BURST
+                            roll < 75 -> MODE_HOLD_LEFT
+                            else     -> MODE_HOLD_RIGHT
                         }
                         closeStrafeNextAt = now + when (closeStrafeMode) {
                             MODE_BURST -> RandomUtils.randomIntInRange(280, 420).toLong()
@@ -310,19 +316,17 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                         closeStrafeToggleAt = now + RandomUtils.randomIntInRange(60, 110)
                     }
 
-                    val weightClose = 6 // un peu plus fort qu’en Classic (mode Combo)
+                    val weightClose = 6
                     if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
                     Movement.startForward()
                     Movement.startSprinting()
                     randomStrafe = false
                 } else {
-                    // ---------- Medium/long range ----------
-                    // Switch latéral régulier
+                    // Medium/long range
                     if (distance < 6.5f && now - lastStrafeSwitch > RandomUtils.randomIntInRange(820, 1100)) {
                         strafeDir = -strafeDir
                         lastStrafeSwitch = now
                     }
-                    // Anti-stagnation si on colle sans bouger
                     val deltaDist = if (prevDistance > 0f) kotlin.math.abs(distance - prevDistance) else 999f
                     if (distance in 1.8f..3.6f && deltaDist < 0.03f && now - lastStrafeSwitch > 260) {
                         strafeDir = -strafeDir
@@ -345,6 +349,5 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         Combat.wTap(100)
         tapping = true
         TimeUtils.setTimeout({ tapping = false }, 120)
-        // (on garde l’AC géré par onTick/locking)
     }
 }
