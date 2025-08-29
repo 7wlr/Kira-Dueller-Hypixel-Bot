@@ -273,7 +273,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
 
         // ------------------- STRAFE “Classic-like” -------------------
         val movePriority = arrayListOf(0, 0)
-        var randomStrafe = false
+        var randomStrafe: Boolean
 
         if (distance < 8) {
             // En visibilité réduite, se décaler vers le centre (approche “safe”)
