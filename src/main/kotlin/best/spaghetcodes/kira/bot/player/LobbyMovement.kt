@@ -12,6 +12,7 @@ import java.util.Timer
 object LobbyMovement {
 
     private var tickYawChange = 0f
+    private var initialYaw = 0f
     private var intervals: ArrayList<Timer?> = ArrayList()
 
     fun sumo() {
@@ -27,6 +28,7 @@ object LobbyMovement {
         if (kira.mc.thePlayer != null) {
             Movement.startForward()
             Movement.startSprinting()
+            initialYaw = kira.mc.thePlayer.rotationYaw
 
             intervals.add(TimeUtils.setInterval(
                 fun () {
