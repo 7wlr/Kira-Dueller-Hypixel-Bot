@@ -13,6 +13,7 @@ import best.spaghetcodes.kira.utils.RandomUtils
 import best.spaghetcodes.kira.utils.TimeUtils
 import best.spaghetcodes.kira.utils.WorldUtils
 import net.minecraft.init.Blocks
+import net.minecraft.init.Items
 import net.minecraft.util.Vec3
 
 class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
@@ -29,24 +30,25 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         )
     }
 
-    // ------------------- Etat & ressources -------------------
+    // ---- état combat / clic ----
     private var tapping = false
     private var lockLeftAC = false
 
-    // Potion (2 doses, timings fixes sans check d'effet)
+    // ---- cycles déterministes (aucun check d'effet) ----
+    // Strength : 2 doses, 2e à +296 s après le début de la 1re
     private var strengthDosesUsed = 0
     override var lastPotion = 0L
     private var strengthCycleStarted = false
     private var nextStrengthAt = 0L
-    private val strengthPeriodMs = 296_000L // 296s après début dose #1
+    private val strengthPeriodMs = 296_000L
 
-    // Gap cycle fixe (26s)
+    // Gapples : toutes les 26 s, indéfiniment
     override var lastGap = 0L
     private var gapCycleStarted = false
     private var nextGapAt = 0L
     private val gapPeriodMs = 26_000L
 
-    // Perles
+    // Ressources diverses
     private var pearls = 5
     private var lastPearl = 0L
 
@@ -54,11 +56,11 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     private var openingPhase = true
     private var openingScheduled = false
 
-    // Fenêtre de conso (empêche toute interruption)
+    // Verrou conso (empêche interruptions pendant ~2s)
     private var consumingUntil = 0L
     private fun isConsuming(): Boolean = System.currentTimeMillis() < consumingUntil
 
-    // Mouvements
+    // Sauts / strafes
     private var lastFarJumpAt = 0L
     private var lastStrafeSwitch = 0L
     private var strafeDir = 1
@@ -72,13 +74,22 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     enum class ArmorEnum { BOOTS, LEGGINGS, CHESTPLATE, HELMET }
     private var armor = hashMapOf(0 to 1, 1 to 1, 2 to 1, 3 to 1)
 
-    // ------------------- Utils inventaire / conso -------------------
+    // ------------------- Helpers item -------------------
     private fun equipAny(vararg keys: String): Boolean {
         for (k in keys) if (Inventory.setInvItem(k)) return true
         return false
     }
+    private fun isHoldingGap(): Boolean {
+        val it = mc.thePlayer?.heldItem ?: return false
+        return it.item == Items.golden_apple
+    }
+    private fun isHoldingPotion(): Boolean {
+        val it = mc.thePlayer?.heldItem ?: return false
+        return it.item == Items.potionitem
+    }
 
-    /** Verrouille ~2.1s + marge, coupe l’auto-clic gauche, puis revient à l’épée si demandé. */
+    // ------------------- Fenêtre conso & clic -------------------
+    /** Verrouille la durée de la conso, coupe l’AC gauche, puis (optionnel) revient épée. */
     private fun beginConsumeWindow(holdMs: Int, returnSword: Boolean) {
         val now = System.currentTimeMillis()
         consumingUntil = now + holdMs + 150
@@ -91,51 +102,101 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
                     lockLeftAC = false
                 }, RandomUtils.randomIntInRange(120, 200))
             } else {
-                // on laisse la main sans forcer l'épée (utile pour chaîner la gap d'ouverture)
                 lockLeftAC = false
             }
         }, holdMs + 140)
     }
 
-    /** Boit une potion (clic maintenu garanti ~2.1s). Ne vérifie pas l’effet. */
-    private fun drinkPotionStrong(returnSword: Boolean) {
-        // Sélection : alias courants (Hypixel Combo: souvent slot 8)
-        if (!equipAny("potion", "strength", "str")) {
-            // fallback : helper si dispo (sélection côté helper + rClick court), puis on allonge notre hold par-dessus
-            usePotion(8, false, false)
-            // on tente de revenir sur l'item potion via alias au tick suivant si besoin
-            TimeUtils.setTimeout({ equipAny("potion", "strength", "str") }, 40)
-        }
-
-        val hold = 2100 // sûr pour 32 ticks de boisson
-        beginConsumeWindow(hold, returnSword)
-        Mouse.rClick(hold)
-
-        // Cycle potion (timé sur le début de cette conso)
-        lastPotion = System.currentTimeMillis()
-        strengthDosesUsed += 1
-        if (!strengthCycleStarted) {
-            strengthCycleStarted = true
-            nextStrengthAt = lastPotion + strengthPeriodMs
-        } else {
-            nextStrengthAt = 0L // plus de dose après la 2e
-        }
+    /** Équipe (avec pré-délai), vérifie l’item en main, puis tient le clic droit. */
+    private fun equipAndHoldRightClick(
+        select: () -> Boolean,
+        verify: () -> Boolean,
+        preMs: Int,
+        holdMs: Int,
+        returnSword: Boolean
+    ): Boolean {
+        val selected = select()
+        if (!selected) return false
+        TimeUtils.setTimeout({
+            // Si pas encore le bon item (latence de switch), retente une fois
+            if (!verify()) {
+                select()
+            }
+            beginConsumeWindow(holdMs, returnSword)
+            Mouse.rClick(holdMs)
+        }, preMs)
+        return true
     }
 
-    /** Mange une gapple (clic maintenu garanti ~2.1s). */
-    private fun eatGapStrong(distance: Float, player: net.minecraft.entity.player.EntityPlayer, target: net.minecraft.entity.Entity) {
-        if (!equipAny("gap", "gapple", "apple", "golden_apple")) {
-            // fallback : helper (sélection + rClick court), puis on tient nous-mêmes
-            useGap(distance, distance < 2f, EntityUtils.entityFacingAway(player, target))
-            TimeUtils.setTimeout({ equipAny("gap", "gapple", "apple", "golden_apple") }, 40)
+    // ------------------- Ouverture : potion -> gap (séquencé) -------------------
+    private fun drinkStrength(preMs: Int, holdMs: Int, returnSword: Boolean): Boolean {
+        val ok = equipAndHoldRightClick(
+            { equipAny("potion", "strength", "str") },
+            { isHoldingPotion() },
+            preMs, holdMs, returnSword
+        )
+        if (ok) {
+            // Horodatage au démarrage (après pré-délai ; ~équiv au début du hold)
+            TimeUtils.setTimeout({
+                lastPotion = System.currentTimeMillis()
+                strengthDosesUsed += 1
+                if (!strengthCycleStarted) {
+                    strengthCycleStarted = true
+                    nextStrengthAt = lastPotion + strengthPeriodMs
+                } else {
+                    nextStrengthAt = 0L
+                }
+            }, preMs + 5)
         }
-        val hold = 2100
-        beginConsumeWindow(hold, true)
-        Mouse.rClick(hold)
+        return ok
+    }
 
-        lastGap = System.currentTimeMillis()
-        if (!gapCycleStarted) gapCycleStarted = true
-        nextGapAt = lastGap + gapPeriodMs
+    private fun eatGap(preMs: Int, holdMs: Int, distance: Float, player: net.minecraft.entity.player.EntityPlayer, target: net.minecraft.entity.Entity): Boolean {
+        val ok = equipAndHoldRightClick(
+            { equipAny("gap", "gapple", "apple", "golden_apple") },
+            { isHoldingGap() },
+            preMs, holdMs, /*returnSword=*/true
+        )
+        if (ok) {
+            TimeUtils.setTimeout({
+                lastGap = System.currentTimeMillis()
+                if (!gapCycleStarted) gapCycleStarted = true
+                nextGapAt = lastGap + gapPeriodMs
+            }, preMs + 5)
+        } else {
+            // Fallback minimal : on essaie via helper (sélection interne) SANS tenir un 2e clic par-dessus
+            useGap(distance, distance < 2f, EntityUtils.entityFacingAway(player, target))
+            // On recale quand même le cycle, et le watchdog rattrapera si la conso n'est pas partie
+            lastGap = System.currentTimeMillis()
+            if (!gapCycleStarted) gapCycleStarted = true
+            nextGapAt = lastGap + gapPeriodMs
+        }
+        return ok
+    }
+
+    private fun startOpening(distance: Float, player: net.minecraft.entity.player.EntityPlayer, target: net.minecraft.entity.Entity) {
+        val prePot = RandomUtils.randomIntInRange(110, 160)
+        val holdPot = 2100
+        val preGap = RandomUtils.randomIntInRange(110, 160)
+        val holdGap = 2100
+
+        // 1) Potion d’ouverture (ne pas forcer retour épée ici, on enchaîne la gap juste après)
+        val potOk = drinkStrength(prePot, holdPot, /*returnSword=*/false)
+
+        // 2) Gap juste après la fin de la boisson (préPot + holdPot + petite marge)
+        val delayToGap = prePot + holdPot + RandomUtils.randomIntInRange(40, 80)
+        TimeUtils.setTimeout({
+            // si une autre action a prolongé la conso, on attend la libération
+            fun tryChain() {
+                if (isConsuming()) {
+                    TimeUtils.setTimeout({ tryChain() }, 40)
+                } else {
+                    eatGap(preGap, holdGap, EntityUtils.getDistanceNoY(player, target), player, target)
+                    openingPhase = false
+                }
+            }
+            tryChain()
+        }, delayToGap)
     }
 
     // ------------------- Lifecycle -------------------
@@ -202,27 +263,6 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }, RandomUtils.randomIntInRange(100, 300))
     }
 
-    // ------------------- Ouverture déterministe (potion -> gap) -------------------
-    private fun startOpening(distance: Float, player: net.minecraft.entity.player.EntityPlayer, target: net.minecraft.entity.Entity) {
-        // 1) Potion d’ouverture SANS retour auto à l’épée (pour ne pas couper la gap)
-        drinkPotionStrong(returnSword = false)
-
-        // 2) Gap juste après la fin de la boisson
-        val delay = 2150 // un poil au-dessus du hold (2100) pour être sûr
-        TimeUtils.setTimeout({
-            // Si quelque chose prolonge encore (rare), on attend la libération puis on mange
-            fun tryChain() {
-                if (isConsuming()) {
-                    TimeUtils.setTimeout({ tryChain() }, 40)
-                } else {
-                    eatGapStrong(EntityUtils.getDistanceNoY(player, target), player, target)
-                    openingPhase = false
-                }
-            }
-            tryChain()
-        }, delay)
-    }
-
     // ------------------- Tick principal -------------------
     override fun onTick() {
         val player = mc.thePlayer ?: return
@@ -277,7 +317,9 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         // Potion #2 à +296s (aucun check d'effet)
         if (!openingPhase && strengthCycleStarted && strengthDosesUsed == 1 && !isConsuming()) {
             if (now >= nextStrengthAt) {
-                drinkPotionStrong(returnSword = true)
+                val pre = RandomUtils.randomIntInRange(110, 160)
+                val hold = 2100
+                drinkStrength(pre, hold, /*returnSword=*/true)
             }
         }
 
@@ -311,10 +353,12 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             }
         }
 
-        // Gap toutes les 26s (infini)
+        // Gap toutes les 26s (infini) + watchdog anti-stall
         if (!openingPhase && gapCycleStarted && !isConsuming()) {
-            if (now >= nextGapAt) {
-                eatGapStrong(distance, player, target)
+            if (now >= nextGapAt || now - lastGap > gapPeriodMs + 2000) {
+                val pre = RandomUtils.randomIntInRange(110, 160)
+                val hold = 2100
+                eatGap(pre, hold, distance, player, target)
             }
         }
 
