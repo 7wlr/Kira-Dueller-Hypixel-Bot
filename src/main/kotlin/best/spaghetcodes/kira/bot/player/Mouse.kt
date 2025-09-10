@@ -44,14 +44,13 @@ object Mouse {
      */
     private fun bowPitchComp(distance: Float): Float {
         return when {
-            distance < 10f  -> 0.0f
-            distance < 12f  -> 0.5f
-            distance < 14f  -> 1.0f
-            distance < 16f  -> 1.2f   // était ~1.5
-            distance < 20f  -> 1.9f   // était ~2.3
-            distance < 24f  -> 2.7f   // était ~3.2
-            distance < 28f  -> 4.2f   // léger -0.3
-            else            -> 5.6f
+            distance < 30f -> 0.0f
+            distance < 35f -> 0.6f
+            distance < 40f -> 1.2f
+            distance < 50f -> 2.0f
+            distance < 60f -> 3.0f
+            distance < 70f -> 4.2f
+            else           -> 5.6f
         }
     }
     // --------------------------------------------
