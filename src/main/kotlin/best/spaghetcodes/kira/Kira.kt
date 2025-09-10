@@ -15,6 +15,7 @@ import net.minecraft.client.Minecraft
 import net.minecraftforge.common.MinecraftForge
 import net.minecraftforge.fml.common.Mod
 import net.minecraftforge.fml.common.event.FMLInitializationEvent
+import java.io.File
 
 @Mod(
     modid = kira.MOD_ID,
@@ -27,9 +28,10 @@ class kira {
         const val MOD_ID = "kira"
         const val MOD_NAME = "kira"
         const val VERSION = "0.1.0"
-        const val configLocation = "./config/kira.toml"
 
         val mc: Minecraft = Minecraft.getMinecraft()
+        private val configDir = File(mc.mcDataDir, "config")
+        val configLocation: String = File(configDir, "kira.toml").absolutePath
         val gson = Gson()
         var config: Config? = null
         var bot: BotBase? = null
@@ -44,6 +46,7 @@ class kira {
     @Mod.EventHandler
     @Suppress("UNUSED_PARAMETER")
     fun init(event: FMLInitializationEvent) {
+        configDir.mkdirs()
         config = Config()
         config?.preload()
 
@@ -61,5 +64,7 @@ class kira {
         val idx = config?.currentBot ?: 0
         val chosen = config?.getBot(idx) ?: Sumo()
         swapBot(chosen)
+
+        Runtime.getRuntime().addShutdownHook(Thread { config?.writeData() })
     }
 }
