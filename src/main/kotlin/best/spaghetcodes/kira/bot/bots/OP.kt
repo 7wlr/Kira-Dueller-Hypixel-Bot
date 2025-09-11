@@ -192,7 +192,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                             useSplashPotion(regenDamage, false, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
                             regenPotsLeft--
                             lastRegenUse = System.currentTimeMillis()
-                        }, RandomUtils.randomIntInRange(1500, 2000))
+                        }, RandomUtils.randomIntInRange(150, 300))
                     }
                 } else {
                     retreatAndSplash(speedDamage) {
@@ -210,7 +210,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             if (((distance > 3f && mc.thePlayer.health < 12) || mc.thePlayer.health < 9) &&
                 combo < 2 && mc.thePlayer.health <= opponent()!!.health) {
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
-                    now - lastPotion > 3500) {
+                    !eatingGap && now - lastPotion > 3500) {
                     
                     if (gapsLeft > 0 && now - lastGap > 4000) {
                         useGap(distance, distance < 2f, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
