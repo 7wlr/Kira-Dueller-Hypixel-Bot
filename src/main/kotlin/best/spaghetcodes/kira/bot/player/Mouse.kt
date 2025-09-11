@@ -132,7 +132,14 @@ object Mouse {
 
     private fun leftACFunc() {
         if (kira.bot?.toggled() == true && leftAC && kira.config?.kiraHit == true) {
-            if (!kira.mc.thePlayer.isUsingItem) {
+            val player = kira.mc.thePlayer
+            val target = kira.bot?.opponent()
+            val maxDist = (kira.config?.maxDistanceAttack ?: 4).toFloat()
+
+            if (player != null && target != null &&
+                EntityUtils.getDistanceNoY(player, target) <= maxDist &&
+                !player.isUsingItem
+            ) {
                 val minCPS = kira.config?.minCPS ?: 10
                 val maxCPS = kira.config?.maxCPS ?: 14
 
