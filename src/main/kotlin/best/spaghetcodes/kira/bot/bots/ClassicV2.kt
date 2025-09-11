@@ -445,6 +445,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
 
         val now = System.currentTimeMillis()
+        val hbActive = now < hbActiveUntil
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
 
@@ -535,7 +536,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         val bowLikely = oppHasBowNow && (isStillNow || bowSlowFrames >= bowSlowFramesNeeded)
 
         // Close cancel strict (< 15) + verrou court
-        if (Mouse.rClickDown && distance < parryCloseCancelDist) {
+        if (Mouse.rClickDown && distance < parryCloseCancelDist && !hbActive) {
             Mouse.rClickUp()
             parryFromBow = false
             parryExtendedUntil = 0L
@@ -588,14 +589,14 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
 
                 val mustKeep = parryFromBow && now < parryExtendedUntil
-                if (!mustKeep && now >= holdBlockUntil) {
+                if (!mustKeep && now >= holdBlockUntil && !hbActive) {
                     Mouse.rClickUp()
                     parryFromBow = false
                     parryExtendedUntil = 0L
                 }
             }
         } else {
-            if (Mouse.rClickDown && !projectileActive) Mouse.rClickUp()
+            if (Mouse.rClickDown && !projectileActive && !hbActive) Mouse.rClickUp()
             parryFromBow = false
             parryExtendedUntil = 0L
         }

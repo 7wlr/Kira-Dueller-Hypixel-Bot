@@ -67,6 +67,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     private var hbHitsSince = 0
     private var hbTargetHits = 0
     private var hbLastHitAt = 0L
+    protected var hbActiveUntil = 0L
 
     private var reconnectTimer: Timer? = null
 
@@ -129,6 +130,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     private fun performHitBlock(now: Long, cfg: Config) {
         val dur = RandomUtils.randomIntInRange(40, 80)
         val delay = RandomUtils.randomIntInRange(0, 20)
+        hbActiveUntil = now + delay + dur
         TimeUtils.setTimeout({ Mouse.rClick(dur) }, delay)
         val interval = (cfg.hitBlockMinInterval + RandomUtils.randomIntInRange(-20, 20)).coerceAtLeast(0)
         hbNextAllowedAt = now + interval
