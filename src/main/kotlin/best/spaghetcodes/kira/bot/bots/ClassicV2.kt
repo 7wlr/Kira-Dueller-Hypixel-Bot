@@ -731,14 +731,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 left > reserve &&
                 (now - lastShotAt) >= RandomUtils.randomIntInRange(openSpacingMin.toInt(), openSpacingMax.toInt())) {
 
-                val tunedD = adjustedAimDistance(distance)
                 val lock = chargeMsFor(distance, opening = true)
                 startupJumping = false // stop sauts de début au 1er draw
                 bowHardLockUntil = now + lock
                 pendingProjectileUntil = now + 60L
                 actionLockUntil = now + (lock + 120)
                 projectileKind = KIND_BOW
-                useBow(tunedD) {
+                useBowImmediateFull {
                     shotsFired++
                     openVolleyFired++
                     lastShotAt = System.currentTimeMillis()
@@ -761,14 +760,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 WorldUtils.blockInFront(p, distance, 0.5f) == Blocks.air &&
                 left > reserve) {
 
-                val tunedD = adjustedAimDistance(distance)
                 val lock = chargeMsFor(distance, opening = false)
                 startupJumping = false
                 bowHardLockUntil = now + lock
                 pendingProjectileUntil = now + 50L
                 actionLockUntil = now + (lock + 100)
                 projectileKind = KIND_BOW
-                useBow(tunedD) {
+                useBowImmediateFull {
                     shotsFired++
                     lastReactiveShotAt = System.currentTimeMillis()
                 }
@@ -786,14 +784,13 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 if ((away && distance in 3.5f..30f) ||
                     (!away && distance in 28.0f..33.0f)) {
 
-                    val tunedD = adjustedAimDistance(distance)
                     val lock = chargeMsFor(distance, opening = false)
                     startupJumping = false
                     bowHardLockUntil = now + lock
                     pendingProjectileUntil = now + 60L
                     actionLockUntil = now + (lock + 120)
                     projectileKind = KIND_BOW
-                    useBow(tunedD) { shotsFired++ }
+                    useBowImmediateFull { shotsFired++ }
                     projectileGraceUntil = bowHardLockUntil + 120
                     postBowNoRodUntil = now + lock + 320L
                     prevDistance = distance
