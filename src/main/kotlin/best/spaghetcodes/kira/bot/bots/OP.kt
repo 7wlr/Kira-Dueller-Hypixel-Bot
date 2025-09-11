@@ -61,7 +61,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             val player = mc.thePlayer
             if (opp != null && player != null) {
                 val dist = EntityUtils.getDistanceNoY(player, opp)
-                if (dist >= 5.5f) {
+                if (dist >= 7f) {
                     check?.cancel()
                     useSplashPotion(damage, false, EntityUtils.entityFacingAway(player, opp))
                     TimeUtils.setTimeout({ retreating = false }, RandomUtils.randomIntInRange(900, 1100))
@@ -183,15 +183,17 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 System.currentTimeMillis() - lastSpeedUse > 15000 &&
                 System.currentTimeMillis() - lastPotion > 3500) {
                 if (speedPotsLeft == 2) {
-                    useSplashPotion(speedDamage, distance < 3.5f, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
-                    speedPotsLeft--
-                    lastSpeedUse = System.currentTimeMillis()
-                    if (regenPotsLeft == 2) {
-                        TimeUtils.setTimeout({
-                            useSplashPotion(regenDamage, false, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
-                            regenPotsLeft--
-                            lastRegenUse = System.currentTimeMillis()
-                        }, RandomUtils.randomIntInRange(150, 300))
+                    retreatAndSplash(speedDamage) {
+                        speedPotsLeft--
+                        lastSpeedUse = System.currentTimeMillis()
+                        if (regenPotsLeft == 2) {
+                            TimeUtils.setTimeout({
+                                retreatAndSplash(regenDamage) {
+                                    regenPotsLeft--
+                                    lastRegenUse = System.currentTimeMillis()
+                                }
+                            }, RandomUtils.randomIntInRange(1000, 1300))
+                        }
                     }
                 } else {
                     retreatAndSplash(speedDamage) {

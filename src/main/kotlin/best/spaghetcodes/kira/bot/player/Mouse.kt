@@ -183,7 +183,7 @@ object Mouse {
                 }
 
                 if (_usingPotion) {
-                    if (splashAim == 0.0) splashAim = RandomUtils.randomDoubleInRange(80.0, 90.0)
+                    if (splashAim == 0.0) splashAim = RandomUtils.randomDoubleInRange(-2.0, 2.0)
                     rotations[1] = splashAim.toFloat()
                 }
 
