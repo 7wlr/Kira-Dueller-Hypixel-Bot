@@ -69,6 +69,9 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     @Property(type = PropertyType.NUMBER, name = "Max Attack Distance", description = "Max distance for attacking.", category = "Combat", min = 3, max = 6, increment = 1)
     var maxDistanceAttack = 5
 
+    @Property(type = PropertyType.SWITCH, name = "Kira Hit", description = "Automatically attack opponents.", category = "Combat")
+    var kiraHit = true
+
     @Property(type = PropertyType.SWITCH, name = "Enable AutoGG", description = "Send a gg message after every game", category = "AutoGG")
     var sendAutoGG = true
 

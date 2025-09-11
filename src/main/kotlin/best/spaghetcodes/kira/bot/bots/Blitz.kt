@@ -6,6 +6,7 @@ import best.spaghetcodes.kira.bot.player.Combat
 import best.spaghetcodes.kira.bot.player.Inventory
 import best.spaghetcodes.kira.bot.player.Mouse
 import best.spaghetcodes.kira.bot.player.Movement
+import best.spaghetcodes.kira.kira
 import best.spaghetcodes.kira.utils.*
 import net.minecraft.init.Blocks
 import net.minecraft.util.Vec3
@@ -33,7 +34,11 @@ class Blitz : BotBase("/play duels_blitz_duel"), MovePriority {
         Movement.startSprinting()
         Movement.startForward()
         Movement.startJumping()
-        Mouse.stopLeftAC()
+        if (kira.config?.kiraHit == true) {
+            Mouse.startLeftAC()
+        } else {
+            Mouse.stopLeftAC()
+        }
 
         lastKitSwitch = 0L
 
@@ -68,7 +73,11 @@ class Blitz : BotBase("/play duels_blitz_duel"), MovePriority {
 
         if (!p.isSprinting) Movement.startSprinting()
         Mouse.startTracking()
-        Mouse.stopLeftAC()
+        if (kira.config?.kiraHit == true) {
+            Mouse.startLeftAC()
+        } else {
+            Mouse.stopLeftAC()
+        }
 
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val now = System.currentTimeMillis()
