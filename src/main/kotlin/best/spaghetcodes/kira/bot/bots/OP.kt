@@ -192,7 +192,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                             useSplashPotion(regenDamage, false, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
                             regenPotsLeft--
                             lastRegenUse = System.currentTimeMillis()
-                        }, RandomUtils.randomIntInRange(150, 300))
+                        }, RandomUtils.randomIntInRange(1500, 2000))
                     }
                 } else {
                     retreatAndSplash(speedDamage) {
