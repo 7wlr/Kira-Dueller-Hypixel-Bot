@@ -211,23 +211,26 @@ class BowDuel : BotBase("/play duels_bow_duel"), Bow, MovePriority {
         // --------- Strafe / déplacement ----------
         val movePriority = arrayListOf(0, 0)
         var clear = false
-        var randomStrafe = false
 
-        // Strafe forcé pendant hop-shot
-        if (now < forceStrafeUntil) {
-            val w = 10
-            if (forceStrafeDir < 0) movePriority[0] += w else movePriority[1] += w
-            randomStrafe = false
-        } else if (now < evasionUntil) {
-            val w = if (distance > 18f) 9 else 7
-            if (strafeDir < 0) movePriority[0] += w else movePriority[1] += w
-            randomStrafe = false
-        } else {
-            // strafe “intelligent” face à la cible
-            randomStrafe = true
-            val rotations = EntityUtils.getRotations(opp, p, false)
-            if (rotations != null && abs(rotations[0]) > 0.0f) {
-                if (rotations[0] < 0) movePriority[1] += 3 else movePriority[0] += 3
+        val randomStrafe = when {
+            // Strafe forcé pendant hop-shot
+            now < forceStrafeUntil -> {
+                val w = 10
+                if (forceStrafeDir < 0) movePriority[0] += w else movePriority[1] += w
+                false
+            }
+            now < evasionUntil -> {
+                val w = if (distance > 18f) 9 else 7
+                if (strafeDir < 0) movePriority[0] += w else movePriority[1] += w
+                false
+            }
+            else -> {
+                // strafe “intelligent” face à la cible
+                val rotations = EntityUtils.getRotations(opp, p, false)
+                if (rotations != null && abs(rotations[0]) > 0.0f) {
+                    if (rotations[0] < 0) movePriority[1] += 3 else movePriority[0] += 3
+                }
+                true
             }
         }
 
