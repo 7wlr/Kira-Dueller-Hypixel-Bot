@@ -339,7 +339,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         if (lockLeftAC && now - lockLeftACSince > 3000) {
             lockLeftAC = false
             lockLeftACSince = 0L
-            if (!isConsuming() && !openingPhase && distance < 10) {
+            if (!isConsuming() && !openingPhase && distance < 10 && kira.config?.kiraHit == true) {
                 val held = player.heldItem
                 if (held != null && held.unlocalizedName.lowercase().contains("sword")) {
                     Mouse.startLeftAC()
@@ -355,7 +355,8 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         val shouldAttack = !isConsuming() && !openingPhase && distance < 10 &&
             player.heldItem != null &&
             player.heldItem.unlocalizedName.lowercase().contains("sword") &&
-            !lockLeftAC
+            !lockLeftAC &&
+            kira.config?.kiraHit == true
         if (shouldAttack) {
             Mouse.startLeftAC()
             leftACActive = true

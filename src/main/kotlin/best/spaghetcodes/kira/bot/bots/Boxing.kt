@@ -40,7 +40,11 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
             TimeUtils.setTimeout(this::fishFunc, RandomUtils.randomIntInRange(10000, 20000))
         }
         Mouse.startTracking()              // tracking ON
-        Mouse.stopLeftAC()
+        if (kira.config?.kiraHit == true) {
+            Mouse.startLeftAC()
+        } else {
+            Mouse.stopLeftAC()
+        }
     }
 
     private fun fishFunc(fish: Boolean = true) {
@@ -80,7 +84,11 @@ class Boxing : BotBase("/play duels_boxing_duel"), MovePriority {
             // tracking ON en continu
             Mouse.startTracking()
 
-            Mouse.stopLeftAC()
+            if (kira.config?.kiraHit == true) {
+                Mouse.startLeftAC()
+            } else {
+                Mouse.stopLeftAC()
+            }
 
             if (combo >= 3 && distance >= 3.2f && mc.thePlayer.onGround) {
                 Movement.singleJump(RandomUtils.randomIntInRange(100, 150))

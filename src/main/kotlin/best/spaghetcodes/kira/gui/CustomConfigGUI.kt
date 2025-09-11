@@ -299,7 +299,8 @@ class CustomConfigGUI : GuiScreen() {
         number("Vertical Look Speed", x, y, { cfg.lookSpeedVertical }, { cfg.lookSpeedVertical = it }, 1, 50, 1); y += 20
         decimal("Look Randomization", x, y, { cfg.lookRand }, { cfg.lookRand = it }, 0f, 2f, 0.05f); y += 24
         number("Max Look Distance", x, y, { cfg.maxDistanceLook }, { cfg.maxDistanceLook = it }, 10, 200, 5); y += 20
-        number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 24
+        number("Max Attack Distance", x, y, { cfg.maxDistanceAttack }, { cfg.maxDistanceAttack = it }, 3, 6, 1); y += 20
+        toggle("Kira Hit", x, y, { cfg.kiraHit }, { cfg.kiraHit = it }); y += 24
 
         // Option Boxing Fish dans l’onglet Combat
         toggle("Boxing: Use Fish", x, y, { cfg.boxingFish }, { cfg.boxingFish = it }); y += 20
