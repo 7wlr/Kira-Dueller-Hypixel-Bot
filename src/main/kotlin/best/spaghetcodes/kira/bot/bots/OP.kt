@@ -44,8 +44,25 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private var gameStartAt = 0L
     private var retreating = false
     private var eatingGap = false
+    private var firstSpeedTaken = false
 
     var tapping = false
+
+    private fun spawnSplash(damage: Int, delay: Int = 0) {
+        TimeUtils.setTimeout({
+            Movement.startForward()
+            Movement.startSprinting()
+            Movement.startJumping()
+            
+            TimeUtils.setTimeout({
+                useSplashPotion(damage, false, false)
+                
+                TimeUtils.setTimeout({
+                    Movement.stopJumping()
+                }, RandomUtils.randomIntInRange(1500, 2000))
+            }, RandomUtils.randomIntInRange(800, 1200))
+        }, delay)
+    }
 
     private fun retreatAndSplash(damage: Int, onComplete: () -> Unit) {
         retreating = true
@@ -56,30 +73,24 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Movement.startSprinting()
         Movement.startJumping()
 
-        var check: java.util.Timer? = null
-        check = TimeUtils.setInterval({
+        TimeUtils.setTimeout({
             val opp = opponent()
             val player = mc.thePlayer
             if (opp != null && player != null) {
-                val dist = EntityUtils.getDistanceNoY(player, opp)
-                if (dist >= 5.5f) {
-                    check?.cancel()
-                    useSplashPotion(damage, false, EntityUtils.entityFacingAway(player, opp))
-                    
-                    TimeUtils.setTimeout({
-                        Movement.stopForward()
-                        Movement.stopSprinting()
-                        Movement.stopJumping()
-                        Mouse.setRunningAway(false)
-                        retreating = false
-                    }, RandomUtils.randomIntInRange(1800, 2200))
-                    onComplete()
-                }
+                useSplashPotion(damage, false, EntityUtils.entityFacingAway(player, opp))
+                
+                TimeUtils.setTimeout({
+                    Movement.stopForward()
+                    Movement.stopSprinting()
+                    Movement.stopJumping()
+                    Mouse.setRunningAway(false)
+                    retreating = false
+                }, RandomUtils.randomIntInRange(1800, 2200))
+                onComplete()
             } else {
-                check?.cancel()
                 retreating = false
             }
-        }, 0, 50)
+        }, RandomUtils.randomIntInRange(2000, 2500))
     }
 
     override fun onGameStart() {
@@ -109,6 +120,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         gameStartAt = 0L
         retreating = false
         eatingGap = false
+        firstSpeedTaken = false
 
         Mouse.stopLeftAC()
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
@@ -160,7 +172,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 Mouse.stopLeftAC()
             }
 
-            if (distance > 8.8f) {
+            if (distance > 8.8f && firstSpeedTaken) {
                 if (opponent() != null && opponent()!!.heldItem != null && opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow")) {
                     if (!Mouse.isRunningAway()) Movement.stopJumping()
                 } else {
@@ -191,19 +203,18 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 System.currentTimeMillis() - lastSpeedUse > 15000 &&
                 System.currentTimeMillis() - lastPotion > 3500) {
                 
-                if (speedPotsLeft == 2) {
-                    useSplashPotion(speedDamage, distance < 3.5f, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
+                if (speedPotsLeft == 2 && !firstSpeedTaken) {
+                    spawnSplash(speedDamage)
                     speedPotsLeft--
                     lastSpeedUse = System.currentTimeMillis()
+                    firstSpeedTaken = true
                     
                     if (regenPotsLeft == 2) {
-                        TimeUtils.setTimeout({
-                            useSplashPotion(regenDamage, false, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
-                            regenPotsLeft--
-                            lastRegenUse = System.currentTimeMillis()
-                        }, RandomUtils.randomIntInRange(150, 300))
+                        spawnSplash(regenDamage, RandomUtils.randomIntInRange(2000, 3000))
+                        regenPotsLeft--
+                        lastRegenUse = System.currentTimeMillis()
                     }
-                } else {
+                } else if (speedPotsLeft > 0) {
                     retreatAndSplash(speedDamage) {
                         speedPotsLeft--
                         lastSpeedUse = System.currentTimeMillis()
