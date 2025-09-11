@@ -294,6 +294,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
 
         val now = System.currentTimeMillis()
+        val hbActive = now < hbActiveUntil
         val distance = EntityUtils.getDistanceNoY(p, opp)
         val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
 
@@ -347,19 +348,21 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         // Parade épée (sticky) + ne pas bloquer la rod prioritaire
         if (holdingSword) {
             if (Mouse.rClickDown) {
-                if (distance < 4.0f && !EntityUtils.entityFacingAway(p, opp)) {
-                    Mouse.rClickUp()
-                }
-                val movingHard = (!isStill && !(oppHasBow && bowSlowFrames >= bowSlowFramesNeeded)) || approaching
-                val mustKeep = (parryFromBow && now < parryExtendedUntil)
-                if (!mustKeep && (movingHard || now >= holdBlockUntil)) {
-                    val stopNow = RandomUtils.randomIntInRange(0, 99) < 80
-                    if (stopNow) {
+                if (!hbActive) {
+                    if (distance < 4.0f && !EntityUtils.entityFacingAway(p, opp)) {
                         Mouse.rClickUp()
-                        parryFromBow = false
-                        parryExtendedUntil = 0L
-                    } else {
-                        holdBlockUntil = max(holdBlockUntil, now + RandomUtils.randomIntInRange(120, 300))
+                    }
+                    val movingHard = (!isStill && !(oppHasBow && bowSlowFrames >= bowSlowFramesNeeded)) || approaching
+                    val mustKeep = (parryFromBow && now < parryExtendedUntil)
+                    if (!mustKeep && (movingHard || now >= holdBlockUntil)) {
+                        val stopNow = RandomUtils.randomIntInRange(0, 99) < 80
+                        if (stopNow) {
+                            Mouse.rClickUp()
+                            parryFromBow = false
+                            parryExtendedUntil = 0L
+                        } else {
+                            holdBlockUntil = max(holdBlockUntil, now + RandomUtils.randomIntInRange(120, 300))
+                        }
                     }
                 }
             } else {
@@ -396,7 +399,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
                 }
             }
         } else {
-            if (Mouse.rClickDown && !projectileActive) {
+            if (Mouse.rClickDown && !projectileActive && !hbActive) {
                 Mouse.rClickUp()
             }
             parryFromBow = false
