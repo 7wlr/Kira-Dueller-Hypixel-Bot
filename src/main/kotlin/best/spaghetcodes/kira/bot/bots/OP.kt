@@ -43,6 +43,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
     private var gameStartAt = 0L
     private var retreating = false
+    private var eatingGap = false
 
     var tapping = false
 
@@ -64,7 +65,14 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 if (dist >= 5.5f) {
                     check?.cancel()
                     useSplashPotion(damage, false, EntityUtils.entityFacingAway(player, opp))
-                    TimeUtils.setTimeout({ retreating = false }, RandomUtils.randomIntInRange(900, 1100))
+                    
+                    TimeUtils.setTimeout({
+                        Movement.stopForward()
+                        Movement.stopSprinting()
+                        Movement.stopJumping()
+                        Mouse.setRunningAway(false)
+                        retreating = false
+                    }, RandomUtils.randomIntInRange(1800, 2200))
                     onComplete()
                 }
             } else {
@@ -100,6 +108,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         lastGap = 0L
         gameStartAt = 0L
         retreating = false
+        eatingGap = false
 
         Mouse.stopLeftAC()
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
@@ -145,7 +154,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             Mouse.startTracking()
 
-            if (kira.config?.kiraHit == true && !retreating) {
+            if (kira.config?.kiraHit == true && !retreating && !eatingGap) {
                 Mouse.startLeftAC()
             } else {
                 Mouse.stopLeftAC()
@@ -213,8 +222,13 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                     !eatingGap && now - lastPotion > 3500) {
                     
                     if (gapsLeft > 0 && now - lastGap > 4000) {
+                        eatingGap = true
                         useGap(distance, distance < 2f, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
                         gapsLeft--
+                        
+                        TimeUtils.setTimeout({
+                            eatingGap = false
+                        }, RandomUtils.randomIntInRange(1500, 2000))
                     } else if (regenPotsLeft > 0 && now - gameStartAt >= 120000 && now - lastRegenUse > 3500) {
                         retreatAndSplash(regenDamage) {
                             regenPotsLeft--
@@ -225,7 +239,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             }
 
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown &&
-                System.currentTimeMillis() - lastGap > 2500) {
+                !eatingGap && System.currentTimeMillis() - lastGap > 2500) {
 
                 if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) &&
                     !EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!)) {
