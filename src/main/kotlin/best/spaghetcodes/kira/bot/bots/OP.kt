@@ -61,7 +61,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             val player = mc.thePlayer
             if (opp != null && player != null) {
                 val dist = EntityUtils.getDistanceNoY(player, opp)
-                if (dist >= 7f) {
+                if (dist >= 5.5f) {
                     check?.cancel()
                     useSplashPotion(damage, false, EntityUtils.entityFacingAway(player, opp))
                     TimeUtils.setTimeout({ retreating = false }, RandomUtils.randomIntInRange(900, 1100))
@@ -76,7 +76,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
     override fun onGameStart() {
         gameStartAt = System.currentTimeMillis()
-        Mouse.startTracking()                 // tracking ON
+        Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
         TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
@@ -105,7 +105,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
         TimeUtils.setTimeout(fun () {
             i?.cancel()
-            Mouse.stopTracking()              // clean
+            Mouse.stopTracking()
             Movement.clearAll()
             Combat.stopRandomStrafe()
         }, RandomUtils.randomIntInRange(200, 400))
@@ -143,7 +143,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 if (effect.effectName.lowercase().contains("speed")) hasSpeed = true
             }
 
-            // tracking ON en continu
             Mouse.startTracking()
 
             if (kira.config?.kiraHit == true && !retreating) {
@@ -182,18 +181,18 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             if (!hasSpeed && speedPotsLeft > 0 &&
                 System.currentTimeMillis() - lastSpeedUse > 15000 &&
                 System.currentTimeMillis() - lastPotion > 3500) {
+                
                 if (speedPotsLeft == 2) {
-                    retreatAndSplash(speedDamage) {
-                        speedPotsLeft--
-                        lastSpeedUse = System.currentTimeMillis()
-                        if (regenPotsLeft == 2) {
-                            TimeUtils.setTimeout({
-                                retreatAndSplash(regenDamage) {
-                                    regenPotsLeft--
-                                    lastRegenUse = System.currentTimeMillis()
-                                }
-                            }, RandomUtils.randomIntInRange(1000, 1300))
-                        }
+                    useSplashPotion(speedDamage, distance < 3.5f, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
+                    speedPotsLeft--
+                    lastSpeedUse = System.currentTimeMillis()
+                    
+                    if (regenPotsLeft == 2) {
+                        TimeUtils.setTimeout({
+                            useSplashPotion(regenDamage, false, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
+                            regenPotsLeft--
+                            lastRegenUse = System.currentTimeMillis()
+                        }, RandomUtils.randomIntInRange(150, 300))
                     }
                 } else {
                     retreatAndSplash(speedDamage) {
@@ -212,6 +211,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 combo < 2 && mc.thePlayer.health <= opponent()!!.health) {
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
                     now - lastPotion > 3500) {
+                    
                     if (gapsLeft > 0 && now - lastGap > 4000) {
                         useGap(distance, distance < 2f, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
                         gapsLeft--
