@@ -230,6 +230,35 @@ object LobbyMovement {
         activeMovementType = null
     }
 
+    private fun maintainMovement() {
+        when (activeMovementType) {
+            Config.LobbyMovementType.STRAFE_WALK -> {
+                if (!Movement.forward()) Movement.startForward()
+                if (!Movement.left() && !Movement.right()) {
+                    if (RandomUtils.randomBool()) Movement.startLeft() else Movement.startRight()
+                }
+            }
+            Config.LobbyMovementType.WALKER -> {
+                if (!Movement.forward()) Movement.startForward()
+            }
+            Config.LobbyMovementType.SLOW_DRIFT -> {
+                if (!Movement.sneaking()) Movement.startSneaking()
+                if (!Movement.forward() && !Movement.left() && !Movement.right()) Movement.startForward()
+            }
+            Config.LobbyMovementType.FAST_FORWARD -> {
+                if (!Movement.forward()) Movement.startForward()
+                if (!Movement.sprinting()) Movement.startSprinting()
+                val p = kira.mc.thePlayer
+                if (p != null && p.onGround && !Movement.jumping()) Movement.startJumping()
+            }
+            Config.LobbyMovementType.SUMO -> {
+                if (!Movement.forward()) Movement.startForward()
+                if (!Movement.sprinting()) Movement.startSprinting()
+            }
+            else -> {}
+        }
+    }
+
     @SubscribeEvent
     fun onClientTick(event: ClientTickEvent) {
         if (!canActivateAndRunAnyMovement()) {
@@ -237,6 +266,7 @@ object LobbyMovement {
             return
         }
 
+        maintainMovement()
         desiredPitch?.let { kira.mc.thePlayer!!.rotationPitch = it }
         kira.mc.thePlayer!!.rotationYaw += tickYawChange
     }
