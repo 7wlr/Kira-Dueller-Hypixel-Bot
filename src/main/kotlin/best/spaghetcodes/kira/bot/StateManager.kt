@@ -3,6 +3,7 @@ package best.spaghetcodes.kira.bot
 import best.spaghetcodes.kira.kira
 import best.spaghetcodes.kira.bot.player.LobbyMovement
 import best.spaghetcodes.kira.bot.bots.Sumo
+import best.spaghetcodes.kira.core.Config
 import net.minecraftforge.client.event.ClientChatReceivedEvent
 import net.minecraftforge.event.entity.EntityJoinWorldEvent
 import net.minecraftforge.fml.common.eventhandler.EventPriority
@@ -27,9 +28,9 @@ object StateManager {
         if (unformatted.matches(Regex(".* a rejoint \\(./2\\)!"))) {
             state = States.GAME
             if (kira.bot is Sumo) {
-                LobbyMovement.sumo()
+                LobbyMovement.startMovement(Config.LobbyMovementType.SUMO)
             } else {
-                LobbyMovement.generic()
+                LobbyMovement.startMovement(Config.LobbyMovementType.RANDOM_MOVES)
             }
             if (unformatted.matches(Regex(".* a rejoint \\(2/2\\)!"))) {
                 gameFull = true
@@ -43,9 +44,9 @@ object StateManager {
             gameFull = false
             lastGameDuration = System.currentTimeMillis() - gameStartedAt
             if (kira.bot is Sumo) {
-                LobbyMovement.sumo()
+                LobbyMovement.startMovement(Config.LobbyMovementType.SUMO)
             } else {
-                LobbyMovement.generic()
+                LobbyMovement.startMovement(Config.LobbyMovementType.RANDOM_MOVES)
             }
         } else if (unformatted.contains("has quit!")) {
             gameFull = false
