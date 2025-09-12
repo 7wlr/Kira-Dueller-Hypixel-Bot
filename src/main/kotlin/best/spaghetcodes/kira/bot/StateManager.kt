@@ -31,8 +31,7 @@ object StateManager {
                 if (kira.bot is Sumo) {
                     Config.LobbyMovementType.SUMO
                 } else {
-                    val idx = kira.config?.lobbyMovementMode ?: 0
-                    Config.LobbyMovementType.values().getOrElse(idx) { Config.LobbyMovementType.RANDOM_MOVES }
+                    Config.LobbyMovementType.FAST_FORWARD
                 }
             LobbyMovement.startMovement(moveType)
             if (unformatted.matches(Regex(".* a rejoint \\(2/2\\)!"))) {
@@ -50,8 +49,7 @@ object StateManager {
                 if (kira.bot is Sumo) {
                     Config.LobbyMovementType.SUMO
                 } else {
-                    val idx = kira.config?.lobbyMovementMode ?: 0
-                    Config.LobbyMovementType.values().getOrElse(idx) { Config.LobbyMovementType.RANDOM_MOVES }
+                    Config.LobbyMovementType.FAST_FORWARD
                 }
             LobbyMovement.startMovement(moveType)
         } else if (unformatted.contains("has quit!")) {

@@ -33,15 +33,6 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     @Property(type = PropertyType.SWITCH, name = "Lobby Movement", description = "Whether or not the bot should move in pre-game lobbies.", category = "General")
     var lobbyMovement = true
 
-    @Property(
-        type = PropertyType.SELECTOR,
-        name = "Lobby Movement Mode",
-        description = "Movement pattern to use in pre-game lobbies.",
-        category = "General",
-        options = ["Random Moves", "Strafe Walk", "Walker", "Slow Drift", "Fast Forward"]
-    )
-    var lobbyMovementMode = 0
-
     @Property(type = PropertyType.SWITCH, name = "Disable Chat Messages", description = "When this is enabled, the bot will not send any chat messages.", category = "General")
     var disableChatMessages = false
 
@@ -197,7 +188,6 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
         addDependency("dodgeWLR", "enableDodging")
         addDependency("dodgeLostTo", "enableDodging")
         addDependency("dodgeNoStats", "enableDodging")
-        addDependency("lobbyMovementMode", "lobbyMovement")
 
         // Toujours utiliser getBot ici -> pas d'Any
         registerListener("currentBot") { idx: Int ->
@@ -210,10 +200,6 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     fun getCustomGui(): GuiScreen = CustomConfigGUI()
 
     enum class LobbyMovementType {
-        RANDOM_MOVES,
-        STRAFE_WALK,
-        WALKER,
-        SLOW_DRIFT,
         FAST_FORWARD,
         SUMO
     }
