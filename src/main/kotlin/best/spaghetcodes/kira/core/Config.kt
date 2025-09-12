@@ -198,4 +198,13 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     }
 
     fun getCustomGui(): GuiScreen = CustomConfigGUI()
+
+    enum class LobbyMovementType {
+        RANDOM_MOVES,
+        STRAFE_WALK,
+        WALKER,
+        SLOW_DRIFT,
+        FAST_FORWARD,
+        SUMO
+    }
 }
