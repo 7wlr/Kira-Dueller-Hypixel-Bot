@@ -46,7 +46,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private var eatingGap = false
     private var firstSpeedTaken = false
     private var allowStrafing = false
-    private var initialPotsUsed = 0
 
     var tapping = false
 
@@ -151,23 +150,18 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
+        Movement.clearLeftRight()
+        Combat.stopRandomStrafe()
         allowStrafing = false
-        initialPotsUsed = 0
 
         TimeUtils.setTimeout({
-            spawnSplash(speedDamage) {
-                initialPotsUsed++
-                if (initialPotsUsed >= 2) allowStrafing = true
-            }
+            spawnSplash(speedDamage) {}
             speedPotsLeft--
             lastSpeedUse = System.currentTimeMillis()
             firstSpeedTaken = true
 
             if (regenPotsLeft == 2) {
-                spawnSplash(regenDamage, RandomUtils.randomIntInRange(1500, 2000)) {
-                    initialPotsUsed++
-                    if (initialPotsUsed >= 2) allowStrafing = true
-                }
+                spawnSplash(regenDamage, RandomUtils.randomIntInRange(1500, 2000)) {}
                 regenPotsLeft--
                 lastRegenUse = System.currentTimeMillis()
             }
@@ -203,7 +197,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         eatingGap = false
         firstSpeedTaken = false
         allowStrafing = false
-        initialPotsUsed = 0
 
         strafeDir = 1
         lastStrafeSwitch = 0L
@@ -249,8 +242,15 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             val distance = EntityUtils.getDistanceNoY(mc.thePlayer, opponent())
 
             var hasSpeed = false
+            var hasRegen = false
             for (effect in mc.thePlayer.activePotionEffects) {
-                if (effect.effectName.lowercase().contains("speed")) hasSpeed = true
+                val name = effect.effectName.lowercase()
+                if (name.contains("speed")) hasSpeed = true
+                if (name.contains("regeneration")) hasRegen = true
+            }
+
+            if (!allowStrafing && hasSpeed && hasRegen) {
+                allowStrafing = true
             }
 
             Mouse.startTracking()
