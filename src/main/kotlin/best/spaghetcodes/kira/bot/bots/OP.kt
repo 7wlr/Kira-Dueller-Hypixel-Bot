@@ -48,6 +48,19 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
     var tapping = false
 
+    private var strafeDir = 1
+    private var lastStrafeSwitch = 0L
+    private var lastCloseStrafeSwitch = 0L
+    private var closeStrafeNextAt = 0L
+
+    private fun computeCloseStrafeDelay(distance: Float): Long {
+        return when {
+            distance < 1.4f -> 120L
+            distance < 2.0f -> 200L
+            else -> 260L
+        }
+    }
+
     private fun spawnSplash(damage: Int, delay: Int = 0) {
         TimeUtils.setTimeout({
             Movement.startForward()
@@ -136,6 +149,11 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         } else {
             Mouse.stopLeftAC()
         }
+
+        strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
+        lastStrafeSwitch = 0L
+        lastCloseStrafeSwitch = 0L
+        closeStrafeNextAt = 0L
     }
 
     override fun onGameEnd() {
@@ -153,6 +171,11 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         retreating = false
         eatingGap = false
         firstSpeedTaken = false
+
+        strafeDir = 1
+        lastStrafeSwitch = 0L
+        lastCloseStrafeSwitch = 0L
+        closeStrafeNextAt = 0L
 
         Mouse.stopLeftAC()
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
@@ -296,13 +319,27 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                         if (WorldUtils.leftOrRightToPoint(mc.thePlayer, Vec3(0.0, 0.0, 0.0))) movePriority[0] += 4
                         else movePriority[1] += 4
                     } else {
-                        if (distance < 8f) {
-                            val rotations = EntityUtils.getRotations(opponent()!!, mc.thePlayer, false)
-                            if (rotations != null) {
-                                if (rotations[0] < 0) movePriority[1] += 5 else movePriority[0] += 5
+                        val nowMs = System.currentTimeMillis()
+                        if (distance < 2.6f) {
+                            if (nowMs >= closeStrafeNextAt && nowMs - lastCloseStrafeSwitch >= 150) {
+                                strafeDir = -strafeDir
+                                lastCloseStrafeSwitch = nowMs
+                                closeStrafeNextAt = nowMs + computeCloseStrafeDelay(distance)
+                            } else if (closeStrafeNextAt == 0L) {
+                                closeStrafeNextAt = nowMs + computeCloseStrafeDelay(distance)
                             }
+                            val weightClose = 4
+                            if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
+                            randomStrafe = false
                         } else {
-                            randomStrafe = (opponent()!!.heldItem != null &&
+                            closeStrafeNextAt = 0L
+                            if (distance < 6.5f && nowMs - lastStrafeSwitch > RandomUtils.randomIntInRange(820, 1100)) {
+                                strafeDir = -strafeDir
+                                lastStrafeSwitch = nowMs
+                            }
+                            val weight = if (distance < 4f) 7 else 5
+                            if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
+                            randomStrafe = (distance >= 8f && opponent()!!.heldItem != null &&
                                 (opponent()!!.heldItem.unlocalizedName.lowercase().contains("bow") ||
                                  opponent()!!.heldItem.unlocalizedName.lowercase().contains("rod")))
                             if (randomStrafe && distance < 15f) Movement.stopJumping()
