@@ -8,11 +8,9 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent
 import net.minecraftforge.fml.common.gameevent.TickEvent.ClientTickEvent
 import java.util.*
 
-// Mouvement de lobby : FAST_FORWARD (inchangé) et SUMO (cercle régulier)
-
 object LobbyMovement {
 
-    // === commun ===
+    // --- commun ---
     private var tickYawChange = 0f
     private var desiredPitch: Float? = null
     private var intervals: ArrayList<Timer?> = ArrayList()
@@ -30,7 +28,6 @@ object LobbyMovement {
             return
         }
         if (activeMovementType == typeToStart) {
-            // petit bonus pour FAST_FORWARD : s’assurer que ça saute si on est au sol
             if (typeToStart == Config.LobbyMovementType.FAST_FORWARD) {
                 if (kira.mc.thePlayer?.onGround == true && !Movement.jumping()) {
                     Movement.startJumping()
@@ -50,43 +47,57 @@ object LobbyMovement {
         }
     }
 
-    // === FAST_FORWARD inchangé (exemple générique) ===
+    // =======================
+    // FAST_FORWARD (exemple)
+    // =======================
     private fun runForwardPreGameInternal() {
         Movement.startForward()
         Movement.startSprinting()
         Movement.startJumping()
         tickYawChange = 0f
         desiredPitch = 0f
-        // Ex : demi-tour toutes les 7 s
+
+        // ex : demi-tour toutes les 7s
         intervals.add(TimeUtils.setInterval(fun() {
             val p = kira.mc.thePlayer ?: return@setInterval
             p.rotationYaw += 180f
         }, 7000, 7000))
     }
 
-    // =========================
+    // =======================
     //         SUMO
-    // =========================
+    // =======================
 
-    // Paramètres faciles à tuner
-    private const val SUMO_ANGLE_DEG = 45f               // pas angulaire
-    private const val SUMO_ROTATE_EVERY_JUMPS = 2        // tous les N sauts
+    // réglages
+    private const val SUMO_INITIAL_ANGLE_DEG = 45f         // pivot au spawn
+    private const val SUMO_PER_JUMP_ANGLE_DEG = 18f        // << tourne à CHAQUE saut de cet angle
+    private const val SUMO_JUMP_HOLD_TICKS = 2             // durée d’appui saut en ticks
 
-    // État Sumo
-    private var sumoInitialTurnRight = true              // sens du pivot initial
-    private var sumoCircleTurnRight = false              // sens du cercle (opposé au pivot initial)
-    private var sumoJumpCounter = 0                      // nb d’impulsions déclenchées
-    private var sumoWasOnGround = false                  // pour détecter l’atterrissage
+    // état
+    private var sumoInitialTurnRight = true                // sens du pivot initial
+    private var sumoCircleTurnRight = false                // sens du cercle = opposé
+    private var sumoWasOnGround = false                    // détection atterrissage
+    private var sumoQueuedJumpTicks = 0                    // appui jump en cours (ticks)
+
+    private fun queueJumpTap(ticks: Int = SUMO_JUMP_HOLD_TICKS) {
+        // Appui synchronisé au tick
+        if (!Movement.jumping()) Movement.startJumping()
+        sumoQueuedJumpTicks = maxOf(sumoQueuedJumpTicks, ticks)
+
+        // Rotation à CHAQUE impulsion
+        val p = kira.mc.thePlayer ?: return
+        p.rotationYaw += if (sumoCircleTurnRight) SUMO_PER_JUMP_ANGLE_DEG else -SUMO_PER_JUMP_ANGLE_DEG
+    }
 
     private fun sumoInternal() {
         val player = kira.mc.thePlayer ?: return
 
-        // petit pitch naturel
+        // pitch naturel
         desiredPitch = RandomUtils.randomDoubleInRange(-5.0, 10.0).toFloat()
 
-        // 1) rotation initiale ±45°
+        // 1) pivot initial ±45°
         sumoInitialTurnRight = RandomUtils.randomBool()
-        player.rotationYaw += if (sumoInitialTurnRight) SUMO_ANGLE_DEG else -SUMO_ANGLE_DEG
+        player.rotationYaw += if (sumoInitialTurnRight) SUMO_INITIAL_ANGLE_DEG else -SUMO_INITIAL_ANGLE_DEG
 
         // 2) sens du cercle = opposé au pivot initial
         sumoCircleTurnRight = !sumoInitialTurnRight
@@ -95,35 +106,35 @@ object LobbyMovement {
         Movement.startForward()
         Movement.startSprinting()
         tickYawChange = 0f
-        sumoJumpCounter = 0
+
+        // 4) init états
         sumoWasOnGround = player.onGround
+        sumoQueuedJumpTicks = 0
 
-        // 4) premier saut immédiat après le pivot si on peut
+        // 5) premier saut immédiat si possible (et on applique déjà la petite rotation)
         if (player.onGround) {
-            Movement.singleJump(RandomUtils.randomIntInRange(80, 150))
-            sumoJumpCounter = 1
+            queueJumpTap()
         }
-
-        // NB : plus d’intervalle pour gérer les sauts → on travaille à l’atterrissage dans onClientTick()
     }
 
     private fun sumoTick() {
         val p = kira.mc.thePlayer ?: return
 
-        // sécurité : maintenir la marche/sprint
+        // maintenir la marche/sprint
         if (!Movement.forward()) Movement.startForward()
         if (!Movement.sprinting()) Movement.startSprinting()
 
-        // Détection d’atterrissage : onGround vient de passer de false -> true
+        // Détection atterrissage (false -> true) : on relance un saut + petite rotation
         val justLanded = p.onGround && !sumoWasOnGround
         if (justLanded) {
-            // On prépare le prochain saut (léger délai pour fiabiliser)
-            Movement.singleJump(RandomUtils.randomIntInRange(80, 150))
-            sumoJumpCounter++
+            queueJumpTap()
+        }
 
-            // Tous les N sauts, on rajoute ±45° dans le sens du cercle (opposé au pivot initial)
-            if (sumoJumpCounter % SUMO_ROTATE_EVERY_JUMPS == 0) {
-                p.rotationYaw += if (sumoCircleTurnRight) SUMO_ANGLE_DEG else -SUMO_ANGLE_DEG
+        // Gestion de l’appui de saut (en ticks pour ne pas rater l’input)
+        if (sumoQueuedJumpTicks > 0) {
+            sumoQueuedJumpTicks--
+            if (sumoQueuedJumpTicks == 0) {
+                Movement.stopJumping()
             }
         }
 
@@ -138,11 +149,9 @@ object LobbyMovement {
         desiredPitch = null
         activeMovementType = null
 
-        // reset état sumo
-        sumoJumpCounter = 0
-        sumoInitialTurnRight = true
-        sumoCircleTurnRight = false
+        // reset sumo
         sumoWasOnGround = false
+        sumoQueuedJumpTicks = 0
     }
 
     private fun maintainMovement() {
@@ -168,14 +177,11 @@ object LobbyMovement {
             return
         }
 
-        // “entretien” commun
         maintainMovement()
 
-        // appli pitch/yaw
         desiredPitch?.let { kira.mc.thePlayer!!.rotationPitch = it }
         kira.mc.thePlayer!!.rotationYaw += tickYawChange
 
-        // boucle sumo par tick
         if (activeMovementType == Config.LobbyMovementType.SUMO) {
             sumoTick()
         }
