@@ -52,13 +52,28 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private var lastStrafeSwitch = 0L
     private var lastCloseStrafeSwitch = 0L
     private var closeStrafeNextAt = 0L
+    private var longStrafeUntil = 0L
+    private var longStrafeChance = 25
 
     private fun computeCloseStrafeDelay(distance: Float): Long {
         return when {
-            distance < 1.4f -> 120L
-            distance < 2.0f -> 200L
-            else -> 260L
+            distance < 2.0f -> RandomUtils.randomIntInRange(90, 160).toLong()
+            distance < 2.8f -> RandomUtils.randomIntInRange(180, 250).toLong()
+            else -> RandomUtils.randomIntInRange(220, 300).toLong()
         }
+    }
+    
+    private fun shouldStartLongStrafe(distance: Float, nowMs: Long): Boolean {
+        if (longStrafeUntil > nowMs) return false
+        if (distance > 3.8f) return false
+        
+        val chance = when {
+            distance < 2.5f -> longStrafeChance + 15
+            distance < 3.2f -> longStrafeChance + 5
+            else -> longStrafeChance
+        }
+        
+        return RandomUtils.randomIntInRange(1, 100) <= chance
     }
 
     private fun spawnSplash(damage: Int, delay: Int = 0) {
@@ -154,6 +169,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         lastStrafeSwitch = 0L
         lastCloseStrafeSwitch = 0L
         closeStrafeNextAt = 0L
+        longStrafeUntil = 0L
     }
 
     override fun onGameEnd() {
@@ -176,6 +192,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         lastStrafeSwitch = 0L
         lastCloseStrafeSwitch = 0L
         closeStrafeNextAt = 0L
+        longStrafeUntil = 0L
 
         Mouse.stopLeftAC()
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
@@ -320,16 +337,38 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                         else movePriority[1] += 4
                     } else {
                         val nowMs = System.currentTimeMillis()
-                        if (distance < 2.6f) {
-                            if (nowMs >= closeStrafeNextAt && nowMs - lastCloseStrafeSwitch >= 150) {
+                        if (distance < 3.8f) {
+                            // Combat rapproché : strafes rapides + long strafes imprévisibles
+                            if (shouldStartLongStrafe(distance, nowMs)) {
+                                longStrafeUntil = nowMs + RandomUtils.randomIntInRange(1200, 2500)
+                                strafeDir = if (RandomUtils.randomIntInRange(0, 1) == 1) 1 else -1
+                                lastCloseStrafeSwitch = nowMs
+                                closeStrafeNextAt = longStrafeUntil + RandomUtils.randomIntInRange(100, 300)
+                            } else if (longStrafeUntil > nowMs) {
+                                // En cours de long strafe, ne pas changer de direction
+                            } else if (nowMs >= closeStrafeNextAt && nowMs - lastCloseStrafeSwitch >= 150) {
                                 strafeDir = -strafeDir
                                 lastCloseStrafeSwitch = nowMs
                                 closeStrafeNextAt = nowMs + computeCloseStrafeDelay(distance)
                             } else if (closeStrafeNextAt == 0L) {
                                 closeStrafeNextAt = nowMs + computeCloseStrafeDelay(distance)
                             }
-                            val weightClose = 4
+                            
+                            val weightClose = if (longStrafeUntil > nowMs) 6 else 4
                             if (strafeDir < 0) movePriority[0] += weightClose else movePriority[1] += weightClose
+                            randomStrafe = false
+                        } else if (distance < 6.5f) {
+                            // Distance moyenne : strafes longs uniquement
+                            closeStrafeNextAt = 0L
+                            if (distance < 5.5f && nowMs - lastStrafeSwitch > RandomUtils.randomIntInRange(1500, 2200)) {
+                                strafeDir = -strafeDir
+                                lastStrafeSwitch = nowMs
+                            } else if (distance >= 5.5f && nowMs - lastStrafeSwitch > RandomUtils.randomIntInRange(2000, 3000)) {
+                                strafeDir = -strafeDir
+                                lastStrafeSwitch = nowMs
+                            }
+                            val weight = 6
+                            if (strafeDir < 0) movePriority[0] += weight else movePriority[1] += weight
                             randomStrafe = false
                         } else {
                             closeStrafeNextAt = 0L
