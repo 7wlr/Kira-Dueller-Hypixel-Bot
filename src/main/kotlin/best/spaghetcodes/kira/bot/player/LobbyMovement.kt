@@ -16,6 +16,7 @@ object LobbyMovement {
     private var intervals: ArrayList<Timer?> = ArrayList()
 
     fun sumo() {
+        if (kira.config?.lobbyMovement != true) return
         /*val opt = RandomUtils.randomIntInRange(0, 1)
         when (opt) {
             0 -> sumo1()
@@ -25,6 +26,7 @@ object LobbyMovement {
     }
 
     fun generic() {
+        if (kira.config?.lobbyMovement != true) return
         if (kira.mc.thePlayer != null) {
             Movement.startForward()
             Movement.startSprinting()
@@ -49,7 +51,7 @@ object LobbyMovement {
             intervals.add(TimeUtils.setInterval(
                 fun () {
                     val player = kira.mc.thePlayer
-                    if (player != null && !WorldUtils.airInFront(player, 1f)) {
+                    if (player != null && WorldUtils.airInFront(player, 1f)) {
                         player.rotationYaw += 180f
                     }
                 },
@@ -63,6 +65,8 @@ object LobbyMovement {
         Movement.clearAll()
         tickYawChange = 0f
         intervals.forEach { it?.cancel() }
+        intervals.clear()
+        kira.mc.thePlayer?.rotationYaw = initialYaw
     }
 
     private fun sumo1() {
