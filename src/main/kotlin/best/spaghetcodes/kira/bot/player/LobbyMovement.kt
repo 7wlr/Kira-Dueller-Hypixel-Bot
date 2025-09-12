@@ -66,34 +66,68 @@ object LobbyMovement {
     }
 
     private fun sumo1() {
-        if (kira.mc.thePlayer != null) {
-            var left = RandomUtils.randomBool()
+        if (kira.mc.thePlayer == null) return
 
-            val speed = RandomUtils.randomDoubleInRange(3.0, 9.0).toFloat()
+        var left = RandomUtils.randomBool()
+        var base = RandomUtils.randomDoubleInRange(2.0, 3.5).toFloat()
+        base = if (left) -base else base
+        tickYawChange = base
 
-            tickYawChange = if (left) -speed else speed
-            TimeUtils.setTimeout(fun () {
-                Movement.startForward()
-                Movement.startSprinting()
-                TimeUtils.setTimeout(fun () {
-                    Movement.startJumping()
-                }, RandomUtils.randomIntInRange(400, 800))
-                intervals.add(TimeUtils.setInterval(fun () {
-                    tickYawChange = if (WorldUtils.airInFront(kira.mc.thePlayer, 7f)) {
-                        if (WorldUtils.airInFront(kira.mc.thePlayer, 3f)) {
-                            RandomUtils.randomDoubleInRange(if (left) 9.5 else -9.5, if (left) 13.0 else -13.0).toFloat()
-                        } else RandomUtils.randomDoubleInRange(if (left) 4.5 else -4.5, if (left) 7.0 else -7.0).toFloat()
-                    } else {
-                        0f
-                    }
-                }, 0, RandomUtils.randomIntInRange(50, 100)))
-                intervals.add(TimeUtils.setTimeout(fun () {
-                    intervals.add(TimeUtils.setInterval(fun () {
-                        left = !left
-                    }, 0, RandomUtils.randomIntInRange(5000, 10000)))
-                }, RandomUtils.randomIntInRange(5000, 10000)))
-            }, RandomUtils.randomIntInRange(100, 250))
+        Movement.startForward()
+        Movement.startSprinting()
+        if (left) {
+            Movement.startLeft()
+        } else {
+            Movement.startRight()
         }
+
+        intervals.add(TimeUtils.setInterval({
+            val p = kira.mc.thePlayer
+            if (p != null) {
+                tickYawChange = base + RandomUtils.randomDoubleInRange(-0.3, 0.3).toFloat()
+
+                val nearVoid = WorldUtils.airInFront(p, 2f) ||
+                        (left && WorldUtils.airOnLeft(p, 1.5f)) ||
+                        (!left && WorldUtils.airOnRight(p, 1.5f))
+                if (nearVoid) {
+                    Movement.swapLeftRight()
+                    left = !left
+                    base = -base
+                }
+            }
+        }, 0, RandomUtils.randomIntInRange(80, 150)))
+
+        intervals.add(TimeUtils.setInterval({
+            if (RandomUtils.randomBool()) {
+                Movement.singleJump(RandomUtils.randomIntInRange(80, 160))
+            }
+        }, RandomUtils.randomIntInRange(600, 1000), RandomUtils.randomIntInRange(1500, 2500)))
+
+        intervals.add(TimeUtils.setInterval({
+            Movement.stopForward()
+            Movement.clearLeftRight()
+            TimeUtils.setTimeout({
+                Movement.startForward()
+                if (left) {
+                    Movement.startLeft()
+                } else {
+                    Movement.startRight()
+                }
+            }, RandomUtils.randomIntInRange(150, 350))
+        }, RandomUtils.randomIntInRange(4000, 8000), RandomUtils.randomIntInRange(4000, 8000)))
+
+        intervals.add(TimeUtils.setInterval({
+            Movement.swapLeftRight()
+            left = !left
+            base = -base
+        }, RandomUtils.randomIntInRange(5000, 9000), RandomUtils.randomIntInRange(5000, 9000)))
+
+        intervals.add(TimeUtils.setInterval({
+            val p = kira.mc.thePlayer
+            if (p != null) {
+                p.rotationPitch += RandomUtils.randomDoubleInRange(-1.0, 1.0).toFloat()
+            }
+        }, 0, RandomUtils.randomIntInRange(500, 900)))
     }
 
     private fun twerk() {
