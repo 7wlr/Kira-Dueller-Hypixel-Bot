@@ -79,21 +79,24 @@ object LobbyMovement {
     }
 
     private fun sumoInternal() {
-        kira.mc.thePlayer ?: return
+        val player = kira.mc.thePlayer ?: return
         desiredPitch = RandomUtils.randomDoubleInRange(-5.0, 10.0).toFloat()
-        tickYawChange = 0f
-        var l = RandomUtils.randomBool()
-        val ispd = RandomUtils.randomDoubleInRange(3.0, 9.0).toFloat()
-        tickYawChange = if (l) -ispd else ispd
-        TimeUtils.setTimeout(fun() {
-            val player = kira.mc.thePlayer ?: return@setTimeout
-            Movement.startForward(); Movement.startSprinting()
-            TimeUtils.setTimeout(fun() { Movement.singleJump(RandomUtils.randomIntInRange(80, 150)) }, RandomUtils.randomIntInRange(400, 800))
-            intervals.add(TimeUtils.setInterval(fun() {
-                val currentP = kira.mc.thePlayer ?: return@setInterval
-                if (!WorldUtils.airInFront(currentP, 2.5f)) tickYawChange = RandomUtils.randomDoubleInRange(-8.0, 8.0).toFloat()
-            }, 500, 800))
-        }, RandomUtils.randomIntInRange(300, 700))
+
+        // Turn 45° to a random side when spawning
+        val turnRight = RandomUtils.randomBool()
+        player.rotationYaw += if (turnRight) 45f else -45f
+
+        // Start moving forward and circle around the platform
+        Movement.startForward()
+        Movement.startSprinting()
+        tickYawChange = if (turnRight) -RandomUtils.randomDoubleInRange(2.0, 4.0).toFloat()
+            else RandomUtils.randomDoubleInRange(2.0, 4.0).toFloat()
+
+        // Repeatedly jump while slightly turning in the opposite direction
+        intervals.add(TimeUtils.setInterval(fun() {
+            val p = kira.mc.thePlayer ?: return@setInterval
+            if (p.onGround) Movement.singleJump(RandomUtils.randomIntInRange(80, 150))
+        }, RandomUtils.randomIntInRange(300, 500), RandomUtils.randomIntInRange(300, 500)))
     }
 
     private fun circleStrafeInternal() {
