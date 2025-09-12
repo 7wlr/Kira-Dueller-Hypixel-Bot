@@ -253,11 +253,15 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
 
         // 1) clic principal
         if (delay == 0) {
+            if (Mouse.rClickDown) Mouse.rClickUp()
             Mouse.rClick(clickMs)
         } else {
             actionLockUntil += 50
             projectileGraceUntil += 50
-            TimeUtils.setTimeout({ Mouse.rClick(clickMs) }, 50)
+            TimeUtils.setTimeout({
+                if (Mouse.rClickDown) Mouse.rClickUp()
+                Mouse.rClick(clickMs)
+            }, 50)
         }
 
         // 2) backup click APRÈS la fin du clic principal
@@ -421,7 +425,7 @@ class Classic : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         }
 
         // ---------------- Fenêtres rod / bow ----------------
-        if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown) {
+        if (!projectileActive && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && (!Mouse.rClickDown || hbActive)) {
 
             // reset fenêtre quota rods
             if (now > rodWindowResetAt) {

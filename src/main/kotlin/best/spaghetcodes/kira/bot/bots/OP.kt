@@ -288,6 +288,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             }
 
             val now = System.currentTimeMillis()
+            val hbActive = now < hbActiveUntil
             if (((distance > 3f && mc.thePlayer.health < 12) || mc.thePlayer.health < 9) &&
                 combo < 2 && mc.thePlayer.health <= opponent()!!.health) {
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
@@ -311,7 +312,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 }
             }
 
-            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown &&
+            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && (!Mouse.rClickDown || hbActive) &&
                 !eatingGap && System.currentTimeMillis() - lastGap > 2500) {
 
                 if ((distance in 5.7f..6.5f || distance in 9.0f..9.5f) &&

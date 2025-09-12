@@ -337,6 +337,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
             val nowClick = System.currentTimeMillis()
 
             Mouse.setUsingProjectile(true)
+            if (Mouse.rClickDown) Mouse.rClickUp()
             Mouse.rClick(RandomUtils.randomIntInRange(70, 95))
             reentryRodGraceUntil = 0L
 
@@ -628,7 +629,7 @@ class ClassicV2 : BotBase("/play duels_classic_duel"), Bow, Rod, MovePriority {
         if ((!projectileActive || now < reentryRodGraceUntil) &&
             !Mouse.isRunningAway() &&
             !Mouse.isUsingPotion() &&
-            (!Mouse.rClickDown || now < reentryRodGraceUntil)) {
+            (!Mouse.rClickDown || hbActive || now < reentryRodGraceUntil)) {
 
             // *** BAN ROD en zone de mêlée : ne pas sortir la rod ≤ 4.0 blocs ***
             if (distance <= rodBanMeleeDist) {
