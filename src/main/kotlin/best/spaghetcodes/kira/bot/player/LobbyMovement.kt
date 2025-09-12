@@ -69,13 +69,13 @@ object LobbyMovement {
     // =========================
 
     // Paramètres faciles à tuner
-    private const val SUMO_INITIAL_ANGLE_DEG = 45f        // pivot initial au spawn
-    private const val SUMO_STEP_ANGLE_DEG = 30f           // CHANGEMENT : angle ajouté à CHAQUE saut (augmente -> cercle plus petit)
+    private const val SUMO_INITIAL_ANGLE_DEG = 45f        // pivot initial au spawn (fixe)
+    private const val SUMO_STEP_ANGLE_DEG = 60f           // <<< angle ajouté à CHAQUE saut à partir du 2e (augmenter => cercle plus petit)
 
     // État Sumo
     private var sumoInitialTurnRight = true               // sens du pivot initial
     private var sumoCircleTurnRight = false               // sens du cercle (opposé au pivot initial)
-    private var sumoJumpCounter = 0                       // nb d’impulsions déclenchées
+    private var sumoJumpCounter = 0                       // nb d’impulsions déclenchées (1er saut = 1)
     private var sumoWasOnGround = false                   // pour détecter l’atterrissage
 
     private fun sumoInternal() {
@@ -98,12 +98,10 @@ object LobbyMovement {
         sumoJumpCounter = 0
         sumoWasOnGround = player.onGround
 
-        // 4) premier saut immédiat après le pivot si on peut
+        // 4) 1er saut IMMÉDIAT, SANS rotation supplémentaire
         if (player.onGround) {
             Movement.singleJump(RandomUtils.randomIntInRange(80, 150))
-            sumoJumpCounter = 1
-            // CHANGEMENT : on tourne déjà pour ce PREMIER saut
-            player.rotationYaw += if (sumoCircleTurnRight) SUMO_STEP_ANGLE_DEG else -SUMO_STEP_ANGLE_DEG
+            sumoJumpCounter = 1 // on compte le 1er saut, mais on NE tourne PAS ici
         }
 
         // NB : on gère la suite à l’atterrissage dans onClientTick()
@@ -119,12 +117,17 @@ object LobbyMovement {
         // Détection d’atterrissage : onGround vient de passer de false -> true
         val justLanded = p.onGround && !sumoWasOnGround
         if (justLanded) {
-            // Relancer un saut (léger délai réaliste)
+            // On relance UN saut (léger délai pour fiabiliser)
             Movement.singleJump(RandomUtils.randomIntInRange(80, 150))
             sumoJumpCounter++
 
-            // CHANGEMENT : on tourne à CHAQUE saut (plus de modulo 2)
-            p.rotationYaw += if (sumoCircleTurnRight) SUMO_STEP_ANGLE_DEG else -SUMO_STEP_ANGLE_DEG
+            // Règle demandée :
+            // - 1er saut : PAS de rotation (déjà fait au start)
+            // - 2e saut : on applique la première rotation
+            // - 3e, 4e, ... : on applique la rotation à CHAQUE saut
+            if (sumoJumpCounter >= 2) {
+                p.rotationYaw += if (sumoCircleTurnRight) SUMO_STEP_ANGLE_DEG else -SUMO_STEP_ANGLE_DEG
+            }
         }
 
         sumoWasOnGround = p.onGround
