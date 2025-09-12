@@ -48,10 +48,9 @@ object LobbyMovement {
 
             intervals.add(TimeUtils.setInterval(
                 fun () {
-                    tickYawChange = if (WorldUtils.airInFront(kira.mc.thePlayer, 4f)) {
-                        RandomUtils.randomDoubleInRange(-13.0, 13.0).toFloat()
-                    } else {
-                        0f
+                    val player = kira.mc.thePlayer
+                    if (player != null && !WorldUtils.airInFront(player, 1f)) {
+                        player.rotationYaw += 180f
                     }
                 },
                 0,
