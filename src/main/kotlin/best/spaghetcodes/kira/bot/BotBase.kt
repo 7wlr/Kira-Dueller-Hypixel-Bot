@@ -342,7 +342,9 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
             if (toggled()) {
                 ChatUtils.info("Current selected bot: ${EnumChatFormatting.GREEN}${getName()}")
                 joinGame()
-                Session.startTime = System.currentTimeMillis()
+                if (Session.startTime <= 0L) {
+                    Session.startTime = System.currentTimeMillis()
+                }
                 resultCounted = false
             }
         }
