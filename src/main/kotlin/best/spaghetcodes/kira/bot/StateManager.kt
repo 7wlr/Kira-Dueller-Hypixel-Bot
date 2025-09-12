@@ -27,11 +27,14 @@ object StateManager {
         val unformatted = ev.message.unformattedText
         if (unformatted.matches(Regex(".* a rejoint \\(./2\\)!"))) {
             state = States.GAME
-            if (kira.bot is Sumo) {
-                LobbyMovement.startMovement(Config.LobbyMovementType.SUMO)
-            } else {
-                LobbyMovement.startMovement(Config.LobbyMovementType.RANDOM_MOVES)
-            }
+            val moveType =
+                if (kira.bot is Sumo) {
+                    Config.LobbyMovementType.SUMO
+                } else {
+                    val idx = kira.config?.lobbyMovementMode ?: 0
+                    Config.LobbyMovementType.values().getOrElse(idx) { Config.LobbyMovementType.RANDOM_MOVES }
+                }
+            LobbyMovement.startMovement(moveType)
             if (unformatted.matches(Regex(".* a rejoint \\(2/2\\)!"))) {
                 gameFull = true
             }
@@ -43,11 +46,14 @@ object StateManager {
             state = States.GAME
             gameFull = false
             lastGameDuration = System.currentTimeMillis() - gameStartedAt
-            if (kira.bot is Sumo) {
-                LobbyMovement.startMovement(Config.LobbyMovementType.SUMO)
-            } else {
-                LobbyMovement.startMovement(Config.LobbyMovementType.RANDOM_MOVES)
-            }
+            val moveType =
+                if (kira.bot is Sumo) {
+                    Config.LobbyMovementType.SUMO
+                } else {
+                    val idx = kira.config?.lobbyMovementMode ?: 0
+                    Config.LobbyMovementType.values().getOrElse(idx) { Config.LobbyMovementType.RANDOM_MOVES }
+                }
+            LobbyMovement.startMovement(moveType)
         } else if (unformatted.contains("has quit!")) {
             gameFull = false
         }
