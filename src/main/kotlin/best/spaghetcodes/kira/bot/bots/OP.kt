@@ -45,6 +45,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private var retreating = false
     private var eatingGap = false
     private var firstSpeedTaken = false
+    private var allowStrafing = false
+    private var initialPotsUsed = 0
 
     var tapping = false
 
@@ -76,15 +78,17 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         return RandomUtils.randomIntInRange(1, 100) <= chance
     }
 
-    private fun spawnSplash(damage: Int, delay: Int = 0) {
+    private fun spawnSplash(damage: Int, delay: Int = 0, onComplete: (() -> Unit)? = null) {
         TimeUtils.setTimeout({
             Movement.startForward()
             Movement.startSprinting()
             Movement.startJumping()
-            
+            Movement.clearLeftRight()
+
             TimeUtils.setTimeout({
                 useSplashPotion(damage, false, false)
-                
+                onComplete?.invoke()
+
                 TimeUtils.setTimeout({
                     Movement.stopJumping()
                 }, RandomUtils.randomIntInRange(1500, 2000))
@@ -96,6 +100,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         retreating = true
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
+        allowStrafing = false
+        Movement.clearLeftRight()
         
         val opp = opponent()
         if (opp == null) {
@@ -124,7 +130,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             
             TimeUtils.setTimeout({
                 useSplashPotion(damage, false, false)
-                
+                allowStrafing = true
+
                 TimeUtils.setTimeout({
                     Movement.stopForward()
                     Movement.stopSprinting()
@@ -144,15 +151,23 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
-        
+        allowStrafing = false
+        initialPotsUsed = 0
+
         TimeUtils.setTimeout({
-            spawnSplash(speedDamage)
+            spawnSplash(speedDamage) {
+                initialPotsUsed++
+                if (initialPotsUsed >= 2) allowStrafing = true
+            }
             speedPotsLeft--
             lastSpeedUse = System.currentTimeMillis()
             firstSpeedTaken = true
-            
+
             if (regenPotsLeft == 2) {
-                spawnSplash(regenDamage, RandomUtils.randomIntInRange(1500, 2000))
+                spawnSplash(regenDamage, RandomUtils.randomIntInRange(1500, 2000)) {
+                    initialPotsUsed++
+                    if (initialPotsUsed >= 2) allowStrafing = true
+                }
                 regenPotsLeft--
                 lastRegenUse = System.currentTimeMillis()
             }
@@ -187,6 +202,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         retreating = false
         eatingGap = false
         firstSpeedTaken = false
+        allowStrafing = false
+        initialPotsUsed = 0
 
         strafeDir = 1
         lastStrafeSwitch = 0L
@@ -392,7 +409,12 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 Movement.singleJump(RandomUtils.randomIntInRange(200, 400))
             }
 
-            handle(clear, randomStrafe, movePriority)
+            if (allowStrafing) {
+                handle(clear, randomStrafe, movePriority)
+            } else {
+                Combat.stopRandomStrafe()
+                Movement.clearLeftRight()
+            }
         }
     }
 }
