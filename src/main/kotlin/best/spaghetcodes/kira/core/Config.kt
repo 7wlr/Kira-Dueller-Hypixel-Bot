@@ -84,9 +84,6 @@ class Config : Vigilant(File(kira.configLocation), sortingBehavior = ConfigSorte
     )
     var hitBlockMode = 0
 
-    @Property(type = PropertyType.NUMBER, name = "Hit & Block Min Interval", description = "Minimum interval between Hit & Block actions (ms).", category = "Combat", min = 0, max = 2000, increment = 10)
-    var hitBlockMinInterval = 0
-
     @Property(type = PropertyType.NUMBER, name = "Hit & Block Chance", description = "Percentage chance for Hit & Block when in Chance mode.", category = "Combat", min = 0, max = 100, increment = 1)
     var hitBlockChance = 0
 

@@ -309,17 +309,6 @@ class CustomConfigGUI : GuiScreen() {
             listOf("Chance", "Cooldown Hits")
         );
         y += 24
-        number(
-            "H&B Min Interval (ms)",
-            x,
-            y,
-            { cfg.hitBlockMinInterval },
-            { cfg.hitBlockMinInterval = it },
-            0,
-            2000,
-            10
-        );
-        y += 20
         number("H&B Chance (%)", x, y, { cfg.hitBlockChance }, { cfg.hitBlockChance = it }, 0, 100, 1); y += 20
         number("H&B Min Hits", x, y, { cfg.hitBlockMinHits }, { cfg.hitBlockMinHits = it }, 1, 10, 1); y += 20
         number("H&B Max Hits", x, y, { cfg.hitBlockMaxHits }, { cfg.hitBlockMaxHits = it }, 1, 10, 1); y += 24

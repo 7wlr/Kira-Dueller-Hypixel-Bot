@@ -127,13 +127,12 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
     // ----------------------------------------------------
 
-    private fun performHitBlock(now: Long, cfg: Config) {
+    private fun performHitBlock(now: Long) {
         val dur = RandomUtils.randomIntInRange(40, 80)
         val delay = RandomUtils.randomIntInRange(0, 20)
         hbActiveUntil = now + delay + dur
         TimeUtils.setTimeout({ Mouse.rClick(dur) }, delay)
-        val interval = (cfg.hitBlockMinInterval + RandomUtils.randomIntInRange(-20, 20)).coerceAtLeast(0)
-        hbNextAllowedAt = now + interval
+        hbNextAllowedAt = now
     }
 
     private fun maybeHitBlock() {
@@ -152,7 +151,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         when (cfg.hitBlockMode) {
             0 -> { // Chance
                 if (allowed && cfg.hitBlockChance > 0 && RandomUtils.randomIntInRange(1, 100) <= cfg.hitBlockChance) {
-                    performHitBlock(now, cfg)
+                    performHitBlock(now)
                 }
             }
             1 -> { // Cooldown hits
@@ -166,7 +165,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         hbTargetHits = RandomUtils.randomIntInRange(cfg.hitBlockMinHits, cfg.hitBlockMaxHits)
                     }
                     if (hbHitsSince >= hbTargetHits) {
-                        performHitBlock(now, cfg)
+                        performHitBlock(now)
                         hbHitsSince = 0
                         hbTargetHits = 0
                     }
