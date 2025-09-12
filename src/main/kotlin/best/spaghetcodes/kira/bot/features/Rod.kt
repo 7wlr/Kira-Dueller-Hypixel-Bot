@@ -37,6 +37,7 @@ interface Rod {
             }
 
             // Clic droit bref → lance la ligne
+            if (Mouse.rClickDown) Mouse.rClickUp()
             Mouse.rClick(clickMs)
 
             // Revenir épée après un petit temps de vol
@@ -64,6 +65,7 @@ interface Rod {
 
         // Switch instant + clic droit immédiat
         Inventory.setInvItem("rod")
+        if (Mouse.rClickDown) Mouse.rClickUp()
         Mouse.rClick(clickMs)
 
         // Retour épée après court temps de vol
