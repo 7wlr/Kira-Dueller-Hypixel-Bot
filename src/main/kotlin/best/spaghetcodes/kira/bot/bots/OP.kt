@@ -68,16 +68,34 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         retreating = true
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
-        Mouse.setRunningAway(true)
-        Movement.startForward()
-        Movement.startSprinting()
-        Movement.startJumping()
-
-        TimeUtils.setTimeout({
-            val opp = opponent()
-            val player = mc.thePlayer
-            if (opp != null && player != null) {
-                useSplashPotion(damage, false, EntityUtils.entityFacingAway(player, opp))
+        
+        val opp = opponent()
+        if (opp == null) {
+            retreating = false
+            return
+        }
+        
+        val player = mc.thePlayer
+        val oppX = opp.posX
+        val oppZ = opp.posZ
+        val playerX = player.posX
+        val playerZ = player.posZ
+        
+        val dirX = playerX - oppX
+        val dirZ = playerZ - oppZ
+        val length = kotlin.math.sqrt(dirX * dirX + dirZ * dirZ)
+        
+        if (length > 0) {
+            val normalizedX = dirX / length
+            val normalizedZ = dirZ / length
+            
+            Mouse.setRunningAway(true)
+            Movement.startForward()
+            Movement.startSprinting()
+            Movement.startJumping()
+            
+            TimeUtils.setTimeout({
+                useSplashPotion(damage, false, false)
                 
                 TimeUtils.setTimeout({
                     Movement.stopForward()
@@ -87,10 +105,10 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                     retreating = false
                 }, RandomUtils.randomIntInRange(1800, 2200))
                 onComplete()
-            } else {
-                retreating = false
-            }
-        }, RandomUtils.randomIntInRange(2000, 2500))
+            }, RandomUtils.randomIntInRange(2000, 2500))
+        } else {
+            retreating = false
+        }
     }
 
     override fun onGameStart() {
@@ -98,7 +116,21 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.startTracking()
         Movement.startSprinting()
         Movement.startForward()
-        TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(400, 1200))
+        
+        TimeUtils.setTimeout({
+            spawnSplash(speedDamage)
+            speedPotsLeft--
+            lastSpeedUse = System.currentTimeMillis()
+            firstSpeedTaken = true
+            
+            if (regenPotsLeft == 2) {
+                spawnSplash(regenDamage, RandomUtils.randomIntInRange(1500, 2000))
+                regenPotsLeft--
+                lastRegenUse = System.currentTimeMillis()
+            }
+        }, RandomUtils.randomIntInRange(300, 600))
+        
+        TimeUtils.setTimeout(Movement::startJumping, RandomUtils.randomIntInRange(3000, 4000))
         if (kira.config?.kiraHit == true) {
             Mouse.startLeftAC()
         } else {
@@ -203,18 +235,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 System.currentTimeMillis() - lastSpeedUse > 15000 &&
                 System.currentTimeMillis() - lastPotion > 3500) {
                 
-                if (speedPotsLeft == 2 && !firstSpeedTaken) {
-                    spawnSplash(speedDamage)
-                    speedPotsLeft--
-                    lastSpeedUse = System.currentTimeMillis()
-                    firstSpeedTaken = true
-                    
-                    if (regenPotsLeft == 2) {
-                        spawnSplash(regenDamage, RandomUtils.randomIntInRange(2000, 3000))
-                        regenPotsLeft--
-                        lastRegenUse = System.currentTimeMillis()
-                    }
-                } else if (speedPotsLeft > 0) {
+                if (speedPotsLeft > 0) {
                     retreatAndSplash(speedDamage) {
                         speedPotsLeft--
                         lastSpeedUse = System.currentTimeMillis()
@@ -234,12 +255,13 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                     
                     if (gapsLeft > 0 && now - lastGap > 4000) {
                         eatingGap = true
+                        Mouse.stopLeftAC()
                         useGap(distance, distance < 2f, EntityUtils.entityFacingAway(mc.thePlayer, opponent()!!))
                         gapsLeft--
                         
                         TimeUtils.setTimeout({
                             eatingGap = false
-                        }, RandomUtils.randomIntInRange(1500, 2000))
+                        }, RandomUtils.randomIntInRange(3000, 4000))
                     } else if (regenPotsLeft > 0 && now - gameStartAt >= 120000 && now - lastRegenUse > 3500) {
                         retreatAndSplash(regenDamage) {
                             regenPotsLeft--
