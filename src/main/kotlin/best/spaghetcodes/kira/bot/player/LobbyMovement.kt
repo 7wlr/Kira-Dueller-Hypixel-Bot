@@ -14,6 +14,7 @@ object LobbyMovement {
     private var tickYawChange = 0f
     private var initialYaw = 0f
     private var intervals: ArrayList<Timer?> = ArrayList()
+    private var avoidingVoid = false
 
     fun sumo() {
         if (kira.config?.lobbyMovement != true) return
@@ -51,8 +52,15 @@ object LobbyMovement {
             intervals.add(TimeUtils.setInterval(
                 fun () {
                     val player = kira.mc.thePlayer
-                    if (player != null && WorldUtils.airInFront(player, 1f)) {
-                        player.rotationYaw += 180f
+                    if (player != null) {
+                        if (WorldUtils.airInFront(player, 1f)) {
+                            if (!avoidingVoid) {
+                                player.rotationYaw += 180f
+                                avoidingVoid = true
+                            }
+                        } else {
+                            avoidingVoid = false
+                        }
                     }
                 },
                 0,
@@ -66,6 +74,7 @@ object LobbyMovement {
         tickYawChange = 0f
         intervals.forEach { it?.cancel() }
         intervals.clear()
+        avoidingVoid = false
         kira.mc.thePlayer?.rotationYaw = initialYaw
     }
 
