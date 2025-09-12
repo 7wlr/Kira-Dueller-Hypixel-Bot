@@ -14,7 +14,6 @@ object LobbyMovement {
     private var desiredPitch: Float? = null
     private var intervals: ArrayList<Timer?> = ArrayList()
     private var activeMovementType: Config.LobbyMovementType? = null
-    private var collidedLastTick = false
     private var sumoTurnRight = true
     private var sumoJumpCounter = 0
 
@@ -57,6 +56,10 @@ object LobbyMovement {
         Movement.startJumping()
         tickYawChange = 0f
         desiredPitch = 0f
+        intervals.add(TimeUtils.setInterval(fun() {
+            val p = kira.mc.thePlayer ?: return@setInterval
+            p.rotationYaw += 180f
+        }, 7000, 7000))
     }
 
     private fun sumoInternal() {
@@ -96,7 +99,6 @@ object LobbyMovement {
         tickYawChange = 0f
         desiredPitch = null
         activeMovementType = null
-        collidedLastTick = false
         sumoJumpCounter = 0
         sumoTurnRight = true
     }
@@ -107,17 +109,7 @@ object LobbyMovement {
                 if (!Movement.forward()) Movement.startForward()
                 if (!Movement.sprinting()) Movement.startSprinting()
                 val p = kira.mc.thePlayer
-                if (p != null) {
-                    if (p.isCollidedHorizontally) {
-                        if (!collidedLastTick) {
-                            p.rotationYaw += 180f
-                            collidedLastTick = true
-                        }
-                    } else {
-                        collidedLastTick = false
-                        if (p.onGround && !Movement.jumping()) Movement.startJumping()
-                    }
-                }
+                if (p != null && p.onGround && !Movement.jumping()) Movement.startJumping()
             }
             Config.LobbyMovementType.SUMO -> {
                 if (!Movement.forward()) Movement.startForward()
