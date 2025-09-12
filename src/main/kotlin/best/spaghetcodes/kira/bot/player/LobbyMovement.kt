@@ -15,6 +15,8 @@ object LobbyMovement {
     private var intervals: ArrayList<Timer?> = ArrayList()
     private var activeMovementType: Config.LobbyMovementType? = null
     private var collidedLastTick = false
+    private var sumoTurnRight = true
+    private var sumoJumpCounter = 0
 
     private fun canActivateAndRunAnyMovement(): Boolean {
         return kira.mc.thePlayer != null &&
@@ -62,19 +64,25 @@ object LobbyMovement {
         desiredPitch = RandomUtils.randomDoubleInRange(-5.0, 10.0).toFloat()
 
         // Turn 45° to a random side when spawning
-        val turnRight = RandomUtils.randomBool()
-        player.rotationYaw += if (turnRight) 45f else -45f
+        sumoTurnRight = RandomUtils.randomBool()
+        player.rotationYaw += if (sumoTurnRight) 45f else -45f
 
-        // Start moving forward and circle around the platform
+        // Start moving forward and circle around the platform with wider turns
         Movement.startForward()
         Movement.startSprinting()
-        tickYawChange = if (turnRight) -RandomUtils.randomDoubleInRange(2.0, 4.0).toFloat()
-            else RandomUtils.randomDoubleInRange(2.0, 4.0).toFloat()
+        tickYawChange = 0f
+        sumoJumpCounter = 0
 
-        // Repeatedly jump while slightly turning in the opposite direction
+        // Repeatedly jump and only turn every second jump
         intervals.add(TimeUtils.setInterval(fun() {
             val p = kira.mc.thePlayer ?: return@setInterval
-            if (p.onGround) Movement.singleJump(RandomUtils.randomIntInRange(80, 150))
+            if (p.onGround) {
+                Movement.singleJump(RandomUtils.randomIntInRange(80, 150))
+                sumoJumpCounter++
+                if (sumoJumpCounter % 2 == 0) {
+                    p.rotationYaw += if (sumoTurnRight) 45f else -45f
+                }
+            }
         }, RandomUtils.randomIntInRange(300, 500), RandomUtils.randomIntInRange(300, 500)))
     }
 
@@ -89,6 +97,8 @@ object LobbyMovement {
         desiredPitch = null
         activeMovementType = null
         collidedLastTick = false
+        sumoJumpCounter = 0
+        sumoTurnRight = true
     }
 
     private fun maintainMovement() {
