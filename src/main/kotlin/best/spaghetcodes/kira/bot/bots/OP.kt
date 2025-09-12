@@ -60,6 +60,9 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private var longStrafeUntil = 0L
     private var longStrafeChance = 25
 
+    // Verrou d'aim provisoire pour stabiliser les lancers de potions
+    private var aimFreezeUntil = 0L
+
     private fun computeCloseStrafeDelay(distance: Float): Long = when {
         distance < 2.0f -> RandomUtils.randomIntInRange(90, 160).toLong()
         distance < 2.8f -> RandomUtils.randomIntInRange(180, 250).toLong()
@@ -207,6 +210,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             Movement.clearLeftRight()
 
             TimeUtils.setTimeout({
+                aimFreezeUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(260, 360)
                 useSplashPotion(damage, false, false)
                 onComplete?.invoke()
 
@@ -247,6 +251,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             Movement.startJumping()
 
             TimeUtils.setTimeout({
+                aimFreezeUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(260, 360)
                 useSplashPotion(damage, false, false)
                 allowStrafing = true
 
@@ -416,7 +421,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             if (!allowStrafing && hasSpeed && hasRegen) allowStrafing = true
 
-            Mouse.startTracking()
+            if (now >= aimFreezeUntil) Mouse.startTracking() else Mouse.stopTracking()
             if (kira.config?.kiraHit == true && !retreating && !eatingGap) Mouse.startLeftAC() else Mouse.stopLeftAC()
 
             // Sauts contextuels (comportement existant conservé)
@@ -435,16 +440,15 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 Movement.startForward()
             } else if (distance < 0.7f || (distance < 1.4f && combo >= 1)) {
                 Movement.stopForward()
-            } else if (!tapping) {
+            } else if (!tapping && !eatingGap) {
                 Movement.startForward()
             }
 
             // Éviter switch épée pendant le hold de la rod
             if (distance < 1.5f && p.heldItem != null &&
                 !p.heldItem.unlocalizedName.lowercase().contains("sword") &&
-                !Mouse.isUsingPotion() && now >= rodHoldUntil) {
+                !Mouse.isUsingPotion() && now >= rodHoldUntil && !eatingGap) {
                 Inventory.setInvItem("sword")
-                Mouse.rClickUp()
             }
 
             // Effets / gestion soins
@@ -622,7 +626,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 Movement.singleJump(RandomUtils.randomIntInRange(200, 400))
             }
 
-            if (allowStrafing) handle(clear, randomStrafe, movePriority) else { Combat.stopRandomStrafe(); Movement.clearLeftRight() }
+            if (allowStrafing && !eatingGap) handle(clear, randomStrafe, movePriority) else { Combat.stopRandomStrafe(); Movement.clearLeftRight() }
 
             prevDistance = distance
         }
