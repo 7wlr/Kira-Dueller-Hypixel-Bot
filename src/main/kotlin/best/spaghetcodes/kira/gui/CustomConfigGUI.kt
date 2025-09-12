@@ -250,15 +250,6 @@ class CustomConfigGUI : GuiScreen() {
         }, botNames); y += 24
 
         toggle("Lobby Movement", x, y, { cfg.lobbyMovement }, { cfg.lobbyMovement = it }); y += 20
-        selector(
-            "Lobby Move Mode",
-            x,
-            y,
-            { cfg.lobbyMovementMode },
-            { cfg.lobbyMovementMode = it },
-            listOf("Random Moves", "Strafe Walk", "Walker", "Slow Drift", "Fast Forward")
-        );
-        y += 24
         toggle("Fast Requeue", x, y, { cfg.fastRequeue }, { cfg.fastRequeue = it }); y += 20
         toggle("Paper Requeue", x, y, { cfg.paperRequeue }, { cfg.paperRequeue = it }); y += 20
         toggle("Disable Chat Messages", x, y, { cfg.disableChatMessages }, { cfg.disableChatMessages = it }); y += 24
