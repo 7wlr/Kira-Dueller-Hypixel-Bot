@@ -78,7 +78,7 @@ object LobbyMovement {
         tickYawChange = 0f
         desiredPitch = 0f
 
-        // Remplace l’ancien “snap 180°” par un DEMI-CERCLE lissé, même intervalle 7000/7000
+        // Remplace l’ancien “snap 180°” par un DEMI-CERCLE lissé, même intervalle 8500/8500
         intervals.add(TimeUtils.setInterval(fun() {
             kira.mc.thePlayer ?: return@setInterval
 
@@ -101,7 +101,7 @@ object LobbyMovement {
                 ffStrafeTicksLeft = (dur * portion) / 100
                 ffStrafeRight = ffTurnRight
             }
-        }, 7000, 7000))  // mêmes valeurs qu'avant : initialDelay=7000ms, period=7000ms
+        }, 8500, 8500))  // mêmes valeurs qu'avant : initialDelay=8500ms, period=8500ms
     }
 
     // =======================
