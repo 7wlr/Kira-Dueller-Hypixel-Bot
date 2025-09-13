@@ -58,6 +58,11 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
     var tapping = false
 
+    // Ne jamais re-manger une gap tant que la régénération est active (5s mini)
+    private val MIN_GAP_INTERVAL_MS = 5200L
+    // Anti double-gap strict : bloque toute 2e pomme pendant au moins 5.2s après la précédente
+    private var gapLockUntil = 0L
+
     // =====================  STRAFE  =====================
     private var strafeDir = 1
     private var lastStrafeSwitch = 0L
@@ -235,26 +240,28 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.setRunningAway(false)
     }
 
+    
+
     // ---- OUVERTURE : cast en place (SANS retrait) ----
     private fun castOpeningPotionInPlace(damage: Int, onComplete: (() -> Unit)? = null) {
         if (takingPotion) return
         takingPotion = true
-        // sprint + jump tout droit (PAS de retrait)
+        // micro sprint + jump en place vers l'avant (pas de retrait)
         Movement.startForward(); Movement.startSprinting(); Movement.startJumping()
-        // regarder en face ou légèrement vers le HAUT (pitch -8..0)
-        setPitchLock(RandomUtils.randomIntInRange(-8, 0).toFloat(), lockMs = RandomUtils.randomIntInRange(140, 220))
+        // jeter devant soi et sauter dessus → pitch 62–70°
+        setPitchLock(RandomUtils.randomIntInRange(62, 70).toFloat(), lockMs = RandomUtils.randomIntInRange(180, 260))
         Mouse.stopTracking()
-        // léger délai pour assurer la vitesse avant le cast
         TimeUtils.setTimeout({
             useSplashPotion(damage, false, false)
             lastPotion = System.currentTimeMillis()
-            // continuer à courir+sauter pour traverser le nuage de splash
+            // on continue le saut un court instant pour passer dans le splash
             TimeUtils.setTimeout({
                 Movement.stopJumping(); Movement.stopForward()
                 takingPotion = false
                 onComplete?.invoke()
-            }, RandomUtils.randomIntInRange(420, 560))
+            }, RandomUtils.randomIntInRange(220, 320))
         }, RandomUtils.randomIntInRange(90, 140))
+    }, RandomUtils.randomIntInRange(120, 180))
     }
 
     // ---- COMBAT : fuite opposée + cast ----
@@ -265,27 +272,28 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
 
-        // 1) se tourner à l'opposé (yaw seulement), garder un pitch ~horizon / léger haut
-        faceAwayAndLock(lockMs = RandomUtils.randomIntInRange(700, 900))
-        setPitchLock(RandomUtils.randomIntInRange(-8, 0).toFloat(), lockMs = RandomUtils.randomIntInRange(140, 220))
+        // Regarder à l'opposé AVEC un petit pitch vers le bas pour jeter au sol devant soi
+        faceAwayAndLock(lockMs = RandomUtils.randomIntInRange(700, 900), pitch = RandomUtils.randomIntInRange(62, 70).toFloat())
         Mouse.stopTracking()
 
-        // 2) fuite opposée avec sprint + jump
+        // Fuite opposée + jump pour vitesse, puis lancer et sauter dans le splash
         startOppositeRun()
-
-        // 3) lancer en gardant la même orientation (pas de 360), puis sauter dans le splash
         TimeUtils.setTimeout({
-            aimFreezeUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(220, 320)
+            // Cast en gardant l'orientation actuelle
+            aimFreezeUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(280, 380)
             useSplashPotion(damage, false, false)
             lastPotion = System.currentTimeMillis()
             onComplete()
 
+            // Continuer à sprinter + sauter pour passer DANS l'aire de splash
             TimeUtils.setTimeout({
                 stopOppositeRun()
                 retreating = false
                 takingPotion = false
-            }, RandomUtils.randomIntInRange(900, 1150))
+            }, RandomUtils.randomIntInRange(850, 1150))
         }, RandomUtils.randomIntInRange(160, 240))
+    }, RandomUtils.randomIntInRange(700, 900))
+        }, RandomUtils.randomIntInRange(280, 400))
     }
 
     // ---- GAP fiable (fuite courte si proche) ----
@@ -304,6 +312,9 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         }
         useGap(distance, close, facingAway)
         lastGap = now
+        // verrou "anti double-gap" : interdit toute 2e pomme pendant la fenêtre d'effet
+        gapLockUntil = now + MIN_GAP_INTERVAL_MS
+        // on décrémente ici (source de vérité) pour éviter les doubles décréments depuis onTick
         TimeUtils.setTimeout({
             eatingGap = false
             stopOppositeRun()
@@ -533,9 +544,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
                     !eatingGap && !takingPotion && now - lastPotion > 3500) {
 
-                    if (gapsLeft > 0 && now - lastGap > 4000) {
+                    if (gapsLeft > 0 && now >= gapLockUntil && !hasRegen) {
                         eatGoldenApple(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
-                        gapsLeft--
                     } else if (regenPotsLeft > 0 && now - gameStartAt >= 120000 && now - lastRegenUse > 3500) {
                         retreatAndSplash(regenDamage) {
                             regenPotsLeft--
