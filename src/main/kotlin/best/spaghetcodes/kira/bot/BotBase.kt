@@ -3,13 +3,8 @@ package best.spaghetcodes.kira.bot
 import best.spaghetcodes.kira.kira
 import best.spaghetcodes.kira.bot.player.*
 import best.spaghetcodes.kira.core.KeyBindings
-import best.spaghetcodes.kira.core.Config
 import best.spaghetcodes.kira.bot.bots.*
 import best.spaghetcodes.kira.utils.*
-import com.google.gson.JsonArray
-import com.google.gson.JsonElement
-import com.google.gson.JsonNull
-import com.google.gson.JsonObject
 import io.netty.channel.ChannelHandlerContext
 import io.netty.channel.SimpleChannelInboundHandler
 import net.minecraft.client.Minecraft
@@ -20,7 +15,6 @@ import net.minecraft.client.multiplayer.ServerData
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.network.Packet
 import net.minecraft.network.play.server.S19PacketEntityStatus
-import net.minecraft.network.play.server.S3EPacketTeams
 import net.minecraft.network.play.server.S45PacketTitle
 import net.minecraft.util.EnumChatFormatting
 import net.minecraft.item.ItemSword
@@ -32,10 +26,7 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent
 import net.minecraftforge.fml.common.gameevent.TickEvent.ClientTickEvent
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientConnectedToServerEvent
 import net.minecraftforge.fml.common.network.FMLNetworkEvent.ClientDisconnectionFromServerEvent
-import java.math.RoundingMode
-import java.text.DecimalFormat
 import java.util.Timer
-import kotlin.concurrent.thread
 
 open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
 
@@ -46,13 +37,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     fun toggle() { toggled = !toggled }
 
     private var attackedID = -1
-
-    private var statKeys: Map<String, String> = mapOf("wins" to "", "losses" to "", "ws" to "")
-
-    private var playerCache: HashMap<String, String> = hashMapOf()
-    private var playersSent: ArrayList<String> = arrayListOf()
-    private var playersQuit: ArrayList<String> = arrayListOf()
-    private var playersLost: ArrayList<String> = arrayListOf()
 
     private var opponent: EntityPlayer? = null
     private var opponentTimer: Timer? = null
@@ -93,7 +77,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     protected open fun onFoundOpponent() {}
     protected open fun onTick() {}
 
-    protected fun setStatKeys(keys: Map<String, String>) { statKeys = keys }
+    protected fun setStatKeys(keys: Map<String, String>) {}
 
     // -------- Résultat via résumé & kill (FR/EN) --------
 
@@ -197,18 +181,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         }
                     }
                 }
-                is S3EPacketTeams -> {
-                    if (packet.action == 3 && packet.name == "§7§k") {
-                        val players = packet.players
-                        for (player in players) {
-                            if (playersQuit.contains(player)) playersQuit.remove(player)
-                            TimeUtils.setTimeout({ handlePlayer(player) }, 1500)
-                        }
-                    } else if (packet.action == 4 && packet.name == "§7§k") {
-                        val players = packet.players
-                        for (player in players) playersQuit.add(player)
-                    }
-                }
                 is S45PacketTitle -> {
                     if (mc.theWorld != null) {
                         TimeUtils.setTimeout({
@@ -224,8 +196,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                                             Triple(me, lastOpponentName, true)
                                         } else {
                                             Session.losses++
-                                            ChatUtils.info("Adding $p to the list of players to dodge...")
-                                            playersLost.add(p)
                                             Triple(p, me, false)
                                         }
 
@@ -262,36 +232,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                                         }
                                     }
 
-                                    if (kira.config?.sendWebhookMessages == true) {
-                                        if (kira.config?.webhookURL != "") {
-                                            val opponentName = if (iWon) loser else winner
-                                            val faceUrl = if (playerCache.containsKey(opponentName)) {
-                                                "https://crafatar.com/avatars/${playerCache[opponentName]}"
-                                            } else {
-                                                "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png"
-                                            }
-                                            val duration = StateManager.lastGameDuration / 1000
-                                            val fields = WebHook.buildFields(arrayListOf(
-                                                mapOf("name" to "Winner", "value" to winner, "inline" to "true"),
-                                                mapOf("name" to "Loser", "value" to loser, "inline" to "true"),
-                                                mapOf("name" to "Bot Started", "value" to "<t:${(Session.startTime / 1000).toInt()}:R>", "inline" to "false")
-                                            ))
-                                            val footer = WebHook.buildFooter(ChatUtils.removeFormatting(Session.getSession()), "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-                                            val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-                                            val thumbnail = WebHook.buildThumbnail(faceUrl)
-
-                                            WebHook.sendEmbed(
-                                                kira.config?.webhookURL!!,
-                                                WebHook.buildEmbed(
-                                                    "${if (iWon) ":smirk:" else ":confused:"} Game ${if (iWon) "WON" else "LOST"}!",
-                                                    "Game Duration: `${duration}`s",
-                                                    fields, footer, author, thumbnail, if (iWon) 0x66ed8a else 0xed6d66
-                                                )
-                                            )
-                                        } else {
-                                            ChatUtils.error("Webhook URL hasn't been set!")
-                                        }
-                                    }
                                 }
                             }
                         }, 1000)
@@ -355,24 +295,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         val unformatted = ev.message.unformattedText
         if (toggled() && mc.thePlayer != null) {
 
-            val needStats = (kira.config?.enableDodging == true) || (kira.config?.sendWebhookStats == true)
-
-            if (unformatted.contains("The game starts in 2 seconds!")) {
-                println(playersSent.joinToString(", "))
-                var found = false
-                if (playersSent.contains(mc.thePlayer.displayNameString)) {
-                    if (playersSent.size > 1) found = true
-                } else {
-                    if (playersSent.size > 0) found = true
-                }
-
-                if (!found && kira.config?.dodgeNoStats == true && needStats) {
-                    ChatUtils.info("No stats found, dodging...")
-                    leaveGame()
-                    sendDodgeWebhook("")
-                    TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(4000, 6000))
-                }
-            } else if (unformatted.contains("The game starts in 1 second!")) {
+            if (unformatted.contains("The game starts in 1 second!")) {
                 beforeStart()
             }
 
@@ -399,7 +322,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         Session.wins++
                     } else {
                         Session.losses++
-                        playersLost.add(winner)
                     }
                     resultCounted = true
                     ChatUtils.info(Session.getSession())
@@ -415,7 +337,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                         Session.wins++
                     } else {
                         Session.losses++
-                        playersLost.add(winner)
                     }
                     resultCounted = true
                     ChatUtils.info(Session.getSession())
@@ -436,15 +357,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
             }
         }
 
-        if (unformatted.contains("Your new API key is ")) {
-            val needStats = (kira.config?.enableDodging == true) || (kira.config?.sendWebhookStats == true)
-            if (needStats) {
-                val key = ev.message.unformattedText.split("Your new API key is ")[1]
-                kira.config?.apiKey = key
-                kira.config?.writeData()
-                ChatUtils.info("Saved API Key!")
-            }
-        }
     }
 
     @SubscribeEvent
@@ -466,12 +378,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     fun onConnect(event: ClientConnectedToServerEvent) {
         if (toggled()) {
             println("Reconnect successful!")
-            val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            val thumbnail = WebHook.buildThumbnail("https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            WebHook.sendEmbed(
-                kira.config?.webhookURL!!,
-                WebHook.buildEmbed("Reconnected!", "The bot successfully reconnected!", JsonArray(), JsonObject(), author, thumbnail, 0x66ed8a)
-            )
             reconnectTimer?.cancel()
             TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(6000, 8000))
         }
@@ -482,12 +388,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     fun onDisconnect(event: ClientDisconnectionFromServerEvent) {
         if (toggled()) {
             println("Disconnected from server, reconnecting...")
-            val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            val thumbnail = WebHook.buildThumbnail("https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            WebHook.sendEmbed(
-                kira.config?.webhookURL!!,
-                WebHook.buildEmbed("Disconnected!", "The bot was disconnected! Attempting to reconnect...", JsonArray(), JsonObject(), author, thumbnail, 0xed6d66)
-            )
             TimeUtils.setTimeout({
                 reconnectTimer = TimeUtils.setInterval(this::reconnect, 0, 30000)
             }, RandomUtils.randomIntInRange(5000, 7000))
@@ -495,8 +395,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     }
 
     private fun resetVars() {
-        playersSent.clear()
-        playersQuit.clear()
         calledFoundOpponent = false
         opponentTimer?.cancel()
         opponent = null
@@ -558,132 +456,6 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         }
     }
 
-    private fun handlePlayer(player: String) {
-        thread {
-            if (StateManager.state == StateManager.States.GAME) {
-                if (player.length > 2) {
-                    val needStats = (kira.config?.enableDodging == true) || (kira.config?.sendWebhookStats == true)
-
-                    if (!needStats) {
-                        if (mc.thePlayer != null && player == mc.thePlayer.displayNameString) {
-                            onJoinGame()
-                        }
-                        return@thread
-                    }
-
-                    val uuid: String? = if (playerCache.containsKey(player)) {
-                        playerCache[player]
-                    } else {
-                        HttpUtils.usernameToUUID(player)
-                    }
-                    println(player)
-
-                    if (uuid == null) {
-                        if (kira.config?.dodgeLostTo == true && playersLost.contains(player)) {
-                            beforeLeave()
-                            leaveGame()
-                            TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(4000, 6000))
-                        }
-                    } else {
-                        playerCache[player] = uuid
-                        if (!playersSent.contains(player)) {
-                            if (mc.thePlayer != null) {
-                                if (player == mc.thePlayer.displayNameString) {
-                                    onJoinGame()
-                                } else {
-                                    val stats = HttpUtils.getPlayerStats(uuid) ?: return@thread
-                                    handleStats(stats, player)
-                                }
-                            } else {
-                                val stats = HttpUtils.getPlayerStats(uuid) ?: return@thread
-                                handleStats(stats, player)
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private fun handleStats(stats: JsonObject, player: String) {
-        if (toggled() && stats.get("success").asBoolean) {
-            if (statKeys.containsKey("wins") && statKeys.containsKey("losses") && statKeys.containsKey("ws")) {
-                fun getStat(key: String): JsonElement? {
-                    var tmpObj = stats
-                    for (p in key.split(".")) {
-                        if (tmpObj.has(p) && tmpObj.get(p).isJsonObject) tmpObj = tmpObj.get(p).asJsonObject
-                        else if (tmpObj.has(p)) return tmpObj.get(p)
-                        else return null
-                    }
-                    return null
-                }
-
-                if (stats.get("player") == JsonNull.INSTANCE) return
-                if (playersQuit.contains(player)) return
-                if (!playersSent.contains(player)) playersSent.add(player) else return
-
-                val wins = getStat(statKeys["wins"]!!)?.asInt ?: 0
-                val losses = getStat(statKeys["losses"]!!)?.asInt ?: 0
-                val ws = getStat(statKeys["ws"]!!)?.asInt ?: 0
-
-                val df = DecimalFormat("#.##")
-                df.roundingMode = RoundingMode.DOWN
-                val wlr = wins.toDouble() / (if (losses == 0) 1.0 else losses.toDouble())
-
-                ChatUtils.info("$player ${EnumChatFormatting.GOLD} >> ${EnumChatFormatting.GOLD}Wins: ${EnumChatFormatting.GREEN}$wins ${EnumChatFormatting.GOLD}WLR: ${EnumChatFormatting.GREEN}${df.format(wlr)} ${EnumChatFormatting.GOLD}WS: ${EnumChatFormatting.GREEN}$ws")
-
-                if (kira.config?.sendWebhookStats == true) {
-                    val fields = WebHook.buildFields(arrayListOf(
-                        mapOf("name" to "Wins", "value" to "$wins", "inline" to "true"),
-                        mapOf("name" to "W/L", "value" to df.format(wlr), "inline" to "true"),
-                        mapOf("name" to "WS", "value" to "$ws", "inline" to "true")
-                    ))
-                    val footer = WebHook.buildFooter(ChatUtils.removeFormatting(Session.getSession()), "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-                    val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-                    val thumbnail = WebHook.buildThumbnail("https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-
-                    WebHook.sendEmbed(
-                        kira.config?.webhookURL!!,
-                        WebHook.buildEmbed("Stats of $player:", "", fields, footer, author, thumbnail, 0x581ff2)
-                    )
-                }
-
-                var dodge = false
-                if (kira.config?.enableDodging == true) {
-                    val config = kira.config
-                    if (wins > config?.dodgeWins!!) dodge = true
-                    else if (wlr > config.dodgeWLR) dodge = true
-                    else if (ws > config.dodgeWS) dodge = true
-                    else if (kira.config?.dodgeLostTo == true) {
-                        if (playersLost.contains(player)) dodge = true
-                    }
-                }
-
-                if (dodge) {
-                    beforeLeave()
-                    leaveGame()
-                    sendDodgeWebhook(player)
-                    TimeUtils.setTimeout(this::joinGame, RandomUtils.randomIntInRange(4000, 6000))
-                }
-            }
-        } else if (toggled()) {
-            ChatUtils.error("Error getting stats! Check the log for more information.")
-            println("Error getting stats! success == false")
-            println(kira.gson.toJson(stats))
-        }
-    }
-
-    private fun sendDodgeWebhook(player: String) {
-        if (kira.config?.sendWebhookDodge == true) {
-            val footer = WebHook.buildFooter(ChatUtils.removeFormatting(Session.getSession()), "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            val author = WebHook.buildAuthor("Duck Dueller - ${getName()}", "https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            val thumbnail = WebHook.buildThumbnail("https://raw.githubusercontent.com/HumanDuck23/upload-stuff-here/main/duck_dueller.png")
-            WebHook.sendEmbed(
-                kira.config?.webhookURL!!,
-                WebHook.buildEmbed("Dodged someone!", if (player != "") "Dodged $player." else "Dodged a nick!", JsonArray(), footer, author, thumbnail, 0x581ff2)
-            )
-        }
-    }
 
     private fun leaveGame() {
         if (toggled() && StateManager.state != StateManager.States.PLAYING) {
