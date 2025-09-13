@@ -1,0 +1,72 @@
+name: Build Kira
+
+on:
+  # Manuel uniquement
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          # Mets false si tu n'as pas *vraiment* besoin des sous-modules
+          submodules: recursive
+          # Évite d’injecter des credentials Git — accélère le "Post Checkout"
+          persist-credentials: false
+
+      # ✅ Nouvelle action officielle, plus fiable
+      - name: Validate Gradle Wrapper
+        uses: gradle/actions/wrapper-validation@v4
+
+      - name: Set up Temurin JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Setup Gradle (cache)
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-home-cache-cleanup: true
+          cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Make gradlew executable
+        run: chmod +x gradlew
+
+      # (Optionnel) Diagnostic rapide : affiche la version/somme Gradle
+      - name: Inspect Gradle wrapper
+        run: |
+          echo "---- gradle-wrapper.properties ----"
+          cat gradle/wrapper/gradle-wrapper.properties || true
+          echo "-----------------------------------"
+
+      # Pré-chauffe : remplit le cache de dépendances
+      - name: Warm Gradle deps
+        run: ./gradlew --no-daemon -q help
+
+      # Build avec retry x3 pour les erreurs transitoires
+      - name: Gradle Clean & Build (retry)
+        uses: nick-fields/retry@v3
+        with:
+          max_attempts: 3
+          timeout_minutes: 25
+          retry_on: error
+          command: ./gradlew --no-daemon --stacktrace clean build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: kira-build
+          path: build/libs/*.jar
+          if-no-files-found: error
