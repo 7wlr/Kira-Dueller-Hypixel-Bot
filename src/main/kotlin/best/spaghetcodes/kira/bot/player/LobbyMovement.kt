@@ -80,7 +80,7 @@ object LobbyMovement {
 
         // Remplace l’ancien “snap 180°” par un DEMI-CERCLE lissé, même intervalle 7000/7000
         intervals.add(TimeUtils.setInterval(fun() {
-            val p = kira.mc.thePlayer ?: return@setInterval
+            kira.mc.thePlayer ?: return@setInterval
 
             // alterner droite/gauche
             ffTurnRight = !ffTurnRight
@@ -330,6 +330,7 @@ object LobbyMovement {
     }
 
     @SubscribeEvent
+    @Suppress("UNUSED_PARAMETER")
     fun onClientTick(event: ClientTickEvent) {
         if (!canActivateAndRunAnyMovement()) {
             if (activeMovementType != null) stop()

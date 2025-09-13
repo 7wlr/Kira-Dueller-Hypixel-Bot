@@ -77,6 +77,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
     protected open fun onFoundOpponent() {}
     protected open fun onTick() {}
 
+    @Suppress("UNUSED_PARAMETER")
     protected fun setStatKeys(keys: Map<String, String>) {}
 
     // -------- Résultat via résumé & kill (FR/EN) --------
@@ -190,7 +191,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                                     val me = mc.thePlayer.displayNameString
                                     val p = ChatUtils.removeFormatting(packet.message.unformattedText).split("won")[0].trim()
 
-                                    val (winner, loser, iWon) =
+                                    val (_, _, iWon) =
                                         if (unformatted.contains(me.lowercase())) {
                                             Session.wins++
                                             Triple(me, lastOpponentName, true)
