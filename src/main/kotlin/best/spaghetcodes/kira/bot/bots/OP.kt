@@ -256,15 +256,15 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             lastPotion = System.currentTimeMillis()
             // on continue le saut un court instant pour passer dans le splash
             TimeUtils.setTimeout({
-                Movement.stopJumping(); Movement.stopForward()
+                Movement.stopJumping();
+                // on laisse l'avance/sprint actifs pour ne pas casser le tempo d'ouverture
                 takingPotion = false
                 onComplete?.invoke()
             }, RandomUtils.randomIntInRange(220, 320))
         }, RandomUtils.randomIntInRange(90, 140))
-    }, RandomUtils.randomIntInRange(120, 180))
     }
 
-    // ---- COMBAT : fuite opposée + cast ----
+    // ---- COMBAT : fuite opposée + cast ---- : fuite opposée + cast ----
     private fun retreatAndSplash(damage: Int, onComplete: () -> Unit) {
         if (takingPotion) return
         retreating = true
@@ -292,11 +292,9 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 takingPotion = false
             }, RandomUtils.randomIntInRange(850, 1150))
         }, RandomUtils.randomIntInRange(160, 240))
-    }, RandomUtils.randomIntInRange(700, 900))
-        }, RandomUtils.randomIntInRange(280, 400))
     }
 
-    // ---- GAP fiable (fuite courte si proche) ----
+    // ---- GAP fiable (fuite courte si proche) ---- (fuite courte si proche) ----
     private fun eatGoldenApple(distance: Float, close: Boolean, facingAway: Boolean) {
         val now = System.currentTimeMillis()
         if (eatingGap || now < lastGap + 3500) return
@@ -311,6 +309,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             startOppositeRun()
         }
         useGap(distance, close, facingAway)
+        gapsLeft--
         lastGap = now
         // verrou "anti double-gap" : interdit toute 2e pomme pendant la fenêtre d'effet
         gapLockUntil = now + MIN_GAP_INTERVAL_MS
