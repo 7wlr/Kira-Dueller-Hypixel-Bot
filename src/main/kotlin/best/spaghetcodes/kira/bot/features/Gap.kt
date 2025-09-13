@@ -18,7 +18,11 @@ interface Gap {
             if (Inventory.setInvItem("gold")) {
                 ChatUtils.info("About to gap")
                 val r = RandomUtils.randomIntInRange(2100, 2200)
-                Mouse.rClick(r)
+                val equipDelay = RandomUtils.randomIntInRange(80, 130)
+
+                TimeUtils.setTimeout(fun () {
+                    Mouse.rClick(r)
+                }, equipDelay)
 
                 TimeUtils.setTimeout(fun () {
                     Inventory.setInvItem("sword")
@@ -26,7 +30,7 @@ interface Gap {
                     TimeUtils.setTimeout(fun () {
                         Mouse.setRunningAway(false)
                     }, RandomUtils.randomIntInRange(200, 400))
-                }, r + RandomUtils.randomIntInRange(200, 300))
+                }, equipDelay + r + RandomUtils.randomIntInRange(200, 300))
             }
         }
 
