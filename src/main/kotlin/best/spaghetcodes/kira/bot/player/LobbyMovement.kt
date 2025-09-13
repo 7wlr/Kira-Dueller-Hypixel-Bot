@@ -12,8 +12,8 @@ import kotlin.math.cos
 import kotlin.math.max
 import kotlin.math.min
 
-// FAST_FORWARD : demi-cercle lissé (humain) via l'intervalle d'origine (7000 ms)
-// SUMO : 45° -> 1er saut sans rotation -> dès le 2e saut rotation à chaque saut (lissée en vol)
+// FAST_FORWARD : demi-cercle lissé (humain) toutes les 7s, easing quintic (plus doux)
+// SUMO : 45° -> 1er saut sans rotation -> dès le 2e saut rotation à chaque saut (lissée en vol, easing sine)
 
 object LobbyMovement {
 
@@ -56,17 +56,18 @@ object LobbyMovement {
     }
 
     // =======================
-    // FAST_FORWARD (demi-cercle lissé, mêmes noms qu'avant)
+    // FAST_FORWARD (demi-cercle lissé)
     // =======================
-    private const val FF_ARC_JITTER_DEG = 8f            // léger aléa sur l’angle total (±)
-    private const val FF_ARC_DURATION_MIN_TICKS = 18    // ~0.9s si 20 TPS
-    private const val FF_ARC_DURATION_MAX_TICKS = 28    // ~1.4s
+    private const val FF_ARC_JITTER_DEG = 6f             // léger aléa sur l’angle total (±)
+    // Durée plus longue pour un pivot plus doux
+    private const val FF_ARC_DURATION_MIN_TICKS = 26     // ~1.3s si 20 TPS
+    private const val FF_ARC_DURATION_MAX_TICKS = 40     // ~2.0s
     private const val FF_STRAFE_ENABLE = true
-    private const val FF_STRAFE_PORTION_MIN = 40        // % de la durée d’arc passée à strafe
-    private const val FF_STRAFE_PORTION_MAX = 60
+    private const val FF_STRAFE_PORTION_MIN = 55         // % de la durée d’arc passée à strafe
+    private const val FF_STRAFE_PORTION_MAX = 75
 
     // état FAST_FORWARD
-    private var ffTurnRight = true                      // on alterne le côté à chaque arc
+    private var ffTurnRight = true                       // on alterne le côté à chaque arc
     private var ffStrafeTicksLeft = 0
     private var ffStrafeRight = true
 
@@ -77,7 +78,7 @@ object LobbyMovement {
         tickYawChange = 0f
         desiredPitch = 0f
 
-        // Remplace l’ancien “snap 180°” par un DEMI-CERCLE lissé, mais garde le même intervalle 7000/7000
+        // Remplace l’ancien “snap 180°” par un DEMI-CERCLE lissé, même intervalle 7000/7000
         intervals.add(TimeUtils.setInterval(fun() {
             val p = kira.mc.thePlayer ?: return@setInterval
 
@@ -91,8 +92,8 @@ object LobbyMovement {
             // durée lissée (ticks)
             val dur = RandomUtils.randomIntInRange(FF_ARC_DURATION_MIN_TICKS, FF_ARC_DURATION_MAX_TICKS)
 
-            // lancer la rotation lissée (toujours avec nos utilitaires internes)
-            startYawPlan(total, dur)
+            // lancer la rotation lissée avec EASING "quintic" (plus doux que le sine)
+            startYawPlan(total, dur, YawEase.QUINT)
 
             // tap-strafe léger pour donner un vrai rayon à l’arc
             if (FF_STRAFE_ENABLE) {
@@ -100,7 +101,7 @@ object LobbyMovement {
                 ffStrafeTicksLeft = (dur * portion) / 100
                 ffStrafeRight = ffTurnRight
             }
-        }, 7000, 7000))  // <-- mêmes valeurs qu'avant : initialDelay=7000ms, period=7000ms
+        }, 7000, 7000))  // mêmes valeurs qu'avant : initialDelay=7000ms, period=7000ms
     }
 
     // =======================
@@ -109,14 +110,14 @@ object LobbyMovement {
 
     // —— Réglages cercle ——
     private const val SUMO_INITIAL_ANGLE_DEG = 45f     // pivot initial (toujours)
-    private const val SUMO_STEP_ANGLE_DEG = 60f        // angle à CHAQUE saut (à partir du 2e) ↑ => cercle plus petit
+    private const val SUMO_STEP_ANGLE_DEG = 60f        // angle appliqué à CHAQUE saut à partir du 2e
     private const val SUMO_JUMP_DELAY_MIN = 80         // ms
     private const val SUMO_JUMP_DELAY_MAX = 150        // ms
 
-    // —— Lissage ——
-    private const val INITIAL_SMOOTH_MIN_TICKS = 4
+    // —— Réglages lissage ——
+    private const val INITIAL_SMOOTH_MIN_TICKS = 4     // durée du pivot initial (ticks)
     private const val INITIAL_SMOOTH_MAX_TICKS = 7
-    private const val AIR_SMOOTH_MIN_TICKS = 4
+    private const val AIR_SMOOTH_MIN_TICKS = 4         // durée des rotations en vol (SUMO) (min/max clamp)
     private const val AIR_SMOOTH_MAX_TICKS = 14
 
     // — État Sumo —
@@ -129,37 +130,64 @@ object LobbyMovement {
     private var ticksAirborneCurrent = 0
     private var lastAirTicks = 8
 
-    // — Rotation lissée planifiée (commune aux deux modes) —
+    // =============== LISSAGE COMMUN ===============
+    // Easing au choix (privé, n'impacte pas les autres fichiers)
+    private enum class YawEase { SINE, CUBIC, QUINT }
+
     private var yawPlanActive = false
     private var yawPlanTotalAngle = 0f
     private var yawPlanTicksTotal = 0
     private var yawPlanTickIndex = 0
     private var yawPlanLastEase = 0f
+    private var yawPlanEase = YawEase.SINE
     private var queuedYawAngle: Float? = null // Sumo : angle à démarrer au décollage
 
-    // Ease in/out (sine)
+    // Easing functions
     private fun easeInOutSine(t: Float): Float {
         return (-(cos(PI * t) - 1.0) / 2.0).toFloat()
     }
+    private fun easeInOutCubic(t: Float): Float {
+        return if (t < 0.5f) 4f * t * t * t
+        else {
+            val a = -2f * t + 2f
+            1f - (a * a * a) / 2f
+        }
+    }
+    private fun easeInOutQuint(t: Float): Float {
+        return if (t < 0.5f) 16f * t * t * t * t * t
+        else {
+            val a = -2f * t + 2f
+            1f - (a * a * a * a * a) / 2f
+        }
+    }
 
-    // Démarrer une rotation lissée de "totalAngleDeg" sur "durationTicks" ticks
+    // Démarrer une rotation lissée (signature d'origine : SINE par défaut)
     private fun startYawPlan(totalAngleDeg: Float, durationTicks: Int) {
+        startYawPlan(totalAngleDeg, durationTicks, YawEase.SINE)
+    }
+    // Surcharge interne pour choisir l'easing (utilisée par FAST_FORWARD)
+    private fun startYawPlan(totalAngleDeg: Float, durationTicks: Int, ease: YawEase) {
         val dur = max(1, durationTicks)
         yawPlanActive = true
         yawPlanTotalAngle = totalAngleDeg
         yawPlanTicksTotal = dur
         yawPlanTickIndex = 0
         yawPlanLastEase = 0f
+        yawPlanEase = ease
     }
 
-    // Appliquer un tick de la rotation lissée (pour tous les modes)
+    // Appliquer un tick de la rotation lissée
     private fun tickYawPlan() {
         if (!yawPlanActive) return
         val p = kira.mc.thePlayer ?: return
 
         yawPlanTickIndex++
         val t = min(1f, yawPlanTickIndex.toFloat() / yawPlanTicksTotal.toFloat())
-        val e = easeInOutSine(t)
+        val e = when (yawPlanEase) {
+            YawEase.SINE  -> easeInOutSine(t)   // SUMO
+            YawEase.CUBIC -> easeInOutCubic(t)
+            YawEase.QUINT -> easeInOutQuint(t)  // FAST_FORWARD (plus doux)
+        }
         val step = yawPlanTotalAngle * (e - yawPlanLastEase)
 
         p.rotationYaw += step
@@ -176,9 +204,11 @@ object LobbyMovement {
 
     private fun sumoInternal() {
         val player = kira.mc.thePlayer ?: return
+
+        // Pitch “vivant” mais discret
         desiredPitch = RandomUtils.randomDoubleInRange(-3.0, 6.0).toFloat()
 
-        // 1) pivot initial ±45° (lissé sur 4..7 ticks)
+        // 1) pivot initial ±45° (easing sine, 4..7 ticks)
         sumoInitialTurnRight = RandomUtils.randomBool()
         val initialDelta = if (sumoInitialTurnRight) SUMO_INITIAL_ANGLE_DEG else -SUMO_INITIAL_ANGLE_DEG
         startYawPlan(initialDelta, RandomUtils.randomIntInRange(INITIAL_SMOOTH_MIN_TICKS, INITIAL_SMOOTH_MAX_TICKS))
@@ -214,17 +244,17 @@ object LobbyMovement {
         val justLanded = onGround && !sumoWasOnGround
         val justTookOff = !onGround && sumoWasOnGround
 
-        // Décollage : démarrer la rotation du saut si en attente
+        // Décollage : si une rotation est en attente, la démarrer MAINTENANT et l'étaler sur la durée estimée du vol
         if (justTookOff) {
             ticksAirborneCurrent = 0
             queuedYawAngle?.let { angle ->
-                val dur = min(max(lastAirTicks, AIR_SMOOTH_MIN_TICKS), AIR_SMOOTH_MAX_TICKS)
-                startYawPlan(angle, dur)
+                // SUMO : durées clampées via lastAirTicks (4..14) et easing SINE par défaut
+                startYawPlan(angle, lastAirTicks)
                 queuedYawAngle = null
             }
         }
 
-        // En l’air : compter la durée de vol
+        // En l’air : compter les ticks de vol
         if (!onGround) {
             ticksAirborneCurrent++
         }
@@ -241,6 +271,11 @@ object LobbyMovement {
             }
             ticksAirborneCurrent = 0
         }
+
+        // Appliquer la rotation lissée planifiée (si en cours)
+        tickYawPlan()
+
+        sumoWasOnGround = onGround
     }
 
     fun stop() {
@@ -269,6 +304,7 @@ object LobbyMovement {
         yawPlanTicksTotal = 0
         yawPlanTickIndex = 0
         yawPlanLastEase = 0f
+        yawPlanEase = YawEase.SINE
     }
 
     private fun maintainMovement() {
@@ -278,11 +314,7 @@ object LobbyMovement {
                 if (!Movement.sprinting()) Movement.startSprinting()
                 // tap-strafe pendant l'arc si activé
                 if (FF_STRAFE_ENABLE && ffStrafeTicksLeft > 0) {
-                    if (ffStrafeRight) {
-                        Movement.startRight()
-                    } else {
-                        Movement.startLeft()
-                    }
+                    if (ffStrafeRight) Movement.startRight() else Movement.startLeft()
                     ffStrafeTicksLeft--
                     if (ffStrafeTicksLeft == 0) {
                         if (ffStrafeRight) Movement.stopRight() else Movement.stopLeft()
