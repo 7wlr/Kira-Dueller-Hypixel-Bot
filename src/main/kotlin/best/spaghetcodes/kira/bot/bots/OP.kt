@@ -72,9 +72,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     // Verrou d'aim court pour stabiliser un cast
     private var aimFreezeUntil = 0L
 
-    // Fenêtre "hb" (ex. blockhit) permettant d'ignorer rClickDown un court instant
-    private var hbActiveUntil = 0L
-
     private fun computeCloseStrafeDelay(distance: Float): Long = when {
         distance < 2.0f -> RandomUtils.randomIntInRange(90, 160).toLong()
         distance < 2.8f -> RandomUtils.randomIntInRange(180, 250).toLong()
@@ -218,6 +215,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         aimFreezeUntil = System.currentTimeMillis() + lockMs
     }
 
+    // Ne modifie QUE le pitch et pose un court verrou d'aim
     private fun setPitchLock(pitch: Float, lockMs: Int = 220) {
         val p = mc.thePlayer ?: return
         p.rotationPitch = pitch
@@ -243,13 +241,16 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private fun castOpeningPotionInPlace(damage: Int, onComplete: (() -> Unit)? = null) {
         if (takingPotion) return
         takingPotion = true
+        // sprint + jump tout droit (PAS de retrait)
         Movement.startForward(); Movement.startSprinting(); Movement.startJumping()
         // regarder en face ou légèrement vers le HAUT (pitch -8..0)
         setPitchLock(RandomUtils.randomIntInRange(-8, 0).toFloat(), lockMs = RandomUtils.randomIntInRange(140, 220))
         Mouse.stopTracking()
+        // léger délai pour assurer la vitesse avant le cast
         TimeUtils.setTimeout({
             useSplashPotion(damage, false, false)
             lastPotion = System.currentTimeMillis()
+            // continuer à courir+sauter pour traverser le nuage de splash
             TimeUtils.setTimeout({
                 Movement.stopJumping(); Movement.stopForward()
                 takingPotion = false
@@ -266,17 +267,21 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
 
+        // 1) se tourner à l'opposé (yaw), garder un pitch ~horizon/léger haut
         faceAwayAndLock(lockMs = RandomUtils.randomIntInRange(700, 900))
         setPitchLock(RandomUtils.randomIntInRange(-8, 0).toFloat(), lockMs = RandomUtils.randomIntInRange(140, 220))
         Mouse.stopTracking()
 
+        // 2) fuite opposée avec sprint + jump
         startOppositeRun()
 
+        // 3) lancer en gardant la même orientation, puis sauter dans le splash
         TimeUtils.setTimeout({
             aimFreezeUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(220, 320)
             useSplashPotion(damage, false, false)
             lastPotion = System.currentTimeMillis()
             onComplete()
+
             TimeUtils.setTimeout({
                 stopOppositeRun()
                 retreating = false
@@ -325,7 +330,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
         takingPotion = false
         aimFreezeUntil = 0L
-        hbActiveUntil = 0L
 
         // OUVERTURE : speed puis regen SANS retrait
         TimeUtils.setTimeout({
@@ -333,6 +337,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 speedPotsLeft--
                 lastSpeedUse = System.currentTimeMillis()
                 firstSpeedTaken = true
+                // Chainer la regen en place après un petit délai
                 TimeUtils.setTimeout({
                     castOpeningPotionInPlace(regenDamage) {
                         regenPotsLeft--
@@ -393,7 +398,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
         takingPotion = false
         aimFreezeUntil = 0L
-        hbActiveUntil = 0L
 
         strafeDir = 1
         lastStrafeSwitch = 0L
@@ -443,17 +447,14 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             } else if (n.contains("sword")) {
                 if (distance < 2f) {
                     Mouse.rClick(RandomUtils.randomIntInRange(60, 90))
-                    // petite fenêtre "hb" pour ignorer rClickDown
-                    val now = System.currentTimeMillis()
-                    hbActiveUntil = now + RandomUtils.randomIntInRange(140, 240)
                 } else {
                     Combat.wTap(100)
                     tapping = true
                     TimeUtils.setTimeout(fun () { tapping = false }, 100)
                 }
-                val now2 = System.currentTimeMillis()
-                forwardStickUntil = now2 + RandomUtils.randomIntInRange(220, 280)
-                meleeFocusUntil = now2 + RandomUtils.randomIntInRange(300, 340)
+                val now = System.currentTimeMillis()
+                forwardStickUntil = now + RandomUtils.randomIntInRange(220, 280)
+                meleeFocusUntil = now + RandomUtils.randomIntInRange(300, 340)
                 TimeUtils.setTimeout({
                     Movement.startForward(); Movement.startSprinting()
                 }, 80)
@@ -525,9 +526,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 Mouse.setRunningAway(false)
             }
 
-            // fenêtre hb (ex. blockhit) pour ignorer rClickDown
-            val hbActive = now < hbActiveUntil
-
             // Gap / regen tardive (avec anti-double-gap basé sur hasRegen + 5.2s)
             if (((distance > 3f && p.health < 12) || p.health < 9) &&
                 combo < 2 && p.health <= opp.health) {
@@ -576,7 +574,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             var randomStrafe = false
 
             // =====================  ROD (déclenchement)  =====================
-            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && (!Mouse.rClickDown || hbActive) &&
+            if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !Mouse.rClickDown &&
                 !eatingGap && !takingPotion && now - lastGap > 2500) {
 
                 val isStillNow = stillFrames >= stillFramesNeeded
