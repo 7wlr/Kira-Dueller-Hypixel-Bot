@@ -297,7 +297,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         if (toggled() && mc.thePlayer != null) {
 
             if (unformatted.contains("The game starts in 1 second!") ||
-                unformatted.contains("La partie commence dans 1 seconde")) {
+                unformatted.contains("dans 1 secondes!")) {
                 beforeStart()
             }
 
@@ -305,7 +305,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                 leaveGame()
             }
 
-            if (unformatted.contains("Opponent:") || unformatted.contains("Adversaire")) {
+            if (unformatted.contains("Opponent:") || unformatted.contains("adversaires")) {
                 gameStart()
             }
 
@@ -316,7 +316,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
             }
 
             // Fallback résultat via résumé (FR/EN)
-            if (!resultCounted && (unformatted.contains("GAGNANT") || unformatted.contains("WINNER"))) {
+            if (!resultCounted && (unformatted.contains("GAGNANT!") || unformatted.contains("WINNER!"))) {
                 parseWinnerFromSummary(unformatted)?.let { (winner, _) ->
                     val me = mc.thePlayer.gameProfile.name
                     val iWon = winner.equals(me, ignoreCase = true)
