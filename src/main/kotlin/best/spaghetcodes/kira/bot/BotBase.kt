@@ -296,7 +296,8 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
         val unformatted = ev.message.unformattedText
         if (toggled() && mc.thePlayer != null) {
 
-            if (unformatted.contains("The game starts in 1 second!")) {
+            if (unformatted.contains("The game starts in 1 second!") ||
+                unformatted.contains("La partie commence dans 1 seconde")) {
                 beforeStart()
             }
 
@@ -304,7 +305,7 @@ open class BotBase(val queueCommand: String, val quickRefresh: Int = 10000) {
                 leaveGame()
             }
 
-            if (unformatted.contains("Opponent:")) {
+            if (unformatted.contains("Opponent:") || unformatted.contains("Adversaire")) {
                 gameStart()
             }
 
