@@ -37,7 +37,7 @@ object StateManager {
             if (unformatted.matches(Regex(".* a rejoint \\(2/2\\)!"))) {
                 gameFull = true
             }
-        } else if (unformatted.contains("Opponent:")) {
+        } else if (unformatted.contains("Opponent:") || unformatted.contains("Adversaire")) {
             state = States.PLAYING
             gameStartedAt = System.currentTimeMillis()
             LobbyMovement.stop()
