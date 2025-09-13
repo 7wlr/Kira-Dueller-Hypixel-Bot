@@ -365,7 +365,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
                 Inventory.setInvItem("sword")
             }
-        }, RandomUtils.randomIntInRange(3400, 4200))
+        }, RandomUtils.randomIntInRange(2400, 2800))
     }
 
     // =====================  LIFECYCLE  =====================
