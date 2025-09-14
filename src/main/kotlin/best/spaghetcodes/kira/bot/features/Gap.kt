@@ -12,6 +12,7 @@ interface Gap {
     var lastGap: Long
 
     fun useGap(distance: Float, run: Boolean, facingAway: Boolean) {
+        if (Mouse.rClickDown) Mouse.rClickUp()
         lastGap = System.currentTimeMillis()
         fun gap() {
             Mouse.stopLeftAC()
