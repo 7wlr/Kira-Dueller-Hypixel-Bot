@@ -2,6 +2,7 @@ package best.spaghetcodes.kira.bot.player
 
 import best.spaghetcodes.kira.utils.RandomUtils
 import best.spaghetcodes.kira.utils.TimeUtils
+import java.util.Timer
 
 object Combat {
 
@@ -9,9 +10,21 @@ object Combat {
     private var randomStrafeMin = 0
     private var randomStrafeMax = 0
 
+    private var wTapTimer: Timer? = null
+
     fun wTap(duration: Int) {
         Movement.stopForward()
-        TimeUtils.setTimeout(Movement::startForward, duration)
+        wTapTimer?.cancel()
+        wTapTimer = TimeUtils.setTimeout({
+            Movement.startForward()
+            wTapTimer = null
+        }, duration)
+    }
+
+    fun cancelWTap() {
+        wTapTimer?.cancel()
+        wTapTimer = null
+        Movement.stopForward()
     }
 
     fun sTap(duration: Int) {

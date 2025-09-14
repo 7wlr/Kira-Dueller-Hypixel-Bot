@@ -386,6 +386,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         if (eatingGap || start < lastGap + MIN_GAP_INTERVAL_MS) return
 
         eatingGap = true
+        Combat.cancelWTap()
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
 
