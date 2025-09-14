@@ -22,7 +22,8 @@ interface Flint {
      */
     fun useFlint(distance: Float, after: () -> Unit = {}) {
         if (flintUses <= 0) return
-        if (!Inventory.setInvItem("flint_and_steel")) {
+        // Unlocalized name is "item.flintAndSteel" -> substring "flintandsteel"
+        if (!Inventory.setInvItem("flintandsteel")) {
             after()
             return
         }
