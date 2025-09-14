@@ -78,7 +78,9 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private var blockGuardUntil = 0L
 
     private fun computeCloseStrafeDelay(distance: Float): Long = when {
-        distance < 2.0f -> RandomUtils.randomIntInRange(, 160).toLong()
+        // For very close distances, switch strafing a bit faster with a
+        // small randomised delay to keep movement less predictable.
+        distance < 2.0f -> RandomUtils.randomIntInRange(120, 160).toLong()
         distance < 2.8f -> RandomUtils.randomIntInRange(180, 250).toLong()
         else -> RandomUtils.randomIntInRange(220, 300).toLong()
     }
