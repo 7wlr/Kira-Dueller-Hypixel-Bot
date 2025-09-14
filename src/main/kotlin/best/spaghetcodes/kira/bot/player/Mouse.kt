@@ -11,6 +11,12 @@ import kotlin.math.abs
 
 object Mouse {
 
+    private const val LEFT_HOLD_TICKS_MIN = 1    // ticks to hold attack key
+    private const val LEFT_HOLD_TICKS_MAX = 3
+    private const val JITTER_MS_MIN = -20       // ms jitter on click delay
+    private const val JITTER_MS_MAX = 20
+    private const val MIN_DELAY_MS = 5          // enforce a small positive delay
+
     private var leftAC = false
     var rClickDown = false
 
@@ -21,8 +27,9 @@ object Mouse {
     private var _runningAway = false
 
     private var leftClickDur = 0
-
-    private var lastLeftClick = 0L
+    /** Scheduled time for the next left click, in nanoseconds */
+    private var nextLeftClickNs = 0L
+    private var lastCPS = 0
 
     private var runningRotations: FloatArray? = null
 
@@ -69,6 +76,7 @@ object Mouse {
             !kira.mc.thePlayer.isUsingItem) {
             kira.mc.thePlayer.swingItem()
             KeyBinding.setKeyBindState(kira.mc.gameSettings.keyBindAttack.keyCode, true)
+            leftClickDur = RandomUtils.randomIntInRange(LEFT_HOLD_TICKS_MIN, LEFT_HOLD_TICKS_MAX)
             if (kira.mc.objectMouseOver != null && kira.mc.objectMouseOver.entityHit != null) {
                 kira.mc.playerController.attackEntity(kira.mc.thePlayer, kira.mc.objectMouseOver.entityHit)
             }
@@ -92,6 +100,8 @@ object Mouse {
 
     fun stopLeftAC() {
         leftAC = false
+        nextLeftClickNs = 0L
+        lastCPS = 0
     }
 
     fun startTracking() {
@@ -140,15 +150,33 @@ object Mouse {
                 EntityUtils.getDistanceNoY(player, target) <= maxDist &&
                 !player.isUsingItem
             ) {
-                val minCPS = kira.config?.minCPS ?: 10
-                val maxCPS = kira.config?.maxCPS ?: 14
-
-                if (System.currentTimeMillis() >= lastLeftClick + (1000 / RandomUtils.randomIntInRange(minCPS, maxCPS))) {
+                val lo = (kira.config?.minCPS ?: 10).coerceAtLeast(1)
+                val hi = (kira.config?.maxCPS ?: 14).coerceAtLeast(lo)
+                if (nextLeftClickNs == 0L) {
+                    scheduleNextClick(lo, hi)
+                }
+                if (System.nanoTime() >= nextLeftClickNs) {
                     leftClick()
-                    lastLeftClick = System.currentTimeMillis()
+                    scheduleNextClick(lo, hi)
                 }
             }
         }
+    }
+
+    private fun scheduleNextClick(minCPS: Int, maxCPS: Int) {
+        // Smoothly vary CPS to keep a natural rhythm without full stops
+        val cps = if (lastCPS == 0) {
+            RandomUtils.randomIntInRange(minCPS, maxCPS)
+        } else {
+            (lastCPS + RandomUtils.randomIntInRange(-1, 1)).coerceIn(minCPS, maxCPS)
+        }
+        lastCPS = cps
+        val baseDelay = 1000 / cps
+        val jitter = RandomUtils.randomIntInRange(JITTER_MS_MIN, JITTER_MS_MAX)
+        // ensure delay remains positive even with negative jitter
+        val delayMs = (baseDelay + jitter).coerceAtLeast(MIN_DELAY_MS)
+        // Use monotonic time to avoid issues if system clock changes
+        nextLeftClickNs = System.nanoTime() + delayMs * 1_000_000L
     }
 
     private fun rClickDown() {
