@@ -417,12 +417,22 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
 
-        useGap(distance, close, facingAway)
+        val wasForward = Movement.forward()
+        if (close) {
+            Movement.stopForward()
+            Movement.startBackward()
+        }
+
+        useGap(distance, false, facingAway)
         gapsLeft--
         lastGap = now
         gapLockUntil = now + MIN_GAP_INTERVAL_MS
 
         waitUntilFinishedEating(maxWaitMs = 2400) {
+            if (close) {
+                Movement.stopBackward()
+                if (wasForward) Movement.startForward()
+            }
             eatingGap = false
             if (Mouse.rClickDown) Mouse.rClickUp()
             if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
