@@ -404,8 +404,9 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             eatingGap = false
             if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
                 Inventory.setInvItem("sword")
+                if (kira.config?.kiraHit == true) Mouse.startLeftAC()
             }
-        }, RandomUtils.randomIntInRange(3400, 4200))
+        }, RandomUtils.randomIntInRange(2600, 3200))
     }
 
     // =====================  LIFECYCLE  =====================
