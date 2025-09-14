@@ -104,6 +104,10 @@ object Mouse {
         lastCPS = 0
     }
 
+    fun currentCPS(): Int {
+        return lastCPS
+    }
+
     fun startTracking() {
         tracking = true
     }
