@@ -29,18 +29,24 @@ object ChatUtils {
         }
     }
 
-    fun info(message: String) {
+    fun info(message: String, force: Boolean = false) {
         // Prefixe chat changé : [KIRA] en bleu ciel (AQUA)
-        sendChatMessage("${EnumChatFormatting.AQUA}[${EnumChatFormatting.BOLD}KIRA${EnumChatFormatting.RESET}${EnumChatFormatting.AQUA}] ${EnumChatFormatting.WHITE}$message")
+        sendChatMessage(
+            "${EnumChatFormatting.AQUA}[${EnumChatFormatting.BOLD}KIRA${EnumChatFormatting.RESET}${EnumChatFormatting.AQUA}] ${EnumChatFormatting.WHITE}$message",
+            force
+        )
     }
 
-    fun error(message: String) {
+    fun error(message: String, force: Boolean = false) {
         // Même prefixe, message en rouge
-        sendChatMessage("${EnumChatFormatting.AQUA}[${EnumChatFormatting.BOLD}KIRA${EnumChatFormatting.RESET}${EnumChatFormatting.AQUA}] ${EnumChatFormatting.RED}$message")
+        sendChatMessage(
+            "${EnumChatFormatting.AQUA}[${EnumChatFormatting.BOLD}KIRA${EnumChatFormatting.RESET}${EnumChatFormatting.AQUA}] ${EnumChatFormatting.RED}$message",
+            force
+        )
     }
 
-    private fun sendChatMessage(message: String) {
-        if (kira.mc.thePlayer != null && kira.config?.disableChatMessages != true) {
+    private fun sendChatMessage(message: String, force: Boolean = false) {
+        if (kira.mc.thePlayer != null && (force || kira.config?.disableChatMessages != true)) {
             kira.mc.thePlayer.addChatMessage(ChatComponentText(message))
         }
     }
