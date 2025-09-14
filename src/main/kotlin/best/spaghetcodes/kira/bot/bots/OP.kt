@@ -369,18 +369,24 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
         }
     }
 
-    // ---- GAP fiable (sans retrait ni 180°) + Flint ----
+    // ---- GAP avec retrait, coup de canne puis Flint ----
     private fun eatGoldenApple(distance: Float, close: Boolean, facingAway: Boolean) {
         val now = System.currentTimeMillis()
         if (eatingGap || now < lastGap + MIN_GAP_INTERVAL_MS) return
 
         eatingGap = true
+        retreating = true
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
+        Movement.stopForward()
+        Movement.startBackward()
 
         val useBefore = flintUses > 0 && close && RandomUtils.randomIntInRange(0, 1) == 0
 
         fun afterGap() {
+            Movement.stopBackward()
+            if (!tapping) Movement.startForward()
+            retreating = false
             eatingGap = false
             val resume = {
                 Inventory.setInvItem("sword")
@@ -394,7 +400,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
         }
 
         val doGap = {
-            // Avoid turning 180° before eating by not forcing a retreat
             useGap(distance, false, facingAway)
             gapsLeft--
             lastGap = now
@@ -402,11 +407,20 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
             TimeUtils.setTimeout({ afterGap() }, RandomUtils.randomIntInRange(2600, 3200))
         }
 
-        if (useBefore) {
-            useFlint(distance) { doGap() }
-        } else {
-            doGap()
+        val afterRod = {
+            if (useBefore) {
+                useFlint(distance) {
+                    Movement.startBackward()
+                    doGap()
+                }
+            } else {
+                doGap()
+            }
         }
+
+        useRodImmediate()
+        val rodDelay = RandomUtils.randomIntInRange(340, 420)
+        TimeUtils.setTimeout({ afterRod() }, rodDelay)
     }
 
     // =====================  LIFECYCLE  =====================

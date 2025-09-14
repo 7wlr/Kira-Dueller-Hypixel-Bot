@@ -177,16 +177,23 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }
         val hadAbsorption = player.isPotionActive(MCPotion.absorption)
 
-        retreating = true
-        Movement.stopForward()
-        Movement.startBackward()
-
         val ok = equipAndHoldRightClick(
             { equipAny("gap", "gapple", "apple", "golden_apple") },
             { isHoldingGap() },
             preMs, holdMs, /*returnSword=*/true
         )
         if (ok) {
+            if (preMs <= 0) {
+                retreating = true
+                Movement.stopForward()
+                Movement.startBackward()
+            } else {
+                TimeUtils.setTimeout({
+                    retreating = true
+                    Movement.stopForward()
+                    Movement.startBackward()
+                }, preMs)
+            }
             TimeUtils.setTimeout({
                 Movement.stopBackward()
                 if (!tapping) Movement.startForward()
