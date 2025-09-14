@@ -314,6 +314,41 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     // COMBAT : 180° lissé → bunny-hop → STOP SAUT → LANCER → délai court → SAUT unique
     private fun retreatAndSplash(damage: Int, onComplete: () -> Unit) {
         if (takingPotion) return
+        val p = mc.thePlayer ?: return
+
+        // If there is no room behind the player, splash without retreating
+        if (!WorldUtils.airInBack(p, 2.0f)) {
+            retreating = true
+            takingPotion = true
+            Mouse.stopLeftAC()
+            Mouse.setUsingProjectile(false)
+
+            val pitch = pickForwardOrSlightUpPitch()
+            smoothFaceAway(totalMsMin = 240, totalMsMax = 340, pitch = pitch)
+            Mouse.stopTracking()
+
+            Movement.stopForward()
+            Movement.stopBackward()
+            Movement.clearLeftRight()
+            Movement.stopJumping()
+
+            val delay = RandomUtils.randomIntInRange(240, 320)
+            TimeUtils.setTimeout({
+                setPitchLock(pitch, lockMs = RandomUtils.randomIntInRange(260, 340))
+                useSplashPotion(damage, false, false)
+                lastPotion = System.currentTimeMillis()
+                onComplete()
+
+                val jumpDelay = RandomUtils.randomIntInRange(160, 220)
+                TimeUtils.setTimeout({
+                    Movement.singleJump(RandomUtils.randomIntInRange(50, 80))
+                    retreating = false
+                    takingPotion = false
+                }, jumpDelay)
+            }, delay)
+            return
+        }
+
         retreating = true
         takingPotion = true
         Mouse.stopLeftAC()
