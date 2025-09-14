@@ -7,6 +7,7 @@ import best.spaghetcodes.kira.utils.Extensions.scale
 import net.minecraft.entity.Entity
 import net.minecraft.entity.player.EntityPlayer
 import net.minecraft.potion.Potion
+import net.minecraft.init.Items
 import net.minecraft.util.MathHelper
 import net.minecraft.util.Vec3
 import kotlin.math.abs
@@ -120,11 +121,12 @@ object EntityUtils {
                     } * if (player.isPotionActive(Potion.moveSpeed)) 1.3 else 1.0
                     val velocity = target.getVelocity().scale(tickPredict)
                     val flatVelo = Vec3(velocity.xCoord, 0.0, velocity.zCoord)
+                    val isPearl = player.heldItem?.item == Items.ender_pearl
                     val height = when (dist) {
-                        in 0f..8f -> target.eyeHeight / 2
+                        in 0f..8f -> if (isPearl) 0.0f else target.eyeHeight / 2f
                         in 8f..15f -> target.eyeHeight
-                        in 15f..25f -> target.eyeHeight * 1.45
-                        else -> target.eyeHeight * 1.7
+                        in 15f..25f -> target.eyeHeight * 1.45f
+                        else -> target.eyeHeight * 1.7f
                     }
                     pos = target.positionVector.add(flatVelo).add(Vec3(0.0, height.toDouble(), 0.0)) ?: Vec3(target.posX, target.posY + target.eyeHeight, target.posZ)
                 }
