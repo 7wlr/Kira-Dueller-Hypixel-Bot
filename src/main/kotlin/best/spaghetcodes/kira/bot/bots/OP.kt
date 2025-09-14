@@ -395,7 +395,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
         }
 
         val doGap = {
-            useGap(distance, close, facingAway)
+            // Avoid turning 180° before eating by not forcing a retreat
+            useGap(distance, false, facingAway)
             gapsLeft--
             lastGap = now
             gapLockUntil = now + MIN_GAP_INTERVAL_MS
@@ -541,9 +542,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
                 combo--
                 TimeUtils.setTimeout(fun () { tapping = false }, 300)
             } else if (n.contains("sword")) {
-                if (distance < 2f) {
-                    Mouse.rClick(RandomUtils.randomIntInRange(60, 90))
-                } else {
+                if (distance >= 2f) {
                     Combat.wTap(100)
                     tapping = true
                     TimeUtils.setTimeout(fun () { tapping = false }, 100)
