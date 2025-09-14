@@ -1,6 +1,7 @@
 package best.spaghetcodes.kira.gui
 
 import best.spaghetcodes.kira.bot.Session
+import best.spaghetcodes.kira.bot.player.Mouse
 import best.spaghetcodes.kira.kira
 import net.minecraft.client.gui.Gui
 import net.minecraftforge.client.event.RenderGameOverlayEvent
@@ -38,6 +39,13 @@ class StatsOverlay {
         if (elapsed > 0) {
             lines += "Wins/h: ${df.format(winsPerHour)}"
             lines += "Time: ${minutes}m"
+        }
+
+        if (kira.config?.kiraHit == true) {
+            val cps = Mouse.currentCPS()
+            if (cps > 0) {
+                lines += "CPS: $cps"
+            }
         }
 
         val fr = mc.fontRendererObj
