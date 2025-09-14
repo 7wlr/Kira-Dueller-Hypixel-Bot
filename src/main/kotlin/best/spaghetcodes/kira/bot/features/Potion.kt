@@ -17,7 +17,12 @@ interface Potion {
         fun pot(dmg: Int) {
             Mouse.stopLeftAC()
             if (Inventory.setInvItemByDamage(dmg)) {
-                ChatUtils.info("About to splash $dmg")
+                val msg = when (dmg) {
+                    16386 -> "Splash Speed"
+                    16385 -> "Splash Regen"
+                    else -> "About to splash $dmg"
+                }
+                ChatUtils.info(msg)
                 TimeUtils.setTimeout(fun() {
                     Mouse.setUsingPotion(true)
 
