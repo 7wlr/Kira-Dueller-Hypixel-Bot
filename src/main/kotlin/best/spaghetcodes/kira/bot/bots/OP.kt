@@ -91,7 +91,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         return RandomUtils.randomIntInRange(1, 100) <= chance
     }
 
-    // =====================  LOGIQUE ROD (ClassicV2 adaptée)  =====================
+    // =====================  LOGIQUE ROD (import ClassicV2 améliorée)  =====================
     private var lastRodUse = 0L
     private var rodCdCloseMsBase = 340L
     private var rodCdFarMsBase = 480L
@@ -217,29 +217,41 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         aimFreezeUntil = System.currentTimeMillis() + lockMs
     }
 
+    // Ne modifie QUE le pitch et pose un court verrou d'aim
     private fun setPitchLock(pitch: Float, lockMs: Int = 220) {
         val p = mc.thePlayer ?: return
         p.rotationPitch = pitch
         aimFreezeUntil = System.currentTimeMillis() + lockMs
-        Mouse.stopTracking()
     }
 
+    // Pitch "en face" (0°) ou légèrement vers le haut (négatif en MC)
     private fun pickForwardOrSlightUpPitch(): Float {
         return if (RandomUtils.randomIntInRange(0, 1) == 0) 0f else -RandomUtils.randomIntInRange(6, 12).toFloat()
     }
 
+    // Pitch "vers le bas" pour splash aux pieds
+    private fun pickDownwardPitch(): Float {
+        return RandomUtils.randomIntInRange(68, 80).toFloat()
+    }
+
+    // Attendre d'être en train de courir AU SOL pendant un court laps de temps
     private fun waitUntilRunningOnGround(minRunMs: Int, maxWaitMs: Int, after: () -> Unit) {
         fun loop(elapsed: Int, grounded: Int) {
             val p = mc.thePlayer ?: return
-            val moving = p.onGround && (kotlin.math.abs(p.motionX) + kotlin.math.abs(p.motionZ) > 0.10) && p.isSprinting
+            val moving = p.onGround && (Math.abs(p.motionX) + Math.abs(p.motionZ) > 0.08)
             val g = if (moving) grounded + 30 else 0
             val e = elapsed + 30
-            if (g >= minRunMs || e >= maxWaitMs) after() else TimeUtils.setTimeout({ loop(e, g) }, 30)
+            if (g >= minRunMs || e >= maxWaitMs) {
+                after()
+            } else {
+                TimeUtils.setTimeout({ loop(e, g) }, 30)
+            }
         }
         loop(0, 0)
     }
 
-    private fun smoothFaceAway(totalMsMin: Int = 240, totalMsMax: Int = 340, pitch: Float? = null) {
+    // Demi-tour lissé (pas instantané) vers l'opposé de l'adversaire
+    private fun smoothFaceAway(totalMsMin: Int = 140, totalMsMax: Int = 200, pitch: Float? = null) {
         val p = mc.thePlayer ?: return
         val opp = opponent() ?: return
         val dx = p.posX - opp.posX
@@ -252,7 +264,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         val curYaw = p.rotationYaw
         val d = delta(curYaw, targetYaw)
         val midYaw = wrap(curYaw + d * 0.55f)
-        val midDelay = RandomUtils.randomIntInRange(80, 110)
+        val midDelay = RandomUtils.randomIntInRange(60, 90)
         val endDelay = RandomUtils.randomIntInRange(totalMsMin, totalMsMax)
 
         if (pitch != null) p.rotationPitch = pitch
@@ -268,12 +280,11 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         }, endDelay)
     }
 
-    // Bunny-hop pour RETRAIT (utilisé pour les potions tardives si besoin)
     private fun startOppositeRun() {
         Mouse.setRunningAway(true)
         Movement.startForward()
         Movement.startSprinting()
-        Movement.startJumping()
+        Movement.startJumping() // sprint + jump pour vitesse
         Movement.clearLeftRight()
     }
 
@@ -284,153 +295,123 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.setRunningAway(false)
     }
 
-    // =====================  POTIONS =====================
-
-    // OUVERTURE : sprint au sol → LANCER → délai court → SAUT unique
+    // ---- OUVERTURE : cast en place (SANS retrait) ----
     private fun castOpeningPotionInPlace(damage: Int, onComplete: (() -> Unit)? = null) {
         if (takingPotion) return
         takingPotion = true
-
+        // Démarre la course au SOL (pas de saut avant le lancer)
         Movement.startForward(); Movement.startSprinting(); Movement.stopJumping()
         val pitch = pickForwardOrSlightUpPitch()
 
+        // Attendre 160–240 ms de course AU SOL, puis lancer, puis SAUTER juste après
         waitUntilRunningOnGround(
-            minRunMs = RandomUtils.randomIntInRange(240, 320),
+            minRunMs = RandomUtils.randomIntInRange(160, 240),
+            maxWaitMs = 800
+        ) {
+            setPitchLock(pitch, lockMs = RandomUtils.randomIntInRange(220, 300))
+            Mouse.stopTracking()
+            useSplashPotion(damage, false, false)
+            lastPotion = System.currentTimeMillis()
+
+            // Saut unique immédiatement après le lancer pour traverser le nuage
+            TimeUtils.setTimeout({
+                Movement.singleJump(RandomUtils.randomIntInRange(50, 80))
+                takingPotion = false
+                onComplete?.invoke()
+            }, RandomUtils.randomIntInRange(180, 240))
+        }
+    }
+
+    // ---- COMBAT : fuite opposée + cast ----
+    private fun retreatAndSplash(damage: Int, onComplete: () -> Unit) {
+        if (takingPotion) return
+        retreating = true
+        takingPotion = true
+        Mouse.stopLeftAC()
+        Mouse.setUsingProjectile(false)
+
+        // 180° lissé + pitch en face / léger haut
+        val pitch = pickForwardOrSlightUpPitch()
+        smoothFaceAway(totalMsMin = 140, totalMsMax = 220, pitch = pitch)
+        Mouse.stopTracking()
+
+        // Fuite opposée au sol (on ne saute PAS avant le lancer)
+        startOppositeRun(); Movement.stopJumping()
+
+        // Attendre 150–230 ms de course au sol, puis lancer, puis saut unique
+        waitUntilRunningOnGround(
+            minRunMs = RandomUtils.randomIntInRange(150, 230),
             maxWaitMs = 900
         ) {
             setPitchLock(pitch, lockMs = RandomUtils.randomIntInRange(240, 320))
             useSplashPotion(damage, false, false)
             lastPotion = System.currentTimeMillis()
-
-            val jumpDelay = RandomUtils.randomIntInRange(170, 230)
-            TimeUtils.setTimeout({
-                Movement.singleJump(RandomUtils.randomIntInRange(50, 80))
-                takingPotion = false
-                onComplete?.invoke()
-            }, jumpDelay)
-        }
-    }
-
-    // COMBAT : 180° lissé → bunny-hop → STOP SAUT → LANCER → délai court → SAUT unique
-    private fun retreatAndSplash(damage: Int, onComplete: () -> Unit) {
-        if (takingPotion) return
-        val p = mc.thePlayer ?: return
-
-        // If there is no room behind the player, splash without retreating
-        if (!WorldUtils.airInBack(p, 2.0f)) {
-            retreating = true
-            takingPotion = true
-            Mouse.stopLeftAC()
-            Mouse.setUsingProjectile(false)
-
-            val pitch = pickForwardOrSlightUpPitch()
-            smoothFaceAway(totalMsMin = 240, totalMsMax = 340, pitch = pitch)
-            Mouse.stopTracking()
-
-            Movement.stopForward()
-            Movement.stopBackward()
-            Movement.clearLeftRight()
-            Movement.stopJumping()
-
-            val delay = RandomUtils.randomIntInRange(240, 320)
-            TimeUtils.setTimeout({
-                setPitchLock(pitch, lockMs = RandomUtils.randomIntInRange(260, 340))
-                useSplashPotion(damage, false, false)
-                lastPotion = System.currentTimeMillis()
-                onComplete()
-
-                val jumpDelay = RandomUtils.randomIntInRange(160, 220)
-                TimeUtils.setTimeout({
-                    Movement.singleJump(RandomUtils.randomIntInRange(50, 80))
-                    retreating = false
-                    takingPotion = false
-                }, jumpDelay)
-            }, delay)
-            return
-        }
-
-        retreating = true
-        takingPotion = true
-        Mouse.stopLeftAC()
-        Mouse.setUsingProjectile(false)
-
-        val pitch = pickForwardOrSlightUpPitch()
-        smoothFaceAway(totalMsMin = 240, totalMsMax = 340, pitch = pitch)
-        Mouse.stopTracking()
-
-        startOppositeRun()
-        Movement.stopJumping()
-
-        waitUntilRunningOnGround(
-            minRunMs = RandomUtils.randomIntInRange(180, 260),
-            maxWaitMs = 900
-        ) {
-            setPitchLock(pitch, lockMs = RandomUtils.randomIntInRange(260, 340))
-            useSplashPotion(damage, false, false)
-            lastPotion = System.currentTimeMillis()
             onComplete()
 
-            val jumpDelay = RandomUtils.randomIntInRange(160, 220)
             TimeUtils.setTimeout({
                 Movement.singleJump(RandomUtils.randomIntInRange(50, 80))
                 stopOppositeRun()
                 retreating = false
                 takingPotion = false
-            }, jumpDelay)
+            }, RandomUtils.randomIntInRange(160, 220))
         }
     }
 
-    // =====================  GAP (retour et rod avant de consommer) =====================
-    private fun eatGoldenApple(distance: Float, close: Boolean, facingAway: Boolean) {
-        val start = System.currentTimeMillis()
-        if (eatingGap || start < lastGap + MIN_GAP_INTERVAL_MS) return
-
-        val player = mc.thePlayer ?: return
-
-        eatingGap = true
-        Combat.cancelWTap()
+    // ---- Nouvelle séquence : ROD → SPLASH AUX PIEDS (sans retrait, sans saut) ----
+    private fun rodPingThenFeetSplash(damage: Int, onComplete: () -> Unit) {
+        if (takingPotion) return
+        takingPotion = true
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
 
-        // Reculer puis donner un coup de canne avec un maintien légèrement prolongé
-        retreating = true
-        Movement.stopForward()
-        Movement.startBackward()
-
-        val startX = player.posX
-        val startZ = player.posZ
-
-        val rodHold = RandomUtils.randomIntInRange(260, 300)
+        // 1) Donner un coup de rod
         Mouse.setUsingProjectile(true)
         Inventory.setInvItem("rod")
         Mouse.rClick(RandomUtils.randomIntInRange(70, 95))
+        val rodHold = RandomUtils.randomIntInRange(150, 210)
 
         TimeUtils.setTimeout({
             Inventory.setInvItem("sword")
             Mouse.setUsingProjectile(false)
 
-            val nowPlayer = mc.thePlayer
-            val moved = nowPlayer != null && (abs(nowPlayer.posX - startX) > 0.02 || abs(nowPlayer.posZ - startZ) > 0.02)
-            val extraDelay = if (moved) RandomUtils.randomIntInRange(180, 260) else RandomUtils.randomIntInRange(20, 60)
-
-            TimeUtils.setTimeout({
-                useGap(distance, close, facingAway)
-                gapsLeft--
-                lastGap = System.currentTimeMillis()
-                gapLockUntil = lastGap + MIN_GAP_INTERVAL_MS
-
-                val finishDelay = RandomUtils.randomIntInRange(2400, 2800)
-                TimeUtils.setTimeout({
-                    Movement.stopBackward()
-                    if (!tapping) Movement.startForward()
-                    retreating = false
-                    eatingGap = false
-                    if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                        Inventory.setInvItem("sword")
-                    }
-                }, finishDelay)
-            }, extraDelay)
+            // 2) Stabiliser au sol (sans saut)
+            Movement.stopJumping()
+            waitUntilRunningOnGround(
+                minRunMs = RandomUtils.randomIntInRange(90, 140),
+                maxWaitMs = 500
+            ) {
+                // 3) Pitch bas et splash aux pieds (pas de saut après)
+                val down = pickDownwardPitch()
+                setPitchLock(down, lockMs = RandomUtils.randomIntInRange(220, 300))
+                useSplashPotion(damage, false, false)
+                lastPotion = System.currentTimeMillis()
+                onComplete()
+                takingPotion = false
+            }
         }, rodHold)
+    }
+
+    // ---- GAP fiable (sans retrait ni 180°) ----
+    private fun eatGoldenApple(distance: Float, close: Boolean, facingAway: Boolean) {
+        val now = System.currentTimeMillis()
+        if (eatingGap || now < lastGap + MIN_GAP_INTERVAL_MS) return
+
+        eatingGap = true
+        // On garde le tracking actif et on ne fait NI 180° NI retrait
+        Mouse.stopLeftAC()
+        Mouse.setUsingProjectile(false)
+
+        useGap(distance, close, facingAway)
+        gapsLeft--
+        lastGap = now
+        gapLockUntil = now + MIN_GAP_INTERVAL_MS
+
+        TimeUtils.setTimeout({
+            eatingGap = false
+            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
+                Inventory.setInvItem("sword")
+            }
+        }, RandomUtils.randomIntInRange(3400, 4200))
     }
 
     // =====================  LIFECYCLE  =====================
@@ -455,6 +436,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 speedPotsLeft--
                 lastSpeedUse = System.currentTimeMillis()
                 firstSpeedTaken = true
+                // Chainer la regen en place après un petit délai
                 TimeUtils.setTimeout({
                     castOpeningPotionInPlace(regenDamage) {
                         regenPotsLeft--
@@ -598,12 +580,12 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             if (!allowStrafing && hasSpeed && hasRegen) allowStrafing = true
 
-            // Tracking caméra
-            if ((retreating && !eatingGap) || takingPotion || now < aimFreezeUntil) Mouse.stopTracking() else Mouse.startTracking()
+            // Tracking caméra : coupé si fuite/potion/aim-lock. (eatingGap n'est PAS bloquant)
+            if (retreating || takingPotion || now < aimFreezeUntil) Mouse.stopTracking() else Mouse.startTracking()
 
             if (kira.config?.kiraHit == true && !retreating && !eatingGap && !takingPotion) Mouse.startLeftAC() else Mouse.stopLeftAC()
 
-            // Sauts contextuels hors actions bloquantes
+            // Sauts contextuels
             if (!retreating && !takingPotion && !eatingGap) {
                 if (distance > 8.8f && firstSpeedTaken) {
                     if (opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")) {
@@ -634,10 +616,10 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 Inventory.setInvItem("sword")
             }
 
-            // 2e SPEED (après ouverture)
+            // 2e SPEED (après ouverture) — rod → splash aux pieds (sans saut ni retrait)
             if (openingDone && now >= openingPhaseUntil && !hasSpeed && speedPotsLeft > 0 && now - lastSpeedUse > 15000 &&
                 now - lastPotion > 3500 && !takingPotion) {
-                retreatAndSplash(speedDamage) {
+                rodPingThenFeetSplash(speedDamage) {
                     speedPotsLeft--
                     lastSpeedUse = System.currentTimeMillis()
                 }
@@ -650,17 +632,17 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             val hbActive = now < hbActiveUntil
 
             // =====================  SOINS =====================
-            // Base PV inchangée, mais on ne bloque PLUS la pomme par la présence de Regeneration.
+            // Gap / regen tardive : la gap n'est pas bloquée par Regeneration
             if (((distance > 3f && p.health < 12) || p.health < 9) &&
                 combo < 2 && p.health <= opp.health) {
-
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
                     !eatingGap && !takingPotion && now - lastPotion > 3500) {
 
                     if (gapsLeft > 0 && now >= gapLockUntil) {
                         eatGoldenApple(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
                     } else if (regenPotsLeft > 0 && now - gameStartAt >= 120000 && now - lastRegenUse > 3500) {
-                        retreatAndSplash(regenDamage) {
+                        // Regen tardive — rod → splash aux pieds (sans saut ni retrait)
+                        rodPingThenFeetSplash(regenDamage) {
                             regenPotsLeft--
                             lastRegenUse = System.currentTimeMillis()
                         }
@@ -679,7 +661,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             if (opponentLikelyUsingRod(opp)) lastOppRodSeenAt = now
 
-            // Far -> re-entry
+            // Far -> re-entry pour lever la latence de rod
             val approaching = (prevDistance > 0f) && (prevDistance - distance >= 0.15f)
             if (distance > farThreshold) {
                 if (farSince == 0L) farSince = now
@@ -697,7 +679,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             var clear = false
             var randomStrafe = false
 
-            // =====================  ROD =====================
+            // =====================  ROD (logique ClassicV2 adaptée)  =====================
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && (!Mouse.rClickDown || hbActive) &&
                 !eatingGap && !takingPotion && now - lastGap > 2500) {
 
@@ -727,7 +709,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                         if (distance in rodMidInstantMin..rodMidInstantMax && allowByAntiSpam) {
                             castRodNow(distance); prevDistance = distance
                         } else if (allowRodByMeleePolicy && distance in rodCloseMin..rodCloseMax && distance > rodBanMeleeDist &&
-                            (p.hurtTime > 0 || approaching) && !facingAway && cdCloseOK && allowByAntiSpam) {
+                                   (p.hurtTime > 0 || approaching) && !facingAway && cdCloseOK && allowByAntiSpam) {
                             castRodNow(distance); prevDistance = distance
                         } else if (allowRodByMeleePolicy && !facingAway && (cdFarOK || cdCloseOK) && allowByAntiSpam) {
                             if (oppRodRecently && distance > rodBanMeleeDist) {
@@ -741,7 +723,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                     }
                 }
 
-                // =====================  ARC / MOUVEMENT =====================
+                // =====================  ARC / MOUVEMENT (logique OP d'origine)  =====================
                 if ((EntityUtils.entityFacingAway(p, opp) && distance in 3.5f..30f) ||
                     (distance in 28.0f..33.0f && !EntityUtils.entityFacingAway(p, opp))) {
                     if (distance > 10f && shotsFired < maxArrows && now - lastPotion > 5000) {
@@ -766,7 +748,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                                 lastCloseStrafeSwitch = nowMs
                                 closeStrafeNextAt = longStrafeUntil + RandomUtils.randomIntInRange(100, 300)
                             } else if (longStrafeUntil > nowMs) {
-                                // ne change pas
+                                // ne change pas de direction
                             } else if (nowMs >= closeStrafeNextAt && nowMs - lastCloseStrafeSwitch >= 150) {
                                 strafeDir = -strafeDir
                                 lastCloseStrafeSwitch = nowMs
