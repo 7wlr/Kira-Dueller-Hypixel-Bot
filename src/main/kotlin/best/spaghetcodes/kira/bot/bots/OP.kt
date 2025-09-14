@@ -60,7 +60,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     var tapping = false
 
     // Anti double-gap strict
-    private val MIN_GAP_INTERVAL_MS = 4500L   // *** Modifié: 5200 -> 4500 ***
+    private val MIN_GAP_INTERVAL_MS = 4500L   // modifié: 5200 -> 4500
     private var gapLockUntil = 0L
 
     // =====================  STRAFE  =====================
@@ -311,6 +311,22 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.setRunningAway(false)
     }
 
+    // ========= Helper: attendre la fin RÉELLE de l’ingestion de la gap =========
+    private fun waitUntilFinishedEating(maxWaitMs: Int = 2400, after: () -> Unit) {
+        fun loop(elapsed: Int) {
+            val p = mc.thePlayer ?: return
+            val stillEating = try {
+                p.isUsingItem || p.itemInUseCount > 0
+            } catch (t: Throwable) {
+                // fallback selon versions
+                p.isUsingItem
+            }
+            if (!stillEating || elapsed >= maxWaitMs) after()
+            else TimeUtils.setTimeout({ loop(elapsed + 40) }, 40)
+        }
+        loop(0)
+    }
+
     // ---- OUVERTURE : cast en place (SANS retrait) ----
     private fun castOpeningPotionInPlace(damage: Int, onComplete: (() -> Unit)? = null) {
         if (takingPotion) return
@@ -365,7 +381,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             onComplete()
 
             TimeUtils.setTimeout({
-                Movement.singleJump(RandomUtils.randomIntInRange(50, 80))
+                Movement.singleJump(RandomUtils.randomIntInRange(160, 220))
                 stopOppositeRun()
                 retreating = false
                 takingPotion = false
@@ -384,11 +400,11 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             // Pitch bas instantané
             val down = pickDownwardPitch()
             setPitchInstant(down)
-            // *** Modifié: délai 80–140ms avant le lancer (au lieu de 60–90) ***
+            // délai 80–140ms avant le lancer (modifié)
             TimeUtils.setTimeout({
                 useSplashPotion(damage, false, false)
                 lastPotion = System.currentTimeMillis()
-                // *** Nouveau: garder le pitch vers le bas 90–100ms après le lancer ***
+                // garder le pitch vers le bas 90–100ms après le lancer
                 setPitchLock(down, lockMs = RandomUtils.randomIntInRange(90, 100))
                 takingPotion = false
                 Mouse.startTracking()
@@ -412,12 +428,13 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         lastGap = now
         gapLockUntil = now + MIN_GAP_INTERVAL_MS
 
-        TimeUtils.setTimeout({
+        // Sortir dès la fin RÉELLE de l’animation de manger (cap sécurité 2400ms)
+        waitUntilFinishedEating(maxWaitMs = 2400) {
             eatingGap = false
             if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
                 Inventory.setInvItem("sword")
             }
-        }, RandomUtils.randomIntInRange(3400, 4200))
+        }
     }
 
     // =====================  LIFECYCLE  =====================
