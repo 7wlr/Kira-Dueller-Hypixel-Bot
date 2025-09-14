@@ -56,8 +56,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
 
     // État potions (action en cours)
     private var takingPotion = false
-    // Autoriser le tracking pendant le cast "aux pieds"
-    private var allowTrackingDuringFeetCast = false
 
     var tapping = false
 
@@ -351,22 +349,23 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
         }
     }
 
-    // ---- 2e Speed / 2e Regen : cast aux PIEDS (sans retrait, sans saut, tracking actif) ----
+    // ---- 2e Speed / 2e Regen : cast aux PIEDS (sans retrait, sans saut) ----
     private fun feetSplash(damage: Int, onComplete: (() -> Unit)? = null) {
         if (takingPotion) return
         takingPotion = true
-        allowTrackingDuringFeetCast = true
+        Mouse.stopTracking()
         // Bloque le saut et attend le sol (rapide)
         Movement.stopJumping()
         waitUntilOnGround(maxWaitMs = 420) {
-            // Pitch bas instantané, splash immédiat aux pieds
+            // Pitch bas instantané, puis léger délai avant le splash aux pieds
             setPitchInstant(pickDownwardPitch())
-            useSplashPotion(damage, false, false)
-            lastPotion = System.currentTimeMillis()
-            // Reprise immédiate
-            takingPotion = false
-            allowTrackingDuringFeetCast = false
-            onComplete?.invoke()
+            TimeUtils.setTimeout({
+                useSplashPotion(damage, false, false)
+                lastPotion = System.currentTimeMillis()
+                takingPotion = false
+                Mouse.startTracking()
+                onComplete?.invoke()
+            }, RandomUtils.randomIntInRange(60, 90))
         }
     }
 
@@ -425,7 +424,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
 
         takingPotion = false
         aimFreezeUntil = 0L
-        allowTrackingDuringFeetCast = false
 
         // OUVERTURE : speed puis regen SANS retrait
         TimeUtils.setTimeout({
@@ -494,7 +492,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
 
         takingPotion = false
         aimFreezeUntil = 0L
-        allowTrackingDuringFeetCast = false
 
         strafeDir = 1
         lastStrafeSwitch = 0L
@@ -576,8 +573,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
 
             if (!allowStrafing && hasSpeed && hasRegen) allowStrafing = true
 
-            // Tracking caméra : NE PAS couper pendant feetSplash
-            if (retreating || (takingPotion && !allowTrackingDuringFeetCast) || now < aimFreezeUntil) {
+            // Tracking caméra : coupé pendant les actions de potion
+            if (retreating || takingPotion || now < aimFreezeUntil) {
                 Mouse.stopTracking()
             } else {
                 Mouse.startTracking()
@@ -631,7 +628,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
                 Inventory.setInvItem("sword")
             }
 
-            // ===== 2e SPEED : cast aux pieds (aucun saut, aucun retrait, tracking actif) =====
+            // ===== 2e SPEED : cast aux pieds (aucun saut, aucun retrait) =====
             if (openingDone && now >= openingPhaseUntil && !hasSpeed && speedPotsLeft > 0 && now - lastSpeedUse > 15000 &&
                 now - lastPotion > 3500 && !takingPotion) {
                 feetSplash(speedDamage) {
