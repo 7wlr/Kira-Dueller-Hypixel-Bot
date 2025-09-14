@@ -345,27 +345,45 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         }
     }
 
-    // =====================  GAP (AUCUN retrait, AUCUNE rotation forcée) =====================
+    // =====================  GAP (retour et rod avant de consommer) =====================
     private fun eatGoldenApple(distance: Float, close: Boolean, facingAway: Boolean) {
-        val now = System.currentTimeMillis()
-        if (eatingGap || now < lastGap + MIN_GAP_INTERVAL_MS) return
+        val start = System.currentTimeMillis()
+        if (eatingGap || start < lastGap + MIN_GAP_INTERVAL_MS) return
 
         eatingGap = true
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
 
-        // On ne tourne pas, on ne recule pas : on mange en place selon la logique PV.
-        useGap(distance, close, facingAway)
-        gapsLeft--
-        lastGap = now
-        gapLockUntil = now + MIN_GAP_INTERVAL_MS
+        // Reculer puis donner un coup de canne avec un maintien légèrement prolongé
+        retreating = true
+        Movement.stopForward()
+        Movement.startBackward()
+
+        val rodHold = RandomUtils.randomIntInRange(260, 300)
+        Mouse.setUsingProjectile(true)
+        Inventory.setInvItem("rod")
+        Mouse.rClick(RandomUtils.randomIntInRange(70, 95))
 
         TimeUtils.setTimeout({
-            eatingGap = false
-            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                Inventory.setInvItem("sword")
-            }
-        }, RandomUtils.randomIntInRange(2400, 2800))
+            Inventory.setInvItem("sword")
+            Mouse.setUsingProjectile(false)
+
+            useGap(distance, close, facingAway)
+            gapsLeft--
+            lastGap = System.currentTimeMillis()
+            gapLockUntil = lastGap + MIN_GAP_INTERVAL_MS
+
+            val finishDelay = RandomUtils.randomIntInRange(2400, 2800)
+            TimeUtils.setTimeout({
+                Movement.stopBackward()
+                if (!tapping) Movement.startForward()
+                retreating = false
+                eatingGap = false
+                if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
+                    Inventory.setInvItem("sword")
+                }
+            }, finishDelay)
+        }, rodHold + RandomUtils.randomIntInRange(180, 260))
     }
 
     // =====================  LIFECYCLE  =====================
