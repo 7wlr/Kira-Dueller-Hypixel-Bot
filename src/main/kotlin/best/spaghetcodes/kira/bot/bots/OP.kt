@@ -14,7 +14,7 @@ import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 
-class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
+class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, Flint {
 
     override fun getName(): String = "OP"
 
@@ -38,6 +38,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     var speedPotsLeft = 2
     var regenPotsLeft = 2
     var gapsLeft = 6
+    override var flintUses = 5
 
     var lastSpeedUse = 0L
     var lastRegenUse = 0L
@@ -395,18 +396,35 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.stopLeftAC()
         Mouse.setUsingProjectile(false)
 
-        useGap(distance, close, facingAway)
-        gapsLeft--
-        lastGap = now
-        gapLockUntil = now + MIN_GAP_INTERVAL_MS
+        val useBefore = flintUses > 0 && close && RandomUtils.randomIntInRange(0, 1) == 0
 
-        TimeUtils.setTimeout({
+        fun afterGap() {
             eatingGap = false
-            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
+            val resume = {
                 Inventory.setInvItem("sword")
                 if (kira.config?.kiraHit == true) Mouse.startLeftAC()
             }
-        }, RandomUtils.randomIntInRange(2600, 3200))
+            if (!useBefore && flintUses > 0 && close) {
+                useFlint(distance) { resume() }
+            } else {
+                resume()
+            }
+        }
+
+        val doGap = {
+            useGap(distance, close, facingAway)
+            gapsLeft--
+            lastGap = now
+            gapLockUntil = now + MIN_GAP_INTERVAL_MS
+
+            TimeUtils.setTimeout({ afterGap() }, RandomUtils.randomIntInRange(2600, 3200))
+        }
+
+        if (useBefore) {
+            useFlint(distance) { doGap() }
+        } else {
+            doGap()
+        }
     }
 
     // =====================  LIFECYCLE  =====================
@@ -457,6 +475,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         rodHits = 0
         rodMisses = 0
         pendingRodCheck = false
+        flintUses = 5
         lastRodAttemptAt = 0L
         lastOppRodSeenAt = 0L
         rodHoldUntil = 0L
