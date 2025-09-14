@@ -178,7 +178,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         val hadAbsorption = player.isPotionActive(MCPotion.absorption)
 
         val ok = equipAndHoldRightClick(
-            { equipAny("gap", "gapple", "apple", "golden_apple") },
+            { equipAny("gold", "gap", "gapple", "apple", "golden_apple") }, // recognise "gold" alias
             { isHoldingGap() },
             preMs, holdMs, /*returnSword=*/true
         )
