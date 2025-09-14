@@ -684,7 +684,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             val recentRegen = now - lastRegenUse < 25_000L
             val currentHealth = p.health + p.absorptionAmount
             val gapThreshold = if (recentRegen) 20f else 22f
-            if (combo < 2 && currentHealth < gapThreshold) {
+            if (currentHealth < gapThreshold) {
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
                     !eatingGap && !takingPotion && now - lastPotion > 3500) {
 
