@@ -215,6 +215,19 @@ class Sumo : BotBase("/play duels_sumo_duel"), MovePriority {
             }, baitDur)
         }
 
+        // If the opponent closes in while baiting, stop hitselecting and attack
+        if (isHitselecting && distance <= attackStartDist) {
+            isHitselecting = false
+            hitselectCooldownUntil = now + RandomUtils.randomIntInRange(hitselectCooldown.first, hitselectCooldown.last)
+            if (stoppedSprintForBait && !p.isSprinting) {
+                Movement.startSprinting()
+            }
+            if (kira.config?.kiraHit == true) {
+                keepACUntil = now + attackLatchMs
+                Mouse.startLeftAC()
+            }
+        }
+
         // =================== STRAFE & DIRECTION ===================
         val movePriority = arrayListOf(0, 0)
         var clear = false
