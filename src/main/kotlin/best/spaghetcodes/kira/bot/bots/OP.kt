@@ -587,7 +587,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             if (!allowStrafing && hasSpeed && hasRegen) allowStrafing = true
 
             // Tracking caméra
-            if (retreating || takingPotion || now < aimFreezeUntil) Mouse.stopTracking() else Mouse.startTracking()
+            if ((retreating && !eatingGap) || takingPotion || now < aimFreezeUntil) Mouse.stopTracking() else Mouse.startTracking()
 
             if (kira.config?.kiraHit == true && !retreating && !eatingGap && !takingPotion) Mouse.startLeftAC() else Mouse.stopLeftAC()
 
