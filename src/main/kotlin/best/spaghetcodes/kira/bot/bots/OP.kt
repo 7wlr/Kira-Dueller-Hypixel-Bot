@@ -385,6 +385,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         val start = System.currentTimeMillis()
         if (eatingGap || start < lastGap + MIN_GAP_INTERVAL_MS) return
 
+        val player = mc.thePlayer ?: return
+
         eatingGap = true
         Combat.cancelWTap()
         Mouse.stopLeftAC()
@@ -395,6 +397,9 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Movement.stopForward()
         Movement.startBackward()
 
+        val startX = player.posX
+        val startZ = player.posZ
+
         val rodHold = RandomUtils.randomIntInRange(260, 300)
         Mouse.setUsingProjectile(true)
         Inventory.setInvItem("rod")
@@ -404,22 +409,28 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             Inventory.setInvItem("sword")
             Mouse.setUsingProjectile(false)
 
-            useGap(distance, close, facingAway)
-            gapsLeft--
-            lastGap = System.currentTimeMillis()
-            gapLockUntil = lastGap + MIN_GAP_INTERVAL_MS
+            val nowPlayer = mc.thePlayer
+            val moved = nowPlayer != null && (abs(nowPlayer.posX - startX) > 0.02 || abs(nowPlayer.posZ - startZ) > 0.02)
+            val extraDelay = if (moved) RandomUtils.randomIntInRange(180, 260) else RandomUtils.randomIntInRange(20, 60)
 
-            val finishDelay = RandomUtils.randomIntInRange(2400, 2800)
             TimeUtils.setTimeout({
-                Movement.stopBackward()
-                if (!tapping) Movement.startForward()
-                retreating = false
-                eatingGap = false
-                if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                    Inventory.setInvItem("sword")
-                }
-            }, finishDelay)
-        }, rodHold + RandomUtils.randomIntInRange(180, 260))
+                useGap(distance, close, facingAway)
+                gapsLeft--
+                lastGap = System.currentTimeMillis()
+                gapLockUntil = lastGap + MIN_GAP_INTERVAL_MS
+
+                val finishDelay = RandomUtils.randomIntInRange(2400, 2800)
+                TimeUtils.setTimeout({
+                    Movement.stopBackward()
+                    if (!tapping) Movement.startForward()
+                    retreating = false
+                    eatingGap = false
+                    if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
+                        Inventory.setInvItem("sword")
+                    }
+                }, finishDelay)
+            }, extraDelay)
+        }, rodHold)
     }
 
     // =====================  LIFECYCLE  =====================
