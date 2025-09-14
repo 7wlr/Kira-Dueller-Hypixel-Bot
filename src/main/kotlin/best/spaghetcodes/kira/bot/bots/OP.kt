@@ -664,7 +664,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap, 
                     !eatingGap && !takingPotion && now - lastPotion > 3500) {
 
                     if (gapsLeft > 0 && now >= gapLockUntil) {
-                        eatGoldenApple(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
+                        eatGoldenApple(distance, distance < 4f, EntityUtils.entityFacingAway(p, opp))
                     } else if (regenPotsLeft > 0 && now - gameStartAt >= 120000 && now - lastRegenUse > 3500) {
                         // ===== 2e REGEN : cast aux pieds =====
                         feetSplash(regenDamage) {
