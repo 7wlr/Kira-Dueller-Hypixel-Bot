@@ -41,6 +41,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
     private var lockLeftAC = false
     private var lockLeftACSince = 0L
     private var tapping = false
+    private var retreating = false
     private var leftACActive = false
     private var lastOpponentDistance = 0f
     private val strengthPeriodMs = 294_000L
@@ -175,12 +176,22 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             }
         }
         val hadAbsorption = player.isPotionActive(MCPotion.absorption)
+
+        retreating = true
+        Movement.stopForward()
+        Movement.startBackward()
+
         val ok = equipAndHoldRightClick(
             { equipAny("gap", "gapple", "apple", "golden_apple") },
             { isHoldingGap() },
             preMs, holdMs, /*returnSword=*/true
         )
         if (ok) {
+            TimeUtils.setTimeout({
+                Movement.stopBackward()
+                if (!tapping) Movement.startForward()
+                retreating = false
+            }, preMs + holdMs + 150)
             fun confirmGap() {
                 val hasAbsorption = player.isPotionActive(MCPotion.absorption)
                 var gapsAfter = 0
@@ -207,6 +218,9 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             }
             TimeUtils.setTimeout({ confirmGap() }, preMs + holdMs + 150)
         } else {
+            Movement.stopBackward()
+            if (!tapping) Movement.startForward()
+            retreating = false
             // Fallback minimal : on essaie via helper (sélection interne) SANS tenir un 2e clic par-dessus
             useGap(distance, distance < 2f, EntityUtils.entityFacingAway(player, target))
         }
@@ -293,6 +307,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         lockLeftAC = false
         lockLeftACSince = 0L
         tapping = false
+        retreating = false
     }
 
     override fun onGameEnd() {
@@ -303,6 +318,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             Inventory.setInvItem("sword")
             Combat.stopRandomStrafe()
             tapping = false
+            retreating = false
             lockLeftAC = false
             lockLeftACSince = 0L
 
@@ -380,7 +396,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
         }
 
         // Avance en continu (sauf pendant un wTap)
-        if (!tapping) {
+        if (!tapping && !retreating) {
             Movement.startForward()
         }
 
