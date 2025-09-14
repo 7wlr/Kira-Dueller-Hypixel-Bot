@@ -229,7 +229,7 @@ class Combo : BotBase("/play duels_combo_duel"), MovePriority, Gap, Potion {
             if (!tapping) Movement.startForward()
             retreating = false
             // Fallback minimal : on essaie via helper (sélection interne) SANS tenir un 2e clic par-dessus
-            useGap(distance, distance < 2f, EntityUtils.entityFacingAway(player, target))
+            useGap(distance, distance < 4f, EntityUtils.entityFacingAway(player, target))
         }
         return ok
     }
