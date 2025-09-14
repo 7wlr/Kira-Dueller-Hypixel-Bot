@@ -78,7 +78,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private var blockGuardUntil = 0L
 
     private fun computeCloseStrafeDelay(distance: Float): Long = when {
-        distance < 2.0f -> RandomUtils.randomIntInRange(90, 160).toLong()
+        distance < 2.0f -> RandomUtils.randomIntInRange(, 160).toLong()
         distance < 2.8f -> RandomUtils.randomIntInRange(180, 250).toLong()
         else -> RandomUtils.randomIntInRange(220, 300).toLong()
     }
@@ -400,7 +400,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 useSplashPotion(damage, false, false)
                 if (Mouse.rClickDown) Mouse.rClickUp()
                 lastPotion = System.currentTimeMillis()
-                setPitchLock(down, lockMs = RandomUtils.randomIntInRange(90, 100))
+                setPitchLock(down, lockMs = RandomUtils.randomIntInRange(130, 170))
                 takingPotion = false
                 Mouse.startTracking()
                 onComplete?.invoke()
