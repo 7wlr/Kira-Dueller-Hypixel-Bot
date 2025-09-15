@@ -320,17 +320,25 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
     // ========= Helper: attendre la fin RÉELLE de l’ingestion de la gap =========
     private fun waitUntilFinishedEating(maxWaitMs: Int = 2400, after: () -> Unit) {
-        fun loop(elapsed: Int) {
-            val p = mc.thePlayer ?: return
+        fun loop(elapsed: Int, hasStarted: Boolean) {
+            val p = mc.thePlayer ?: run {
+                after()
+                return
+            }
             val stillEating = try {
                 p.isUsingItem || p.itemInUseCount > 0
             } catch (t: Throwable) {
                 p.isUsingItem
             }
-            if (!stillEating || elapsed >= maxWaitMs) after()
-            else TimeUtils.setTimeout({ loop(elapsed + 40) }, 40)
+
+            val started = hasStarted || stillEating
+            if ((started && !stillEating) || elapsed >= maxWaitMs) {
+                after()
+            } else {
+                TimeUtils.setTimeout({ loop(elapsed + 40, started) }, 40)
+            }
         }
-        loop(0)
+        loop(0, false)
     }
 
     // ---- OUVERTURE : cast en place (SANS retrait) ----
@@ -414,6 +422,12 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     private fun eatGoldenApple(distance: Float, close: Boolean, facingAway: Boolean) {
         val now = System.currentTimeMillis()
         if (eatingGap || now < lastGap + MIN_GAP_INTERVAL_MS) return
+
+        val player = mc.thePlayer ?: return
+        val recentRegen = now - lastRegenUse < 25_000L
+        val currentHealth = player.health + player.absorptionAmount
+        val gapThreshold = if (recentRegen) 20f else 22f
+        if (currentHealth >= gapThreshold) return
 
         eatingGap = true
         Mouse.stopLeftAC()
