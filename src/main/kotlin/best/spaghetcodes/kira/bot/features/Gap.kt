@@ -16,8 +16,17 @@ interface Gap {
         lastGap = System.currentTimeMillis()
         fun gap() {
             Mouse.stopLeftAC()
-            val equipped = listOf("gold", "gap", "gapple", "apple", "golden_apple")
-                .any { Inventory.setInvItem(it) }
+            val gapNames = listOf(
+                "minecraft:golden_apple",
+                "item.minecraft.golden_apple",
+                "applegold",
+                "golden_apple",
+                "pomme",
+                "pomme_doree",
+                "gap",
+                "gapple"
+            )
+            val equipped = gapNames.any { Inventory.setInvItem(it) }
             if (equipped) {
                 ChatUtils.info("About to gap")
                 val r = RandomUtils.randomIntInRange(2100, 2200)
