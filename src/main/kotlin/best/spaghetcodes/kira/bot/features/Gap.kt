@@ -7,6 +7,43 @@ import best.spaghetcodes.kira.utils.ChatUtils
 import best.spaghetcodes.kira.utils.RandomUtils
 import best.spaghetcodes.kira.utils.TimeUtils
 import best.spaghetcodes.kira.kira
+import net.minecraft.item.ItemStack
+
+private val GOLDEN_APPLE_REGEX = Regex(
+    pattern = """
+        (
+          (minecraft:)?golden[_\s]*apple |      # golden_apple / golden apple
+          gold[_\s]*apple |                     # gold apple (rare)
+          item\.applegold |                     # unlocalized ancien
+          applegold | apple\s*gold |            # applegold / apple gold
+          pomme[_\s]*dor(?:ée|ee)               # pomme dorée / doree
+        )
+    """.trimIndent(),
+    options = setOf(RegexOption.IGNORE_CASE, RegexOption.COMMENTS)
+)
+
+private val PLAIN_APPLE_REGEX = Regex(
+    pattern = """\b(apple|pomme)\b""",
+    options = setOf(RegexOption.IGNORE_CASE)
+)
+
+private fun stackSearchKey(stack: ItemStack): String {
+    return (stack.unlocalizedName + " " + stack.displayName).lowercase()
+}
+
+private fun matchesGoldenApple(stack: ItemStack?): Boolean {
+    val it = stack ?: return false
+    return GOLDEN_APPLE_REGEX.containsMatchIn(stackSearchKey(it))
+}
+
+private fun matchesPlainApple(stack: ItemStack?): Boolean {
+    val it = stack ?: return false
+    return PLAIN_APPLE_REGEX.containsMatchIn(stackSearchKey(it))
+}
+
+private fun matchesAnyGap(stack: ItemStack?): Boolean {
+    return matchesGoldenApple(stack) || matchesPlainApple(stack)
+}
 
 /**
  * Gestion "pomme dorée" par regex (sans liste fermée).
@@ -17,55 +54,44 @@ interface Gap {
     var lastGap: Long
 
     /** Sélection d’une gap via REGEX sur hotbar (slots 0..8). */
-    private fun selectGapByRegex(): Boolean {
-        val inv = kira.mc.thePlayer?.inventory ?: return false
-
-        // 1) GOLDEN APPLE d’abord (priorité)
-        //   - "minecraft:golden_apple", "golden apple", "gold apple",
-        //   - "item.appleGold" (ancien unlocalized),
-        //   - "applegold" / "apple gold",
-        //   - "pomme dorée" / "pomme_doree" (FR, avec/ sans accents).
-        val goldenAppleRegex = Regex(
-            pattern = """
-                (
-                  (minecraft:)?golden[_\s]*apple |      # golden_apple / golden apple
-                  gold[_\s]*apple |                     # gold apple (rare)
-                  item\.applegold |                     # unlocalized ancien
-                  applegold | apple\s*gold |            # applegold / apple gold
-                  pomme[_\s]*dor(?:ée|ee)               # pomme dorée / doree
-                )
-            """.trimIndent(),
-            options = setOf(RegexOption.IGNORE_CASE, RegexOption.COMMENTS)
-        )
-
-        // 2) Fallback : APPLE simple (si un pack renomme l’item -> “apple”/“pomme”)
-        //    On le prend seulement si aucune "golden apple" n’a été trouvée.
-        val plainAppleRegex = Regex(
-            pattern = """\b(apple|pomme)\b""",
-            options = setOf(RegexOption.IGNORE_CASE)
-        )
+    private fun selectGapByRegex(): Int? {
+        val inv = kira.mc.thePlayer?.inventory ?: return null
 
         // --- Pass 1 : chercher une golden apple
         for (i in 0..8) {
             val stack = inv.getStackInSlot(i) ?: continue
-            val combined = (stack.unlocalizedName + " " + stack.displayName).lowercase()
-            if (goldenAppleRegex.containsMatchIn(combined)) {
+            if (matchesGoldenApple(stack)) {
                 inv.currentItem = i
-                return true
+                return i
             }
         }
 
         // --- Pass 2 : si rien, chercher une apple simple
         for (i in 0..8) {
             val stack = inv.getStackInSlot(i) ?: continue
-            val combined = (stack.unlocalizedName + " " + stack.displayName).lowercase()
-            if (plainAppleRegex.containsMatchIn(combined)) {
+            if (matchesPlainApple(stack)) {
                 inv.currentItem = i
-                return true
+                return i
             }
         }
 
-        return false
+        return null
+    }
+
+    private fun ensureGapStillSelected(initialSlot: Int): Boolean {
+        val player = kira.mc.thePlayer ?: return false
+        val inv = player.inventory ?: return false
+
+        if (matchesAnyGap(player.heldItem)) return true
+
+        val stillGapInSlot = matchesAnyGap(inv.getStackInSlot(initialSlot))
+        if (stillGapInSlot) {
+            Inventory.setInvSlot(initialSlot)
+            return matchesAnyGap(player.heldItem)
+        }
+
+        val reselection = selectGapByRegex()
+        return reselection != null && matchesAnyGap(player.heldItem)
     }
 
     /**
@@ -79,20 +105,31 @@ interface Gap {
         fun gap() {
             Mouse.stopLeftAC()
 
-            val equipped = selectGapByRegex()
-            if (equipped) {
+            val gapSlot = selectGapByRegex()
+            if (gapSlot != null) {
                 ChatUtils.info("About to gap (regex)")
                 val r = RandomUtils.randomIntInRange(2100, 2200)      // durée "manger"
                 val equipDelay = RandomUtils.randomIntInRange(80, 130) // petit settle après switch
 
-                TimeUtils.setTimeout({ Mouse.rClick(r) }, equipDelay)
+                var startedEating = false
 
                 TimeUtils.setTimeout({
+                    if (!ensureGapStillSelected(gapSlot)) {
+                        ChatUtils.warn("Gap lost before eating; aborting right click")
+                        return@setTimeout
+                    }
+                    startedEating = true
+                    Mouse.rClick(r)
+                }, equipDelay)
+
+                val finishDelay = equipDelay + r + RandomUtils.randomIntInRange(200, 300)
+                TimeUtils.setTimeout({
+                    if (!startedEating) return@setTimeout
                     Inventory.setInvItem("sword")
                     TimeUtils.setTimeout({
                         Mouse.setRunningAway(false)
                     }, RandomUtils.randomIntInRange(200, 400))
-                }, equipDelay + r + RandomUtils.randomIntInRange(200, 300))
+                }, finishDelay)
             } else {
                 // Log utile si jamais rien n’a matché (diagnostic serveur/pack)
                 ChatUtils.warn("No golden apple (or apple) found by regex in hotbar")
