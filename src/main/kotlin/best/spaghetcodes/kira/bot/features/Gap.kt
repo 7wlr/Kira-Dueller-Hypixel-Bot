@@ -16,7 +16,9 @@ interface Gap {
         lastGap = System.currentTimeMillis()
         fun gap() {
             Mouse.stopLeftAC()
-            if (Inventory.setInvItem("gold")) {
+            val equipped = listOf("gold", "gap", "gapple", "apple", "golden_apple")
+                .any { Inventory.setInvItem(it) }
+            if (equipped) {
                 ChatUtils.info("About to gap")
                 val r = RandomUtils.randomIntInRange(2100, 2200)
                 val equipDelay = RandomUtils.randomIntInRange(80, 130)
