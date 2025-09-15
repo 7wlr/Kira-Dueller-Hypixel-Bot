@@ -12,9 +12,13 @@ object Inventory {
         if (kira.mc.thePlayer != null && kira.mc.thePlayer.inventory != null) {
             for (i in 0..8) {
                 val stack = kira.mc.thePlayer.inventory.getStackInSlot(i)
-                if (stack != null && stack.unlocalizedName.lowercase().contains(_item)) {
-                    kira.mc.thePlayer.inventory.currentItem = i
-                    return true
+                if (stack != null) {
+                    val unloc = stack.unlocalizedName.lowercase()
+                    val display = stack.displayName.lowercase()
+                    if (unloc.contains(_item) || display.contains(_item)) {
+                        kira.mc.thePlayer.inventory.currentItem = i
+                        return true
+                    }
                 }
             }
         }
@@ -54,7 +58,9 @@ object Inventory {
         val _item = item.lowercase()
         if (kira.mc.thePlayer != null) {
             for (itemStack in kira.mc.thePlayer.getInventory()) {
-                if (itemStack.unlocalizedName.lowercase().contains(_item)) {
+                val unloc = itemStack.unlocalizedName.lowercase()
+                val display = itemStack.displayName.lowercase()
+                if (unloc.contains(_item) || display.contains(_item)) {
                     return true
                 }
             }
