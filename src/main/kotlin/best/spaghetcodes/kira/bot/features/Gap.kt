@@ -21,6 +21,7 @@ interface Gap {
                 "item.minecraft.golden_apple",
                 "applegold",
                 "golden_apple",
+                "apple",
                 "pomme",
                 "pomme_doree",
                 "gap",

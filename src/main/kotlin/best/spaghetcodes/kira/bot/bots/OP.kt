@@ -682,9 +682,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             // =====================  SOINS classiques (gap / regen tardive sur PV) =====================
             val recentRegen = now - lastRegenUse < 25_000L
-            val currentHealth = p.health + p.absorptionAmount
             val gapThreshold = if (recentRegen) 8f else 10f
-            if (combo < 2 && currentHealth < gapThreshold) {
+            if (combo < 2 && p.health < gapThreshold) {
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
                     !eatingGap && !takingPotion && now - lastPotion > 3500) {
 
