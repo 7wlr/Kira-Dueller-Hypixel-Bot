@@ -37,6 +37,14 @@ object ChatUtils {
         )
     }
 
+    fun warn(message: String, force: Boolean = false) {
+        // Même prefixe, message en jaune pour un avertissement
+        sendChatMessage(
+            "${EnumChatFormatting.AQUA}[${EnumChatFormatting.BOLD}KIRA${EnumChatFormatting.RESET}${EnumChatFormatting.AQUA}] ${EnumChatFormatting.YELLOW}$message",
+            force
+        )
+    }
+
     fun error(message: String, force: Boolean = false) {
         // Même prefixe, message en rouge
         sendChatMessage(
