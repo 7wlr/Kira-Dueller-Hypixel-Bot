@@ -777,7 +777,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         if (opponent() != null && mc.theWorld != null && mc.thePlayer != null) {
             if (!mc.thePlayer.isSprinting) Movement.startSprinting()
 
-            val p = mc.thePlayer
+            val p = mc.thePlayer!!   // <— FIX nullabilité pour les API qui attendent Entity non-null
             val opp = opponent()!!
             val now = System.currentTimeMillis()
             val distance = EntityUtils.getDistanceNoY(p, opp)
