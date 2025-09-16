@@ -464,7 +464,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             val okSelect = ensureHoldingGap()
             if (okSelect) {
                 // Si le helper interne ne tient pas le clic droit, on le force
-                val hold = forceHoldMs ?: RandomUtils.randomIntInRange(1200, 1600)
+                val hold = forceHoldMs ?: RandomUtils.randomIntInRange(1700, 1900)
                 if (!Mouse.rClickDown) {
                     Mouse.rClick(hold)
                 }
@@ -472,7 +472,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                     if (!isUsingItemSafe(p) && !Mouse.rClickDown) {
                         // on force une 2e fois (sélection + hold)
                         ensureHoldingGap()
-                        Mouse.rClick(RandomUtils.randomIntInRange(900, 1300))
+                        Mouse.rClick(RandomUtils.randomIntInRange(1700, 1900))
                     }
                     after?.invoke()
                 }, RandomUtils.randomIntInRange(90, 130))
@@ -489,7 +489,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             eatingStarted = isUsingItemSafe(p)
             if (!eatingStarted) {
                 // fallback manuel fiable
-                tryStartEat(forceHoldMs = RandomUtils.randomIntInRange(1200, 1600)) {
+                tryStartEat(forceHoldMs = RandomUtils.randomIntInRange(1700, 1900)) {
                     eatingStarted = isUsingItemSafe(p)
                 }
             }
