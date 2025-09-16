@@ -51,7 +51,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
     private var retreating = false
     private var eatingGap = false
-    private var preparingGap = false          // phase d’action pré-gap (rod / flint pendant le recul)
     private var firstSpeedTaken = false
     private var allowStrafing = false
 
@@ -78,78 +77,22 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
     // Anti-parry watchdog : fenêtre pendant laquelle on autorise un court block à l'épée
     private var blockGuardUntil = 0L
 
-    // =====================  PRE-GAP ACTIONS (ROD / FLINT) =====================
-    private var usePreGapRod = true
-    private var usePreGapFlint = true
-    private var preGapRodMaxDistance = 4.2f
-    private var preGapFlintMaxDistance = 3.2f
-    private var preGapDelayAfterActionMin = 150
-    private var preGapDelayAfterActionMax = 240
-    private var retreatLeadMsMin = 140           // temps avant d’essayer l’action pendant le recul
-    private var retreatLeadMsMax = 220
-
-    private var lastPreGapRodAt = 0L
-    private var lastPreGapFlintAt = 0L
-    private val preGapRodCooldown = 1200L
-    private val preGapFlintCooldown = 1800L
-
-    private fun hasRodInHotbar(): Boolean {
-        return Inventory.peekInvItem("rod") || Inventory.peekInvItem("fishing_rod") || Inventory.peekInvItem("rod_")
-    }
-    private fun ensureRodSelected(): Boolean {
-        return Inventory.setInvItem("rod") || Inventory.setInvItem("fishing_rod") || Inventory.setInvItem("rod_")
-    }
-    private fun hasFlintInHotbar(): Boolean {
-        return Inventory.peekInvItem("flint_and_steel") || Inventory.peekInvItem("flint") || Inventory.peekInvItem("steel")
-    }
-    private fun ensureFlintSelected(): Boolean {
-        return Inventory.setInvItem("flint_and_steel") || Inventory.setInvItem("flint") || Inventory.setInvItem("steel")
+    private fun computeCloseStrafeDelay(distance: Float): Long = when {
+        distance < 2.0f -> RandomUtils.randomIntInRange(120, 160).toLong()
+        distance < 2.8f -> RandomUtils.randomIntInRange(180, 250).toLong()
+        else -> RandomUtils.randomIntInRange(220, 300).toLong()
     }
 
-    // Place un feu au sol pendant le recul (pitch bas + rClick bref)
-    private fun tryPlaceFireWhileRetreating(currentDistance: Float): Boolean {
-        val now = System.currentTimeMillis()
-        if (!usePreGapFlint || currentDistance > preGapFlintMaxDistance) return false
-        if (now - lastPreGapFlintAt < preGapFlintCooldown) return false
-        if (takingPotion || eatingGap || preparingGap) return false
-        if (!ensureFlintSelected()) return false
+    private fun shouldStartLongStrafe(distance: Float, nowMs: Long): Boolean {
+        if (longStrafeUntil > nowMs) return false
+        if (distance > 3.8f) return false
 
-        preparingGap = true
-        Mouse.stopLeftAC()
-        Movement.stopJumping()
-        val down = RandomUtils.randomIntInRange(68, 80).toFloat()
-        setPitchInstant(down)
-
-        TimeUtils.setTimeout({
-            Mouse.rClick(RandomUtils.randomIntInRange(70, 110))
-            lastPreGapFlintAt = System.currentTimeMillis()
-            setPitchLock(down, lockMs = RandomUtils.randomIntInRange(100, 150))
-            preparingGap = false
-        }, RandomUtils.randomIntInRange(60, 90))
-
-        return true
-    }
-
-    // Petit rod “poke” pendant le recul pour créer de l’espace
-    private fun tryRodWhileRetreating(currentDistance: Float): Boolean {
-        val now = System.currentTimeMillis()
-        if (!usePreGapRod || currentDistance > preGapRodMaxDistance) return false
-        if (now - lastPreGapRodAt < preGapRodCooldown) return false
-        if (takingPotion || eatingGap || preparingGap) return false
-        if (!hasRodInHotbar()) return false
-
-        // Respecter anti-spam de la logique rod si possible
-        val allow = now >= rodAntiSpamUntil || now < reentryRodGraceUntil
-        if (!allow) return false
-
-        preparingGap = true
-        if (!ensureRodSelected()) { preparingGap = false; return false }
-
-        castRodNow(currentDistance)
-        lastPreGapRodAt = System.currentTimeMillis()
-
-        TimeUtils.setTimeout({ preparingGap = false }, RandomUtils.randomIntInRange(110, 160))
-        return true
+        val chance = when {
+            distance < 2.5f -> longStrafeChance + 15
+            distance < 3.2f -> longStrafeChance + 5
+            else -> longStrafeChance
+        }
+        return RandomUtils.randomIntInRange(1, 100) <= chance
     }
 
     // =====================  LOGIQUE ROD (import ClassicV2 améliorée)  =====================
@@ -248,6 +191,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         TimeUtils.setTimeout({
             Inventory.setInvItem("sword")
             Mouse.setUsingProjectile(false)
+            // sécurité anti-parry hérité d'un clic droit : on relâche toujours
             if (Mouse.rClickDown) Mouse.rClickUp()
         }, max(holdMs + 20, settle))
 
@@ -279,25 +223,30 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         aimFreezeUntil = System.currentTimeMillis() + lockMs
     }
 
+    // Ne modifie QUE le pitch et pose un court verrou d'aim
     private fun setPitchLock(pitch: Float, lockMs: Int = 220) {
         val p = mc.thePlayer ?: return
         p.rotationPitch = pitch
         aimFreezeUntil = System.currentTimeMillis() + lockMs
     }
 
+    // Pitch instantané (ne touche pas au yaw, ne freeze pas l'aim)
     private fun setPitchInstant(pitch: Float) {
         val p = mc.thePlayer ?: return
         p.rotationPitch = pitch
     }
 
+    // Pitch "en face" (0°) ou légèrement vers le haut (négatif en MC)
     private fun pickForwardOrSlightUpPitch(): Float {
         return if (RandomUtils.randomIntInRange(0, 1) == 0) 0f else -RandomUtils.randomIntInRange(6, 12).toFloat()
     }
 
+    // Pitch "vers le bas" pour splash aux pieds
     private fun pickDownwardPitch(): Float {
         return RandomUtils.randomIntInRange(70, 80).toFloat()
     }
 
+    // Attendre d'être au sol (rapide, ≤ ~0.4s)
     private fun waitUntilOnGround(maxWaitMs: Int = 420, after: () -> Unit) {
         fun loop(elapsed: Int) {
             val p = mc.thePlayer ?: return
@@ -306,6 +255,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         loop(0)
     }
 
+    // Attendre d'être en train de courir AU SOL pendant un court laps de temps
     private fun waitUntilRunningOnGround(minRunMs: Int, maxWaitMs: Int, after: () -> Unit) {
         fun loop(elapsed: Int, grounded: Int) {
             val p = mc.thePlayer ?: return
@@ -321,6 +271,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         loop(0, 0)
     }
 
+    // Demi-tour lissé (pas instantané) vers l'opposé de l'adversaire
     private fun smoothFaceAway(totalMsMin: Int = 140, totalMsMax: Int = 200, pitch: Float? = null) {
         val p = mc.thePlayer ?: return
         val opp = opponent() ?: return
@@ -354,7 +305,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         Mouse.setRunningAway(true)
         Movement.startForward()
         Movement.startSprinting()
-        Movement.startJumping()
+        Movement.startJumping() // sprint + jump pour vitesse
         Movement.clearLeftRight()
     }
 
@@ -449,7 +400,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         }
     }
 
-    // ---- 2e Speed / 2e Regen : cast aux PIEDS ----
+    // ---- 2e Speed / 2e Regen : cast aux PIEDS (sans retrait, sans saut) ----
     private fun feetSplash(damage: Int, onComplete: (() -> Unit)? = null) {
         if (takingPotion) return
         takingPotion = true
@@ -470,10 +421,10 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         }
     }
 
-    // ---- GAP fiable (corrigée) + pré-actions PENDANT le recul ----
+    // ---- GAP fiable (corrigée) ----
     private fun eatGoldenApple(distance: Float, close: Boolean, facingAway: Boolean) {
         val now = System.currentTimeMillis()
-        if (eatingGap || preparingGap || now < lastGap + MIN_GAP_INTERVAL_MS) return
+        if (eatingGap || now < lastGap + MIN_GAP_INTERVAL_MS) return
 
         val p = mc.thePlayer ?: return
 
@@ -484,126 +435,103 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         if (healthOnly >= gapThreshold) return
         // -----------------------------------------------------------------------------
 
-        // ==== 1) Recul d'abord ====
+        eatingGap = true
+        Mouse.stopLeftAC()
+        Mouse.setUsingProjectile(false)
+
         val wasForward = Movement.forward()
-        Movement.stopForward()
-        Movement.startBackward()
-        // (optionnel) léger demi-tour caméra pour décrocher un peu l’opposant en mêlée
-        if (!facingAway) smoothFaceAway(totalMsMin = 100, totalMsMax = 160, pitch = null)
+        if (close) {
+            Movement.stopForward()
+            Movement.startBackward()
+        }
 
-        // ==== 2) Pendant le recul, tenter FLINT ou ROD ====
-        val lead = RandomUtils.randomIntInRange(retreatLeadMsMin, retreatLeadMsMax)
+        // 1) Essai "standard" via helper
+        var eatingStarted = false
+        var decremented = false
+
+        fun ensureHoldingGap(): Boolean {
+            val held = p.heldItem?.unlocalizedName?.lowercase() ?: ""
+            if (held.contains("apple")) return true
+            // essaie plusieurs alias
+            return Inventory.setInvItem("gold") ||
+                   Inventory.setInvItem("gap") ||
+                   Inventory.setInvItem("gapple") ||
+                   Inventory.setInvItem("apple") ||
+                   Inventory.setInvItem("golden_apple")
+        }
+
+        fun tryStartEat(forceHoldMs: Int? = null, after: (() -> Unit)? = null) {
+            val okSelect = ensureHoldingGap()
+            if (okSelect) {
+                // Si le helper interne ne tient pas le clic droit, on le force
+                val hold = forceHoldMs ?: RandomUtils.randomIntInRange(1200, 1600)
+                if (!Mouse.rClickDown) {
+                    Mouse.rClick(hold)
+                }
+                TimeUtils.setTimeout({
+                    if (!isUsingItemSafe(p) && !Mouse.rClickDown) {
+                        // on force une 2e fois (sélection + hold)
+                        ensureHoldingGap()
+                        Mouse.rClick(RandomUtils.randomIntInRange(900, 1300))
+                    }
+                    after?.invoke()
+                }, RandomUtils.randomIntInRange(90, 130))
+            } else {
+                after?.invoke()
+            }
+        }
+
+        // Appel initial au helper du mixin (peut sélectionner + cliquer selon l'implémentation)
+        useGap(distance, false, facingAway)
+
+        // 2) Vérification after a short delay : si pas en train d'eat -> on force manuellement
         TimeUtils.setTimeout({
-            val pNow = mc.thePlayer ?: return@setTimeout
-            val opp = opponent()
-            val curDist = if (opp != null) EntityUtils.getDistanceNoY(pNow, opp) else distance
-
-            var didPre = false
-            if (usePreGapFlint && curDist <= preGapFlintMaxDistance && hasFlintInHotbar()) {
-                didPre = tryPlaceFireWhileRetreating(curDist)
+            eatingStarted = isUsingItemSafe(p)
+            if (!eatingStarted) {
+                // fallback manuel fiable
+                tryStartEat(forceHoldMs = RandomUtils.randomIntInRange(1200, 1600)) {
+                    eatingStarted = isUsingItemSafe(p)
+                }
             }
-            if (!didPre && usePreGapRod && curDist <= preGapRodMaxDistance && hasRodInHotbar()) {
-                didPre = tryRodWhileRetreating(curDist)
-            }
+        }, RandomUtils.randomIntInRange(90, 130))
 
-            val preDelay = if (didPre) RandomUtils.randomIntInRange(preGapDelayAfterActionMin, preGapDelayAfterActionMax) else 0
+        // 3) Confirmation + bookkeeping SEULEMENT si ça a démarré
+        TimeUtils.setTimeout({
+            eatingStarted = eatingStarted || isUsingItemSafe(p)
 
-            // ==== 3) Après l'action, on MANGE ====
-            TimeUtils.setTimeout({
-                eatingGap = true
-                Mouse.stopLeftAC()
-                Mouse.setUsingProjectile(false)
+            if (eatingStarted) {
+                // On ne décrémente et ne verrouille qu'une fois sûr que ça mange
+                if (!decremented) {
+                    gapsLeft = max(0, gapsLeft - 1)
+                    lastGap = System.currentTimeMillis()
+                    gapLockUntil = lastGap + MIN_GAP_INTERVAL_MS
+                    decremented = true
+                }
 
-                // on reste en recul s'il est encore proche
-                val againOpp = opponent()
-                val againDist = if (againOpp != null) EntityUtils.getDistanceNoY(pNow, againOpp) else curDist
-                if (againDist < 2.2f || close) {
-                    Movement.startBackward()
-                } else {
-                    // si assez loin, on peut arrêter de reculer pour éviter de perdre trop d’espace
+                waitUntilFinishedEating(maxWaitMs = 2600) {
+                    if (close) {
+                        Movement.stopBackward()
+                        if (wasForward) Movement.startForward()
+                    }
+                    eatingGap = false
+                    if (Mouse.rClickDown) Mouse.rClickUp()
+                    if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
+                        Inventory.setInvItem("sword")
+                    }
+                }
+            } else {
+                // Échec de démarrage : rollback propre, pas de décrément, reprise combat
+                if (close) {
                     Movement.stopBackward()
                     if (wasForward) Movement.startForward()
                 }
-
-                // 3.a) Essai "standard" via helper
-                var eatingStarted = false
-                var decremented = false
-
-                fun ensureHoldingGap(): Boolean {
-                    val held = pNow.heldItem?.unlocalizedName?.lowercase() ?: ""
-                    if (held.contains("apple")) return true
-                    return Inventory.setInvItem("gold") ||
-                           Inventory.setInvItem("gap") ||
-                           Inventory.setInvItem("gapple") ||
-                           Inventory.setInvItem("apple") ||
-                           Inventory.setInvItem("golden_apple")
+                eatingGap = false
+                if (Mouse.rClickDown) Mouse.rClickUp()
+                if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
+                    Inventory.setInvItem("sword")
                 }
-
-                fun tryStartEat(forceHoldMs: Int? = null, after: (() -> Unit)? = null) {
-                    val okSelect = ensureHoldingGap()
-                    if (okSelect) {
-                        val hold = forceHoldMs ?: RandomUtils.randomIntInRange(1200, 1600)
-                        if (!Mouse.rClickDown) Mouse.rClick(hold)
-                        TimeUtils.setTimeout({
-                            if (!isUsingItemSafe(pNow) && !Mouse.rClickDown) {
-                                ensureHoldingGap()
-                                Mouse.rClick(RandomUtils.randomIntInRange(900, 1300))
-                            }
-                            after?.invoke()
-                        }, RandomUtils.randomIntInRange(90, 130))
-                    } else {
-                        after?.invoke()
-                    }
-                }
-
-                // Appel initial au helper du mixin (peut sélectionner + cliquer)
-                useGap(againDist, false, EntityUtils.entityFacingAway(pNow, againOpp))
-
-                // Vérif rapide : si pas d’ingestion, forcer le hold
-                TimeUtils.setTimeout({
-                    eatingStarted = isUsingItemSafe(pNow)
-                    if (!eatingStarted) {
-                        tryStartEat(forceHoldMs = RandomUtils.randomIntInRange(1200, 1600)) {
-                            eatingStarted = isUsingItemSafe(pNow)
-                        }
-                    }
-                }, RandomUtils.randomIntInRange(90, 130))
-
-                // Bookkeeping & fin
-                TimeUtils.setTimeout({
-                    eatingStarted = eatingStarted || isUsingItemSafe(pNow)
-
-                    if (eatingStarted) {
-                        if (!decremented) {
-                            gapsLeft = max(0, gapsLeft - 1)
-                            lastGap = System.currentTimeMillis()
-                            gapLockUntil = lastGap + MIN_GAP_INTERVAL_MS
-                            decremented = true
-                        }
-
-                        waitUntilFinishedEating(maxWaitMs = 2600) {
-                            Movement.stopBackward()
-                            if (wasForward) Movement.startForward()
-                            eatingGap = false
-                            if (Mouse.rClickDown) Mouse.rClickUp()
-                            if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                                Inventory.setInvItem("sword")
-                            }
-                        }
-                    } else {
-                        // Échec de démarrage : pas de décrément, reprise
-                        Movement.stopBackward()
-                        if (wasForward) Movement.startForward()
-                        eatingGap = false
-                        if (Mouse.rClickDown) Mouse.rClickUp()
-                        if (!Mouse.isUsingProjectile() && !Mouse.isUsingPotion()) {
-                            Inventory.setInvItem("sword")
-                        }
-                    }
-                }, RandomUtils.randomIntInRange(240, 320))
-            }, preDelay)
-
-        }, lead)
+            }
+        }, RandomUtils.randomIntInRange(240, 320))
     }
 
     // =====================  LIFECYCLE  =====================
@@ -622,10 +550,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
         takingPotion = false
         aimFreezeUntil = 0L
-        preparingGap = false
-        eatingGap = false
 
-        // OUVERTURE : Speed en place, puis Regen d’ouverture différée (~20 blocs)
+        // OUVERTURE : Speed en place, puis la Regen d'ouverture est différée (à ~20 blocs)
         TimeUtils.setTimeout({
             castOpeningPotionInPlace(speedDamage) {
                 speedPotsLeft--
@@ -663,9 +589,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         farSince = 0L
         reentryRodGraceUntil = 0L
         prevDistance = -1f
-
-        lastPreGapRodAt = 0L
-        lastPreGapFlintAt = 0L
     }
 
     override fun onGameEnd() {
@@ -684,7 +607,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         openingRegenPending = false
         retreating = false
         eatingGap = false
-        preparingGap = false
         firstSpeedTaken = false
         allowStrafing = false
 
@@ -717,9 +639,6 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
         reentryRodGraceUntil = 0L
         prevDistance = -1f
 
-        lastPreGapRodAt = 0L
-        lastPreGapFlintAt = 0L
-
         Mouse.stopLeftAC()
         if (Mouse.rClickDown) Mouse.rClickUp()
         val i = TimeUtils.setInterval(Mouse::stopLeftAC, 100, 100)
@@ -738,10 +657,11 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             if (n.contains("rod")) {
                 Combat.wTap(300)
                 tapping = true
-                combo--
+                combo-- // logique d'attaque inchangée; n'influence pas la décision de manger
                 TimeUtils.setTimeout(fun () { tapping = false }, 300)
             } else if (n.contains("sword")) {
                 if (distance < 2f) {
+                    // court “block-hit” contrôlé + watchdog
                     Mouse.rClick(RandomUtils.randomIntInRange(60, 90))
                     blockGuardUntil = System.currentTimeMillis() + RandomUtils.randomIntInRange(160, 240)
                 } else {
@@ -778,10 +698,10 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             if (!allowStrafing && hasSpeed && hasRegen) allowStrafing = true
 
-            // Tracking caméra : coupé si fuite/potion/aim-lock/pré-gap
-            if (retreating || takingPotion || now < aimFreezeUntil || preparingGap) Mouse.stopTracking() else Mouse.startTracking()
+            // Tracking caméra : coupé si fuite/potion/aim-lock (pas pendant la pomme)
+            if (retreating || takingPotion || now < aimFreezeUntil) Mouse.stopTracking() else Mouse.startTracking()
 
-            if (kira.config?.kiraHit == true && !retreating && !eatingGap && !takingPotion && !preparingGap) Mouse.startLeftAC() else Mouse.stopLeftAC()
+            if (kira.config?.kiraHit == true && !retreating && !eatingGap && !takingPotion) Mouse.startLeftAC() else Mouse.stopLeftAC()
 
             // Sauts contextuels
             if (distance > 8.8f && firstSpeedTaken) {
@@ -795,24 +715,26 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             }
 
             // Avance / stick avant court (aucune logique combo pour la gap)
-            if (now < forwardStickUntil && !takingPotion && !retreating && !eatingGap && !preparingGap) {
+            if (now < forwardStickUntil && !takingPotion && !retreating && !eatingGap) {
                 Movement.startForward()
-            } else if (distance < 0.7f || distance < 1.4f) {
+            } else if (distance < 0.7f || distance < 1.4f) { // <-- pas de "combo < 2"
                 Movement.stopForward()
-            } else if (!tapping && !eatingGap && !takingPotion && !retreating && !preparingGap) {
+            } else if (!tapping && !eatingGap && !takingPotion && !retreating) {
                 Movement.startForward()
             }
 
             // ===================== Anti-parry STUCK (patch) =====================
+            // NE JAMAIS relâcher le clic droit si on est en train de manger (eatingGap)
+            // ou si Minecraft signale un "using item" (inclut l'animation de manger)
             if (p.heldItem != null && p.heldItem.unlocalizedName.lowercase().contains("sword")) {
-                val usingOther = Mouse.isUsingPotion() || Mouse.isUsingProjectile() || eatingGap || retreating || takingPotion || preparingGap || isUsingItemSafe(p)
+                val usingOther = Mouse.isUsingPotion() || Mouse.isUsingProjectile() || eatingGap || retreating || takingPotion || isUsingItemSafe(p)
                 val allowShortBlock = (!usingOther) && now < blockGuardUntil && distance < 2.6f
                 val tooLong = now > blockGuardUntil + 200
                 if (Mouse.rClickDown && (!allowShortBlock || tooLong)) {
                     Mouse.rClickUp()
                 }
             } else {
-                val safeToRelease = !Mouse.isUsingProjectile() && !Mouse.isUsingPotion() && !eatingGap && !preparingGap && !isUsingItemSafe(p)
+                val safeToRelease = !Mouse.isUsingProjectile() && !Mouse.isUsingPotion() && !eatingGap && !isUsingItemSafe(p)
                 if (Mouse.rClickDown && safeToRelease) {
                     Mouse.rClickUp()
                 }
@@ -822,7 +744,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
             // Éviter switch épée pendant actions bloquantes
             if (distance < 1.5f && p.heldItem != null &&
                 !p.heldItem.unlocalizedName.lowercase().contains("sword") &&
-                !Mouse.isUsingPotion() && now >= rodHoldUntil && !eatingGap && !takingPotion && !retreating && !preparingGap) {
+                !Mouse.isUsingPotion() && now >= rodHoldUntil && !eatingGap && !takingPotion && !retreating) {
                 Inventory.setInvItem("sword")
             }
 
@@ -860,12 +782,12 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             if (needGap) {
                 if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() &&
-                    !eatingGap && !takingPotion && !preparingGap && now - lastPotion > 3500) {
+                    !eatingGap && !takingPotion && now - lastPotion > 3500) {
 
                     if (gapsLeft > 0 && now >= gapLockUntil) {
                         eatGoldenApple(distance, distance < 2f, EntityUtils.entityFacingAway(p, opp))
                     } else if (regenPotsLeft > 0 && now - gameStartAt >= 120000 && now - lastRegenUse > 3500 && !openingRegenPending) {
-                        // Optionnel : regen tardive si pas de gap dispo
+                        // Optionnel : regen tardive si pas de gap dispo ou lock
                         feetSplash(regenDamage) {
                             regenPotsLeft--
                             lastRegenUse = System.currentTimeMillis()
@@ -874,11 +796,11 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 }
             }
 
-            // =====================  2e REGEN — opportuniste =====================
+            // =====================  2e REGEN — logique opportuniste =====================
             if (!takingPotion && !openingRegenPending && regenPotsLeft > 0 && !hasRegen) {
                 val noGapSince30s = (now - lastGap) >= 30000L
                 val cdsOk = (now - lastRegenUse > 3500L) && (now - lastPotion > 3500L)
-                val handsFree = !Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !eatingGap && !preparingGap
+                val handsFree = !Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && !eatingGap
                 if (noGapSince30s && cdsOk && handsFree) {
                     feetSplash(regenDamage) {
                         regenPotsLeft--
@@ -918,7 +840,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
 
             // =====================  ROD (logique ClassicV2 adaptée)  =====================
             if (!Mouse.isUsingProjectile() && !Mouse.isRunningAway() && !Mouse.isUsingPotion() && (!Mouse.rClickDown || hbActive) &&
-                !eatingGap && !takingPotion && !preparingGap && now - lastGap > 2500) {
+                !eatingGap && !takingPotion && now - lastGap > 2500) {
 
                 val isStillNow = stillFrames >= stillFramesNeeded
                 val oppHasBow = opp.heldItem != null && opp.heldItem.unlocalizedName.lowercase().contains("bow")
@@ -932,7 +854,8 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                         rodAntiSpamUntil = now + RandomUtils.randomIntInRange(300, 380)
                         prevDistance = distance
                     } else if (bowLikelyNowClose) {
-                        castRodNow(distance); prevDistance = distance
+                        castRodNow(distance)
+                        prevDistance = distance
                     } else {
                         val cdClose = (rodCdCloseMsBase * rodCdBias).toLong()
                         val cdFar = (rodCdFarMsBase * rodCdBias).toLong()
@@ -1026,7 +949,7 @@ class OP : BotBase("/play duels_op_duel"), Bow, Rod, MovePriority, Potion, Gap {
                 Movement.singleJump(RandomUtils.randomIntInRange(200, 400))
             }
 
-            if (allowStrafing && !eatingGap && !takingPotion && !retreating && !preparingGap) handle(clear, randomStrafe, movePriority) else { Combat.stopRandomStrafe(); Movement.clearLeftRight() }
+            if (allowStrafing && !eatingGap && !takingPotion && !retreating) handle(clear, randomStrafe, movePriority) else { Combat.stopRandomStrafe(); Movement.clearLeftRight() }
 
             prevDistance = distance
         }
